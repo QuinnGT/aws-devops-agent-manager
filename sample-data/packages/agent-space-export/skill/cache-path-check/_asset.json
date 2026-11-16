@@ -1,0 +1,24 @@
+{
+  "assetId": "ki-00000000-0000-4000-8000-000000000112",
+  "assetType": "skill",
+  "metadata": {
+    "name": "cache-path-check",
+    "description": "Use when seat holds disappear early or a cache may be involved. Checks evictions, memory use and the eviction policy before you rule the cache out.",
+    "agent_types": [
+      "INCIDENT_RCA"
+    ],
+    "status": "ACTIVE",
+    "skill_type": "USER"
+  },
+  "version": 2,
+  "createdAt": "2026-10-20 18:10:42+00:00",
+  "updatedAt": "2026-11-02 17:45:30+00:00",
+  "creator": {
+    "uid": "00000000-0000-4000-8000-0000000000bb",
+    "displayName": "AnyCompanyAgentSpaceAdmin"
+  },
+  "editor": {
+    "uid": "00000000-0000-4000-8000-0000000000bb",
+    "displayName": "AnyCompanyAgentSpaceAdmin"
+  }
+}

@@ -1,0 +1,28 @@
+version: 2
+updates:
+  # pnpm projects use the "npm" ecosystem. Dependabot reads pnpm-lock.yaml.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+
+  # Keeps the commit SHAs in .github/workflows up to date, and the version comment next to each one.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+
+  # The Docker updater reads files named Dockerfile or Containerfile in the directory
+  # (docker/lib/dependabot/docker/file_fetcher.rb in dependabot-core).
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+    ignore:
+      # The image runs the same Node.js major version as CI (24). Move both together, by hand.
+      # Dependabot names the image library/node because the Containerfile uses the full docker.io/library/node path.
+      - dependency-name: library/node
+        update-types: [version-update:semver-major]

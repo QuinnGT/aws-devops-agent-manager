@@ -1,0 +1,19 @@
+{
+  "request": {
+    "agentSpaceId": "00000000-0000-4000-8000-0000000000bb",
+    "assetId": "ki-8578b1bb-b5ff-41d8-9368-4f106b846352"
+  },
+  "response": {
+    "asset": {
+      "assetId": "ki-8578b1bb-b5ff-41d8-9368-4f106b846352",
+      "assetType": "agents_md",
+      "metadata": {
+        "status": "ACTIVE",
+        "agent_type": "GENERIC"
+      },
+      "version": 5,
+      "createdAt": "2026-07-08T20:38:48.000Z",
+      "updatedAt": "2026-08-05T20:39:44.000Z"
+    }
+  }
+}

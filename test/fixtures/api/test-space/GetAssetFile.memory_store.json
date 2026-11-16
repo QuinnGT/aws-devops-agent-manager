@@ -1,0 +1,21 @@
+{
+  "request": {
+    "agentSpaceId": "00000000-0000-4000-8000-0000000000bb",
+    "assetId": "ki-63edd778-1a7a-483f-8b18-479742a15a04",
+    "path": "chat-tool-use-best-practices.md"
+  },
+  "response": {
+    "file": {
+      "path": "chat-tool-use-best-practices.md",
+      "content": {
+        "text": "# chat-tool-use-best-practices"
+      },
+      "version": 10,
+      "createdAt": "2026-07-07T18:43:41.000Z",
+      "updatedAt": "2026-08-10T18:37:45.000Z",
+      "metadata": {
+        "mimeType": "text/markdown"
+      }
+    }
+  }
+}

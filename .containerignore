@@ -1,0 +1,14 @@
+# Keep .containerignore and .dockerignore identical.
+# Podman and Buildah read .containerignore first. Docker and Docker Buildx read only .dockerignore.
+node_modules
+.next
+dist
+data
+.dam
+.git
+.github
+.env
+.env.*
+coverage
+test/private
+docs

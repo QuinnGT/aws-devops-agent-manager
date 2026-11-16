@@ -1,0 +1,72 @@
+# Journal export, import and markdown rendering.
+# A customer's history repository can override any key in its own policy/journals.yaml.
+
+# Investigations walked in parallel during an export, and executions per investigation.
+# The SDK retries throttled calls with adaptive retry (api.yaml maxAttempts).
+exportConcurrency: 3
+executionConcurrency: 2
+
+# Export zip files are deleted this many days after they are created.
+exportRetentionDays: 14
+# Daily job (UTC cron) that deletes expired export files.
+expireCron: "17 3 * * *"
+
+# A cached execution in one of these states, with an unchanged updatedAt, is not fetched again.
+terminalExecutionStatuses: [STOPPED, FAILED, CANCELED, TIMED_OUT]
+
+# Markdown templates (logic-less placeholders, see journal-templates/README.md).
+templatesDir: journal-templates
+documentTemplate: _document.md
+recordTemplate: _record.md
+fallbackTemplate: _default.md
+fallbackPartTemplate: _part.default.md
+
+markdown:
+  # Journal exports in this format list records newest first.
+  order: desc
+  # Left out of the markdown, kept in the raw JSON. The *_summary JSON records
+  # duplicate the *_summary_md records that are rendered.
+  skipRecordTypes: [utilization, investigation_summary, mitigation_summary]
+  partSeparator: "\n\n"
+  truncationNotice: "\n... (truncated, {{total}} total chars)"
+  fileName: "{{name}}-journal.md"
+  rawFileName: "{{name}}.json"
+
+# ui_investigation_summary trees: each node with text becomes one block.
+uiTree:
+  separator: "\n\n"
+  nodes:
+    title: "{{props.level|hashes}} {{text}}"
+    card-title: "### {{text}}"
+    badge: "[{{text}}]"
+    list-item: "- {{text}}"
+  default: "{{text}}"
+
+# Choices offered by the export form.
+selection:
+  taskTypes: [INVESTIGATION, EVALUATION, RELEASE_READINESS_REVIEW, RELEASE_TESTING, SYSTEM_LEARNING]
+  statuses:
+    [COMPLETED, IN_PROGRESS, FAILED, TIMED_OUT, CANCELED, SKIPPED, LINKED, WAITING, PENDING_START, PENDING_TRIAGE, PENDING_CUSTOMER_APPROVAL]
+  priorities: [CRITICAL, HIGH, MEDIUM, LOW, MINIMAL]
+  maxIds: 500
+
+import:
+  # 50 MB, the Server Action body limit in next.config.ts.
+  maxUploadBytes: 52428800
+  maxZipEntries: 5000
+  # 1 GB in total, 64 MB per file.
+  maxUncompressedBytes: 1073741824
+  maxEntryBytes: 67108864
+  journalFilePatterns: ["*_full_journal.md", "*-journal.md"]
+  # Ground truth for audits: listed in the import report, not imported.
+  groundTruthFilePatterns: ["*_actual_rca.md", "*_scorecard.md"]
+  incidentIdFromPath: "(INCIDENT-\\d+)"
+
+ui:
+  investigationsPageSize: 50
+  recordsPageSize: 50
+  renderedRecordTypes: [message, ui_investigation_summary, finding, symptom]
+  # Record types whose text is markdown (rendered with SafeMarkdown); others show in <pre>.
+  markdownTextRecordTypes: ["*_md"]
+  # Longest raw record shown on a page, in characters; the export keeps the full record.
+  maxRawChars: 200000

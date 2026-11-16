@@ -1,0 +1,1 @@
+This is the last step of the review: the step budget is used up and the tools are no longer available. Write the final structured output now from what you have read. Where a detail is still unconfirmed, say so in the field ("not determinable" or the null value the output allows) rather than leaving the answer out.

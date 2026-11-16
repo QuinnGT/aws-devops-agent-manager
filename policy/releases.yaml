@@ -1,0 +1,69 @@
+# Releases and rollback.
+#
+# A release is an annotated git tag ({spaceAlias}/{release}, history-layout.yaml
+# releaseTag) on a commit that adds the release manifest
+# (history-layout.yaml releaseManifest).
+
+name:
+  # A release name becomes part of a git tag and a file name. Names must also
+  # pass git's ref rules (no "..", no trailing ".lock"), which the app checks
+  # in addition to this pattern.
+  pattern: "^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,62}[A-Za-z0-9])?$"
+  hint: Use 1 to 64 letters, numbers, dots, hyphens and underscores, starting and ending with a letter or number, for example v2.3.
+  maxLength: 64
+  # "V2.3" and "v2.3" collide as tags and files on case-insensitive file systems.
+  uniqueIgnoringCase: true
+
+noteMaxChars: 2000
+
+# Sync the space before building a release from HEAD, so the release matches
+# the live space at that moment. The sync runs as a reconcile (a full listing
+# under the space's sync lock), so assets deleted from the space are recorded
+# as deleted and not pinned. A release of a given commit (tag after apply)
+# never syncs first. When the sync fails, the release isn't created.
+syncBeforeCreate: true
+
+# Placeholders: {release} {spaceAlias} {shortCommit} (the commit the manifest describes)
+commitMessage: "Release {release} of {spaceAlias}"
+tagMessage: "Release {release} of {spaceAlias} (assets as of {shortCommit})"
+
+# The author of a release commit and tag is the user who created the release.
+committer:
+  name: DevOps Agent Manager
+  email: releases@devops-agent-manager.invalid
+
+rollback:
+  # What a rollback to a release or a commit does with an asset added after
+  # the target, per asset type. deactivate sets status INACTIVE (types without
+  # supportsStatus in asset-types.yaml are kept instead), keep leaves the asset
+  # and lists it in the preview, delete adds it to the plan's deletes (refused
+  # unless the space allows deletes). Matches today's manual rollback: new
+  # skills are set to Inactive.
+  addedAfterTarget:
+    skill: deactivate
+    default: keep
+  # Managed memory stores (asset-types.yaml managedNames) and their memories
+  # are maintained by the DevOps Agent. skip leaves them out of release
+  # restores (a single memory can still be restored from its Versions tab;
+  # the API writes them).
+  managed: skip
+  # Metadata keys added after the target are removed (PATCH keeps them
+  # otherwise), except these, which the service sets.
+  keepMetadataKeys: [skill_type, memory_store_id]
+  statusKey: status
+  inactiveValue: INACTIVE
+  titles:
+    release: "Restore {spaceAlias} to release {release}"
+    commit: "Restore {spaceAlias} to commit {shortCommit}"
+    version: "Restore {assetName} to v{version}"
+  notes:
+    recreated: "Deleted since the target: created again, with a new asset ID."
+    replaced: "Replaced since the target by an asset with the same name: this updates the new asset."
+    deactivated: "Added after the target: set Inactive instead of deleting."
+    deleted: "Added after the target: deleted."
+    kept: "Added after the target and left as it is."
+    alreadyInactive: "Added after the target and already Inactive, so it is left as it is."
+    removedKeys: "Removes metadata keys added after the target: {keys}."
+    fetched: "Files read from the service because the history repository doesn't hold them: {paths}."
+    managed: "The DevOps Agent maintains memories in managed stores, so a release restore leaves it as it is. To go back to an older version, restore it from its Versions tab."
+    notEditable: "Not editable through the app, so a restore leaves it as it is."

@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "devops-agent-manager/audit-profiles/before-after/review.schema.json",
+  "title": "Before-after review of one investigation",
+  "description": "Case reviews plus prioritized issues. Record numbers are the 1-based record positions shown as R<n> in the condensed trace. `citations` lists the records behind every factual claim, each with a short verbatim quote, so the app can check them.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "incident",
+    "title",
+    "cohort",
+    "verdict",
+    "conclusion_support",
+    "supported",
+    "improved",
+    "concerns",
+    "next",
+    "timing",
+    "issues",
+    "one_line",
+    "citations"
+  ],
+  "properties": {
+    "incident": { "type": "string", "maxLength": 100 },
+    "title": { "type": "string", "maxLength": 500 },
+    "cohort": { "type": "string", "enum": ["before", "after"], "description": "The cohort the app assigned to this investigation" },
+    "verdict": { "type": "string", "maxLength": 300, "description": "One sentence: how far the run's own records support its final conclusion" },
+    "conclusion_support": { "type": "string", "enum": ["supported", "partly_supported", "unsupported", "not_determinable"] },
+    "supported": { "type": "string", "maxLength": 2000, "description": "What the exported results support" },
+    "improved": { "type": ["string", "null"], "maxLength": 2000, "description": "For the after cohort: behavior that changed for the better compared with the before cohort. Null when nothing is visible or for the before cohort." },
+    "concerns": { "type": "string", "maxLength": 2000 },
+    "next": { "type": "string", "maxLength": 2000, "description": "What to confirm or measure next" },
+    "timing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start_utc", "end_utc", "first_summary_utc", "summary_pair_exported", "note"],
+      "properties": {
+        "start_utc": { "type": ["string", "null"], "maxLength": 40 },
+        "end_utc": { "type": ["string", "null"], "maxLength": 40 },
+        "first_summary_utc": { "type": ["string", "null"], "maxLength": 40 },
+        "summary_pair_exported": { "type": "boolean", "description": "Both the investigation and the mitigation summary are in the export" },
+        "note": { "type": "string", "maxLength": 1000 }
+      }
+    },
+    "issues": {
+      "type": "array",
+      "maxItems": 8,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["area", "priority", "issue", "detail", "action", "owner", "evidence"],
+        "properties": {
+          "area": {
+            "type": "string",
+            "enum": [
+              "final_output",
+              "mitigation_safety",
+              "causal_support",
+              "cross_incident",
+              "deployed_config",
+              "tool_use",
+              "finalization",
+              "memory_retrieval",
+              "runbook",
+              "telemetry_export",
+              "output_rules",
+              "other"
+            ]
+          },
+          "priority": { "type": "string", "enum": ["P0", "P1", "P2"], "description": "P0: unsafe to use as is. P1: fix before relying on the result. P2: limits the claims that can be made." },
+          "issue": { "type": "string", "maxLength": 300, "description": "A short title for the issue" },
+          "detail": { "type": "string", "maxLength": 2000 },
+          "action": { "type": "string", "maxLength": 1500 },
+          "owner": { "type": "string", "enum": ["access", "trigger", "memory", "instructions", "aws_service", "none_feasible"] },
+          "evidence": {
+            "type": "array",
+            "maxItems": 10,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["record", "quote"],
+              "properties": {
+                "record": { "type": "integer", "minimum": 1 },
+                "quote": { "type": ["string", "null"], "maxLength": 300 }
+              }
+            }
+          }
+        }
+      }
+    },
+    "one_line": { "type": "string", "maxLength": 300, "description": "At most 30 words: the main point of this case" },
+    "citations": {
+      "type": "array",
+      "maxItems": 80,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["record", "quote", "supports"],
+        "properties": {
+          "record": { "type": "integer", "minimum": 1 },
+          "quote": { "type": ["string", "null"], "maxLength": 300, "description": "Short verbatim text from the record, or null" },
+          "supports": { "type": "string", "maxLength": 100, "description": "The output key the record supports, e.g. concerns or issues[0].detail" }
+        }
+      }
+    }
+  }
+}

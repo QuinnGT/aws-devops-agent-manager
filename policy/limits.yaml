@@ -1,0 +1,30 @@
+# Limits from the asset, instruction and memory guides:
+# https://docs.aws.amazon.com/devopsagent/latest/userguide/about-aws-devops-agent-managing-assets.html
+# https://docs.aws.amazon.com/devopsagent/latest/userguide/about-aws-devops-agent-agent-instructions.html
+# https://docs.aws.amazon.com/devopsagent/latest/userguide/about-aws-devops-agent-devops-agent-memories.html
+# Asset types refer to these keys by name (asset-types.yaml `limits` and `counts`).
+
+# AGENTS.md: 25 KB hard limit; about 120 lines recommended (warning above it).
+agentsMdMaxBytes: 25600
+agentsMdRecommendedLines: 120
+# Zip bundle (content.zip.zipFile) and single files (content.file.body).
+zipMaxBytes: 6291456
+singleTextFileMaxBytes: 1572864
+binaryFileMaxBytes: 6291456
+# Per Agent Space and per store.
+maxUserSkills: 200
+maxMemoryStores: 50
+maxMemoriesPerStore: 200
+memoryMaxBytes: 102400
+# Skill, memory store and memory descriptions: 1 to 1024 characters.
+descriptionMaxChars: 1024
+# Extra name rules (asset type -> regex that metadata.name must also match), for
+# example a team prefix. The service's own name rules are in asset-types.yaml.
+namePatterns: {}
+# Safety caps for reading a package folder or zip.
+packageRead:
+  maxZipBytes: 33554432
+  maxEntries: 2000
+  maxEntryBytes: 16777216
+  maxTotalBytes: 67108864
+  maxPathLength: 512

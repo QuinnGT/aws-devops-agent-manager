@@ -1,0 +1,76 @@
+# Drafts, plans, approval and apply. Per-space settings
+# (approvalRequired, changeReasonRequired, deletesEnabled) live with the space.
+
+# Managed memory stores (asset-types.yaml memory_store.managedNames) and their
+# memories. Tested on a test space on 2026-11-13: UpdateAsset
+# writes a managed memory's content (new version, content as sent) and its
+# description, and the Active switch works. All three are on.
+managed:
+  allowStatusSwitch: true
+  allowContentEdit: true
+  allowMetadataEdit: true
+
+# How apply writes each asset type. Metadata is always a PATCH that sends only
+# the keys that change.
+#
+# create (CreateAsset; content is required on create):
+#   file   one inline file (content.file)
+#   zip    a zip of every file (content.zip)
+#   auto   file when the asset has one file, zip otherwise
+#
+# content (a change to the files of an existing asset):
+#   file   one UpdateAsset with the one added or changed file and the metadata
+#          patch. Other files stay. Only valid when no file is removed.
+#   zip    one UpdateAsset with a zip of every file and the metadata patch.
+#          A zip replaces all files (the read-back hash check catches a zip
+#          whose files do not come back identical).
+#   files  UpdateAssetFile, CreateAssetFile and DeleteAssetFile for each file,
+#          then UpdateAsset for the metadata patch. Each call makes a service
+#          version, and the history records each of them.
+#   auto   file when it applies, otherwise zip for multi-file types and files
+#          for the others.
+write:
+  default: { create: auto, content: auto }
+  types:
+    agents_md: { create: file, content: auto }
+    memory_store: { create: file, content: auto }
+    memory: { create: file, content: auto }
+    custom_agent: { create: file, content: auto }
+    test_profile: { create: file, content: auto }
+    # Skills are multi-file; a several-file change goes as one zip, so it is
+    # one service version and one commit.
+    skill: { create: auto, content: auto }
+  # How a metadata key is removed when a restore drops it (it was added after the
+  # target). Tested on a test space on 2026-11-13: the API rejects null for an
+  # array key and removes the key when it is sent as []. send sends [] for an
+  # array key and null for any other key, and the read-back confirms the key is
+  # gone; refuse fails the plan check for that item instead.
+  metadataRemoval: send
+
+# Apply order of asset types: referenced types first, so a memory store or a
+# skill created by the plan has an asset ID before a memory or custom agent
+# that refers to it by name. Unlisted types go last. Deletes run after every
+# other item, in reverse order (memories before their stores).
+applyOrder: [memory_store, skill, agents_md, test_profile, memory, custom_agent]
+
+apply:
+  # After each write, read the asset back this many times (with this delay)
+  # before marking the item Failed on a hash mismatch.
+  readBackAttempts: 3
+  readBackDelayMs: 1500
+
+check:
+  # Parallel live reads in one plan check.
+  concurrency: 4
+
+approval:
+  rejectNoteRequired: true
+  # When the space requires approval, re-checking an approved plan clears the
+  # approval: the approver saw a diff against the old live state.
+  recheckClearsApproval: true
+
+limits:
+  maxItemsPerPlan: 500
+  titleMaxChars: 200
+  reasonMaxChars: 2000
+  noteMaxChars: 2000

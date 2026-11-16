@@ -1,0 +1,85 @@
+{
+  "request": {
+    "resourceName": "ki-9184fa09-8e79-4a11-90fa-a6b81ab5fe6b"
+  },
+  "response": {
+    "Events": [
+      {
+        "EventId": "819eeec4-61e6-49c2-944c-90ea42569020",
+        "EventName": "UpdateAsset",
+        "ReadOnly": "false",
+        "EventTime": "2026-11-10T23:38:13.000Z",
+        "EventSource": "aidevops.amazonaws.com",
+        "Username": "AROAEXAMPLEMASKED0001-alex-Admin",
+        "Resources": [
+          {
+            "ResourceType": "AWS::AIDevOps::Asset",
+            "ResourceName": "ki-9184fa09-8e79-4a11-90fa-a6b81ab5fe6b"
+          }
+        ],
+        "CloudTrailEvent": "{\"eventVersion\":\"1.11\",\"userIdentity\":{\"type\":\"AssumedRole\",\"principalId\":\"AROAEXAMPLEMASKED0001:AROAEXAMPLEMASKED0001-alex-Admin\",\"arn\":\"arn:aws:sts::111122223333:assumed-role/DevOpsAgentRole-WebappAdmin-examplesfx/AROAEXAMPLEMASKED0001-alex-Admin\",\"accountId\":\"111122223333\",\"sessionContext\":{\"sessionIssuer\":{\"type\":\"Role\",\"principalId\":\"AROAEXAMPLEMASKED0001:AROAEXAMPLEMASKED0001-alex-Admin\",\"arn\":\"arn:aws:sts::111122223333:assumed-role/DevOpsAgentRole-WebappAdmin-examplesfx/AROAEXAMPLEMASKED0001-alex-Admin\",\"accountId\":\"111122223333\",\"userName\":\"AROAEXAMPLEMASKED0001-alex-Admin\"},\"attributes\":{\"mfaAuthenticated\":\"false\"}}},\"eventTime\":\"2026-11-10T23:38:13Z\",\"eventSource\":\"aidevops.amazonaws.com\",\"eventName\":\"UpdateAsset\",\"awsRegion\":\"us-west-2\",\"sourceIPAddress\":\"192.0.2.10\",\"userAgent\":\"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0.0.0 Safari/537.36\",\"requestParameters\":{\"clientToken\":\"7c1761ca-b256-4f44-a4a9-2865380f0f8d\"},\"responseElements\":{\"asset\":{\"assetId\":\"ki-9184fa09-8e79-4a11-90fa-a6b81ab5fe6b\",\"assetType\":\"memory\",\"version\":24,\"createdAt\":1786646225,\"updatedAt\":1794353893}},\"requestID\":\"7397c92b-73a5-4b9a-b6cf-51f6abf2d779\",\"eventID\":\"819eeec4-61e6-49c2-944c-90ea42569020\",\"readOnly\":false,\"resources\":[{\"accountId\":\"111122223333\",\"type\":\"AWS::AIDevOps::AgentSpace\",\"ARN\":\"arn:aws:aidevops:us-west-2:111122223333:agentspace/00000000-0000-4000-8000-0000000000bb\"}],\"eventType\":\"AwsApiCall\",\"managementEvent\":true,\"recipientAccountId\":\"111122223333\",\"eventCategory\":\"Management\"}"
+      },
+      {
+        "EventId": "900090bb-832e-4dea-999c-ac157fd6512f",
+        "EventName": "UpdateAsset",
+        "ReadOnly": "false",
+        "EventTime": "2026-11-10T23:38:12.000Z",
+        "EventSource": "aidevops.amazonaws.com",
+        "Username": "AROAEXAMPLEMASKED0001-alex-Admin",
+        "Resources": [
+          {
+            "ResourceType": "AWS::AIDevOps::Asset",
+            "ResourceName": "ki-9184fa09-8e79-4a11-90fa-a6b81ab5fe6b"
+          }
+        ],
+        "CloudTrailEvent": "{\"eventVersion\":\"1.11\",\"userIdentity\":{\"type\":\"AssumedRole\",\"principalId\":\"AROAEXAMPLEMASKED0001:AROAEXAMPLEMASKED0001-alex-Admin\",\"arn\":\"arn:aws:sts::111122223333:assumed-role/DevOpsAgentRole-WebappAdmin-examplesfx/AROAEXAMPLEMASKED0001-alex-Admin\",\"accountId\":\"111122223333\",\"sessionContext\":{\"sessionIssuer\":{\"type\":\"Role\",\"principalId\":\"AROAEXAMPLEMASKED0001:AROAEXAMPLEMASKED0001-alex-Admin\",\"arn\":\"arn:aws:sts::111122223333:assumed-role/DevOpsAgentRole-WebappAdmin-examplesfx/AROAEXAMPLEMASKED0001-alex-Admin\",\"accountId\":\"111122223333\",\"userName\":\"AROAEXAMPLEMASKED0001-alex-Admin\"},\"attributes\":{\"mfaAuthenticated\":\"false\"}}},\"eventTime\":\"2026-11-10T23:38:12Z\",\"eventSource\":\"aidevops.amazonaws.com\",\"eventName\":\"UpdateAsset\",\"awsRegion\":\"us-west-2\",\"sourceIPAddress\":\"192.0.2.10\",\"userAgent\":\"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0.0.0 Safari/537.36\",\"requestParameters\":{\"clientToken\":\"aa51da57-c9e6-40d8-b85c-6e9427dbc36f\"},\"responseElements\":{\"asset\":{\"assetId\":\"ki-9184fa09-8e79-4a11-90fa-a6b81ab5fe6b\",\"assetType\":\"memory\",\"version\":24,\"createdAt\":1786646225,\"updatedAt\":1794353892}},\"requestID\":\"c5327fd7-c23e-47ed-a36e-f861a79de286\",\"eventID\":\"900090bb-832e-4dea-999c-ac157fd6512f\",\"readOnly\":false,\"resources\":[{\"accountId\":\"111122223333\",\"type\":\"AWS::AIDevOps::AgentSpace\",\"ARN\":\"arn:aws:aidevops:us-west-2:111122223333:agentspace/00000000-0000-4000-8000-0000000000bb\"}],\"eventType\":\"AwsApiCall\",\"managementEvent\":true,\"recipientAccountId\":\"111122223333\",\"eventCategory\":\"Management\"}"
+      },
+      {
+        "EventId": "5e472dc5-1ae3-4de5-bd6d-8476d48623c5",
+        "EventName": "UpdateAsset",
+        "ReadOnly": "false",
+        "EventTime": "2026-11-10T23:38:09.000Z",
+        "EventSource": "aidevops.amazonaws.com",
+        "Username": "AROAEXAMPLEMASKED0001-alex-Admin",
+        "Resources": [
+          {
+            "ResourceType": "AWS::AIDevOps::Asset",
+            "ResourceName": "ki-9184fa09-8e79-4a11-90fa-a6b81ab5fe6b"
+          }
+        ],
+        "CloudTrailEvent": "{\"eventVersion\":\"1.11\",\"userIdentity\":{\"type\":\"AssumedRole\",\"principalId\":\"AROAEXAMPLEMASKED0001:AROAEXAMPLEMASKED0001-alex-Admin\",\"arn\":\"arn:aws:sts::111122223333:assumed-role/DevOpsAgentRole-WebappAdmin-examplesfx/AROAEXAMPLEMASKED0001-alex-Admin\",\"accountId\":\"111122223333\",\"sessionContext\":{\"sessionIssuer\":{\"type\":\"Role\",\"principalId\":\"AROAEXAMPLEMASKED0001:AROAEXAMPLEMASKED0001-alex-Admin\",\"arn\":\"arn:aws:sts::111122223333:assumed-role/DevOpsAgentRole-WebappAdmin-examplesfx/AROAEXAMPLEMASKED0001-alex-Admin\",\"accountId\":\"111122223333\",\"userName\":\"AROAEXAMPLEMASKED0001-alex-Admin\"},\"attributes\":{\"mfaAuthenticated\":\"false\"}}},\"eventTime\":\"2026-11-10T23:38:09Z\",\"eventSource\":\"aidevops.amazonaws.com\",\"eventName\":\"UpdateAsset\",\"awsRegion\":\"us-west-2\",\"sourceIPAddress\":\"192.0.2.10\",\"userAgent\":\"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0.0.0 Safari/537.36\",\"requestParameters\":{\"clientToken\":\"1c79ea18-646f-4533-bb29-89ceceb591cc\"},\"responseElements\":{\"asset\":{\"assetId\":\"ki-9184fa09-8e79-4a11-90fa-a6b81ab5fe6b\",\"assetType\":\"memory\",\"version\":24,\"createdAt\":1786646225,\"updatedAt\":1794353889}},\"requestID\":\"55d0cfe2-d02e-4eff-9c59-f292ae76a7dc\",\"eventID\":\"5e472dc5-1ae3-4de5-bd6d-8476d48623c5\",\"readOnly\":false,\"resources\":[{\"accountId\":\"111122223333\",\"type\":\"AWS::AIDevOps::AgentSpace\",\"ARN\":\"arn:aws:aidevops:us-west-2:111122223333:agentspace/00000000-0000-4000-8000-0000000000bb\"}],\"eventType\":\"AwsApiCall\",\"managementEvent\":true,\"recipientAccountId\":\"111122223333\",\"eventCategory\":\"Management\"}"
+      },
+      {
+        "EventId": "f5a87524-8ee8-4285-b735-7421294988b7",
+        "EventName": "UpdateAsset",
+        "ReadOnly": "false",
+        "EventTime": "2026-11-10T23:38:06.000Z",
+        "EventSource": "aidevops.amazonaws.com",
+        "Username": "AROAEXAMPLEMASKED0001-alex-Admin",
+        "Resources": [
+          {
+            "ResourceType": "AWS::AIDevOps::Asset",
+            "ResourceName": "ki-9184fa09-8e79-4a11-90fa-a6b81ab5fe6b"
+          }
+        ],
+        "CloudTrailEvent": "{\"eventVersion\":\"1.11\",\"userIdentity\":{\"type\":\"AssumedRole\",\"principalId\":\"AROAEXAMPLEMASKED0001:AROAEXAMPLEMASKED0001-alex-Admin\",\"arn\":\"arn:aws:sts::111122223333:assumed-role/DevOpsAgentRole-WebappAdmin-examplesfx/AROAEXAMPLEMASKED0001-alex-Admin\",\"accountId\":\"111122223333\",\"sessionContext\":{\"sessionIssuer\":{\"type\":\"Role\",\"principalId\":\"AROAEXAMPLEMASKED0001:AROAEXAMPLEMASKED0001-alex-Admin\",\"arn\":\"arn:aws:sts::111122223333:assumed-role/DevOpsAgentRole-WebappAdmin-examplesfx/AROAEXAMPLEMASKED0001-alex-Admin\",\"accountId\":\"111122223333\",\"userName\":\"AROAEXAMPLEMASKED0001-alex-Admin\"},\"attributes\":{\"mfaAuthenticated\":\"false\"}}},\"eventTime\":\"2026-11-10T23:38:06Z\",\"eventSource\":\"aidevops.amazonaws.com\",\"eventName\":\"UpdateAsset\",\"awsRegion\":\"us-west-2\",\"sourceIPAddress\":\"192.0.2.10\",\"userAgent\":\"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0.0.0 Safari/537.36\",\"requestParameters\":{\"clientToken\":\"963360e3-e5d7-4a97-9e15-0fc3324e7a22\"},\"responseElements\":{\"asset\":{\"assetId\":\"ki-9184fa09-8e79-4a11-90fa-a6b81ab5fe6b\",\"assetType\":\"memory\",\"version\":24,\"createdAt\":1786646225,\"updatedAt\":1794353886}},\"requestID\":\"ad36da39-903d-4b4d-a4aa-5b5b1701d399\",\"eventID\":\"f5a87524-8ee8-4285-b735-7421294988b7\",\"readOnly\":false,\"resources\":[{\"accountId\":\"111122223333\",\"type\":\"AWS::AIDevOps::AgentSpace\",\"ARN\":\"arn:aws:aidevops:us-west-2:111122223333:agentspace/00000000-0000-4000-8000-0000000000bb\"}],\"eventType\":\"AwsApiCall\",\"managementEvent\":true,\"recipientAccountId\":\"111122223333\",\"eventCategory\":\"Management\"}"
+      },
+      {
+        "EventId": "5cf385a2-6428-46e0-a591-24c8c05b5148",
+        "EventName": "UpdateAsset",
+        "ReadOnly": "false",
+        "EventTime": "2026-11-10T23:37:40.000Z",
+        "EventSource": "aidevops.amazonaws.com",
+        "Username": "AROAEXAMPLEMASKED0001-alex-Admin",
+        "Resources": [
+          {
+            "ResourceType": "AWS::AIDevOps::Asset",
+            "ResourceName": "ki-9184fa09-8e79-4a11-90fa-a6b81ab5fe6b"
+          }
+        ],
+        "CloudTrailEvent": "{\"eventVersion\":\"1.11\",\"userIdentity\":{\"type\":\"AssumedRole\",\"principalId\":\"AROAEXAMPLEMASKED0001:AROAEXAMPLEMASKED0001-alex-Admin\",\"arn\":\"arn:aws:sts::111122223333:assumed-role/DevOpsAgentRole-WebappAdmin-examplesfx/AROAEXAMPLEMASKED0001-alex-Admin\",\"accountId\":\"111122223333\",\"sessionContext\":{\"sessionIssuer\":{\"type\":\"Role\",\"principalId\":\"AROAEXAMPLEMASKED0001:AROAEXAMPLEMASKED0001-alex-Admin\",\"arn\":\"arn:aws:sts::111122223333:assumed-role/DevOpsAgentRole-WebappAdmin-examplesfx/AROAEXAMPLEMASKED0001-alex-Admin\",\"accountId\":\"111122223333\",\"userName\":\"AROAEXAMPLEMASKED0001-alex-Admin\"},\"attributes\":{\"mfaAuthenticated\":\"false\"}}},\"eventTime\":\"2026-11-10T23:37:40Z\",\"eventSource\":\"aidevops.amazonaws.com\",\"eventName\":\"UpdateAsset\",\"awsRegion\":\"us-west-2\",\"sourceIPAddress\":\"192.0.2.10\",\"userAgent\":\"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0.0.0 Safari/537.36\",\"requestParameters\":{\"clientToken\":\"a6b3d37c-30ae-4714-a87a-239eeb650034\"},\"responseElements\":{\"asset\":{\"assetId\":\"ki-9184fa09-8e79-4a11-90fa-a6b81ab5fe6b\",\"assetType\":\"memory\",\"version\":24,\"createdAt\":1786646225,\"updatedAt\":1794353860}},\"requestID\":\"6b92a75c-534d-4312-b13a-a776fc3b200a\",\"eventID\":\"5cf385a2-6428-46e0-a591-24c8c05b5148\",\"readOnly\":false,\"resources\":[{\"accountId\":\"111122223333\",\"type\":\"AWS::AIDevOps::AgentSpace\",\"ARN\":\"arn:aws:aidevops:us-west-2:111122223333:agentspace/00000000-0000-4000-8000-0000000000bb\"}],\"eventType\":\"AwsApiCall\",\"managementEvent\":true,\"recipientAccountId\":\"111122223333\",\"eventCategory\":\"Management\"}"
+      }
+    ],
+    "NextToken": "sfJLtNMfmLYONvEnNDgux9YF6WpjKKXjnqgD/MNZLC7m7zKM0AOzSHpZyfRbXtg9"
+  }
+}

@@ -1,0 +1,51 @@
+{
+  "incident": "INCIDENT-20107",
+  "title": "INC-3107: Checkout error-rate alarm at 03:10 PT",
+  "score": "3/5",
+  "ground_truth": "No outage. 3 errors in 41 requests tripped a ratio alarm at night. The errors are the usual 404s on a retired coupon route. The alarm has no minimum request count.",
+  "ground_truth_uncertain": false,
+  "agent_final_answer": "Old mobile clients calling the retired route POST /v1/coupons/redeem cause the errors behind the alarm, with no customer impact; recommends a 410, removing the call and adjusting the threshold (R29, R31).",
+  "summaries": [
+    {
+      "record": "R34",
+      "utc": "2026-10-31T10:19:31Z",
+      "conclusion": "Mobile 5.9.x calls the retired route and every call returns 404; no customer impact; confidence high.",
+      "prompted_by": "initial run"
+    }
+  ],
+  "scored_summary_record": "R34 (investigation_summary_md)",
+  "timing": {
+    "incident_created": "2026-10-31 03:10 PT (10:10 UTC)",
+    "agent_start_utc": "2026-10-31T10:11:10Z",
+    "first_summary_utc": "2026-10-31T10:19:31Z",
+    "ran_while_incident_minutes_old": true,
+    "decisive_evidence_existed_at_run_time": "yes",
+    "note": "The agent started one minute after the alarm. The facts that decide the incident, 3 errors and 41 requests, are in its first metrics result (R18)."
+  },
+  "reachability": "reachable",
+  "reachability_reason": "The request count and error count come from the same tool as the ratio (R16), and the agent received them in one result (R18). Nothing was out of reach.",
+  "near_miss": "Yes. R18 ('10:05: 41') and R18 ('10:05: 3') sit next to the 0.073 ratio (R18), and the finding quotes 3 of 41 (R29). The agent did not ask whether 41 requests can support a ratio alarm. It also noted that the same 404s appear 9 times in two hours (R22) and R25 ('Total in 24 hours: 47') (R26), which marks them as chronic.",
+  "failure_modes": [
+    "K_chronic_noise"
+  ],
+  "primary_failure_mode": "K_chronic_noise",
+  "blocking_errors": [],
+  "scorecard_fair": "mostly",
+  "scorecard_notes": "The score of 3/5 is fair to generous. The agent found the right 3 errors and said there was no customer impact (R31, R34). It named a chronic, low-rate 404 as the root cause (R29) and missed that the alarm fired on a tiny sample (R18).",
+  "quality_notes": [
+    "R27 says the same line appears 9 times in two hours and 47 times in 24 hours (R25) and still calls it the root cause. A chronic error that predates the alarm explains the alarm only through the small denominator.",
+    "The mitigation tells the reader to adjust the alert threshold (R36). A higher threshold hides real errors at a low rate, while a minimum request count fixes the cause.",
+    "The report is clear and correct on impact (R34, R31). The weakness is the framing as a root cause of an incident (R29)."
+  ],
+  "fixes": [
+    {
+      "owner": "customer_memory",
+      "fix": "Add a memory incident-patterns/patterns/low-traffic-alarms: ratio alarms at night can fire on a handful of requests, so count the requests behind the ratio before calling an outage. The agent had the counts (R18) and no memory it read asked it to use them (R9)."
+    },
+    {
+      "owner": "instructions",
+      "fix": "In the INCIDENT_RCA instructions, require that an error named as a cause comes with its rate and its share of the requests in the alarm window, and that an error that predates the alarm is called chronic (R22, R27). A cause of an alarm may be the alarm's own condition."
+    }
+  ],
+  "one_line": "Named a chronic 404 on a retired route as the cause of an alarm that fired on 41 requests."
+}

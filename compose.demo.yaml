@@ -1,0 +1,77 @@
+# Demo stack: the app with the invented AnyCompany Tickets sample space and no AWS at all.
+# Start it with `./scripts/stack.sh demo`, which builds or pulls the image, creates the password in .env
+# and opens nothing but 127.0.0.1.
+#
+# - Own Postgres (database dam_demo, no published port) and own volumes, separate from compose.yaml.
+# - `seed` runs once per start, after the migrations, and fills the database with the sample space
+#   unless an earlier start already did (see `demo-seed` in scripts/entrypoint.sh). To start over,
+#   run `./scripts/stack.sh demo --reset`, which removes the demo volumes first.
+# - No ~/.aws mount and no AWS profile. The sample space names a profile that does not exist, and
+#   AWS_EC2_METADATA_DISABLED stops the SDK from looking for instance credentials.
+# - The worker runs, so imports, exports and analysis work. DAM_POLICY_OVERLAY_DIRS turns off its
+#   scheduled syncs (scripts/demo-seed/policy/sync.yaml), which would fail and overwrite the seeded
+#   sync status. A sync you start yourself still fails, because there is no Agent Space.
+# - The web app is published to 127.0.0.1 only (port DAM_DEMO_PORT, default 3001). Inside the
+#   container it binds 0.0.0.0 so the published port works; the 127.0.0.1 publish is the boundary.
+#   DAM_LOOPBACK_PUBLISH_ONLY=true states that, and is what allows AUTH_DEV_BYPASS here. Remove both
+#   if you change the mapping.
+name: dam-demo
+services:
+  postgres:
+    image: docker.io/library/postgres:18
+    environment:
+      POSTGRES_USER: dam
+      POSTGRES_DB: dam_demo
+      POSTGRES_PASSWORD: ${DAM_DEMO_POSTGRES_PASSWORD:?set DAM_DEMO_POSTGRES_PASSWORD in .env}
+    volumes:
+      - pg-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dam -d dam_demo"]
+      interval: 5s
+      retries: 20
+
+  seed:
+    image: ${DAM_IMAGE:-localhost/devops-agent-manager:dev}
+    command: ["demo-seed"]
+    restart: "no"
+    depends_on:
+      postgres: { condition: service_healthy }
+    environment: &demo-env
+      DATABASE_URL: postgres://dam:${DAM_DEMO_POSTGRES_PASSWORD:?set DAM_DEMO_POSTGRES_PASSWORD in .env}@postgres:5432/dam_demo
+      DAM_HOST: 0.0.0.0
+      DAM_LOOPBACK_PUBLISH_ONLY: "true"
+      AUTH_DEV_BYPASS: "true"
+      AUTH_DEV_USER_EMAIL: alex@example.com
+      AUTH_DEV_USER_NAME: Alex Rivera
+      AUTH_DEV_ROLE: admin
+      AWS_EC2_METADATA_DISABLED: "true"
+      DAM_DATA_DIR: /data
+      DAM_POLICY_OVERLAY_DIRS: /app/demo-policy
+      DAM_ALLOWED_ORIGINS: http://127.0.0.1:${DAM_DEMO_PORT:-3001},http://localhost:${DAM_DEMO_PORT:-3001}
+    volumes:
+      - app-data:/data
+
+  web:
+    build: { context: ., dockerfile: Containerfile }
+    image: ${DAM_IMAGE:-localhost/devops-agent-manager:dev}
+    command: ["web"]
+    depends_on:
+      seed: { condition: service_completed_successfully }
+    ports:
+      - "127.0.0.1:${DAM_DEMO_PORT:-3001}:3000"
+    environment: *demo-env
+    volumes:
+      - app-data:/data
+
+  worker:
+    image: ${DAM_IMAGE:-localhost/devops-agent-manager:dev}
+    command: ["worker"]
+    depends_on:
+      seed: { condition: service_completed_successfully }
+    environment: *demo-env
+    volumes:
+      - app-data:/data
+
+volumes:
+  pg-data: {}
+  app-data: {}

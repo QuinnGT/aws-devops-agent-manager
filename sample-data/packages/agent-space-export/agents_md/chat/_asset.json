@@ -1,0 +1,15 @@
+{
+  "assetId": "ki-00000000-0000-4000-8000-000000000105",
+  "assetType": "agents_md",
+  "metadata": {
+    "status": "ACTIVE",
+    "agent_type": "CHAT"
+  },
+  "version": 1,
+  "createdAt": "2026-10-20 18:02:11+00:00",
+  "updatedAt": "2026-10-20 18:02:11+00:00",
+  "creator": {
+    "uid": "00000000-0000-4000-8000-0000000000bb",
+    "displayName": "AnyCompanyAgentSpaceAdmin"
+  }
+}

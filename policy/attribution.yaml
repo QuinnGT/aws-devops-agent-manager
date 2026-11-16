@@ -1,0 +1,62 @@
+# Source attribution for asset changes.
+# Rules, first match wins:
+#   app      the matching CloudTrail event's clientToken belongs to a plan item this app applied
+#   pattern  the event's principal matches a rolePatterns entry (console, cli or agent)
+#   cli      a matching write event from any other principal
+#   agent    no matching write event (noEventSource, per asset type override below)
+#   unknown  the lookup failed, the change is older than CloudTrail keeps, or the event may not be delivered yet
+cloudTrailSource: lookup-events
+
+# Seconds around a change's timestamp, used only when no event matches version and timestamp exactly.
+matchWindowSeconds: 60
+
+# CloudTrail typically delivers events within about 5 minutes (not guaranteed). A change this recent
+# with no matching event is labeled unknown and marked provisional, so sync can attribute it again later.
+eventDeliveryDelaySeconds: 300
+
+noEventSource: agent
+# Asset types the agent cannot change are better labeled unknown than agent. Example: agents_md: unknown
+noEventSourceByAssetType: {}
+
+events:
+  eventSource: aidevops.amazonaws.com
+  writeEventNames: [CreateAsset, UpdateAsset, CreateAssetFile, UpdateAssetFile, DeleteAssetFile, DeleteAsset]
+  creationEventNames: [CreateAsset]
+  deletionEventNames: [DeleteAsset]
+  # Where the written asset's version and timestamps appear in responseElements ("" is the root).
+  responseObjectPaths: [asset, file, ""]
+
+lookupEvents:
+  # The documented limit is 2 requests per second per account and Region. One leaves headroom.
+  requestsPerSecond: 1
+  maxResults: 50
+  maxPagesPerAsset: 100
+  throttleRetries: 3
+  throttleBackoffMs: 1000
+  retentionDays: 90
+
+# Ordered; first match wins. match: roleName (default), sessionName or arn. `*` is the only wildcard.
+# principal: sessionName, roleName, arn or label (default sessionName for console, arn otherwise).
+# If the chat agent writes as another principal, add it here with source: agent.
+rolePatterns:
+  - { pattern: "DevOpsAgentRole-WebappAdmin-*", source: console, label: Operator Web App }
+
+labels:
+  app: DevOps Agent Manager
+  console: Operator Web App
+  cli: CLI or SDK
+  agent: DevOps Agent
+  unknown: Unknown
+
+# Tooltip sentence for a source's chip, shown in place of the principal.
+notes:
+  agent: No AWS API call was recorded for this change, so it's shown as made by the DevOps Agent.
+
+# Chip text for each source in the UI (short form). `labels` above stay the long form.
+# The console chip says "Web app" so it agrees with the detail line's "in the Operator Web App".
+shortLabels:
+  app: This app
+  console: Web app
+  cli: CLI or SDK
+  agent: DevOps Agent
+  unknown: Unknown

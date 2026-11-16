@@ -1,0 +1,27 @@
+{
+  "request": {},
+  "response": {
+    "usagePeriodStartTime": "2026-11-01T00:00:00.000Z",
+    "usagePeriodEndTime": "2026-11-11T18:17:27.194Z",
+    "monthlyAccountInvestigationHours": {
+      "limit": -1,
+      "usage": 0
+    },
+    "monthlyAccountEvaluationHours": {
+      "limit": -1,
+      "usage": 0
+    },
+    "monthlyAccountSystemLearningHours": {
+      "limit": -1,
+      "usage": 0.2688888888888889
+    },
+    "monthlyAccountOnDemandHours": {
+      "limit": -1,
+      "usage": 0.05277777777777778
+    },
+    "monthlyAccountGraderHours": {
+      "limit": -1,
+      "usage": 0
+    }
+  }
+}

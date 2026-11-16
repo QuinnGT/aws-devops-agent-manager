@@ -1,0 +1,27 @@
+{
+  "assetId": "ki-00000000-0000-4000-8000-000000000122",
+  "assetType": "custom_agent",
+  "metadata": {
+    "skills": [
+      "ki-00000000-0000-4000-8000-000000000118",
+      "ki-00000000-0000-4000-8000-000000000112"
+    ],
+    "name": "capacity-reviewer",
+    "tools": [
+      "anyco_cmdb_lookup",
+      "anyco_metrics_query"
+    ],
+    "status": "ACTIVE"
+  },
+  "version": 1,
+  "createdAt": "2026-10-28 22:15:03+00:00",
+  "updatedAt": "2026-10-28 22:15:03+00:00",
+  "creator": {
+    "uid": "00000000-0000-4000-8000-0000000000bb",
+    "displayName": "AnyCompanyAgentSpaceAdmin"
+  },
+  "editor": {
+    "uid": "00000000-0000-4000-8000-0000000000bb",
+    "displayName": "AnyCompanyAgentSpaceAdmin"
+  }
+}

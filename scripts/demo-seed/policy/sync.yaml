@@ -1,0 +1,10 @@
+# Policy overlay for the demo stack (compose.demo.yaml sets DAM_POLICY_OVERLAY_DIRS to this folder).
+#
+# The sample space has no Agent Space behind it: its AWS profile does not exist, and its pages show
+# what the seed stored. A scheduled sync would fail every time and replace the seeded sync status
+# with an error. The worker still runs, so exports, imports and analysis work, but both sync
+# schedules are set to 29 February at 00:00 UTC, so the next scheduled sync is on 2028-02-29.
+# A cron that can never match, such as 31 February, is rejected by the scheduler, so this is the
+# rarest valid one.
+tickCron: "0 0 29 2 *"
+reconcileCron: "0 0 29 2 *"

@@ -1,0 +1,37 @@
+# Release verification, checks 1 and 2. A customer's history repository can
+# override any of this in its own policy/verify.yaml.
+
+live:
+  # Check 1, live state: sync the space before comparing it with the release.
+  # The sync is a reconcile (a full listing under the space's sync lock), so
+  # assets deleted since the release show as missing.
+  syncFirst: true
+
+reads:
+  # Check 2, what the agent read: the deployed-vs-read analyzer runs on the
+  # investigations that ran on the release, newest first, up to this many.
+  maxInvestigations: 50
+  # Which investigations ran on the release.
+  #   release-created  created after the release was created, and before the
+  #                    next release was created
+  #   content-live     created after the newest asset change in the release, and
+  #                    before the newest asset change in the next release (use it
+  #                    when releases are created some time after the upload)
+  window: release-created
+  # The agent maintains memories in managed stores (asset-types.yaml
+  # managedNames), so their bodies change without a release: skip or include.
+  managed: skip
+  # Inactive skills and memories can't be loaded by the agent: skip or include.
+  inactive: skip
+  # Example records kept per file and outcome, for the links on the release page.
+  examplesPerFile: 3
+  # When the agent got a body that isn't the release's, this many earlier and
+  # later versions of the file from the history repository are compared with it,
+  # to name the version the agent read (for example v1 read after v2 was sent).
+  versionsPerFile: 10
+  auto:
+    # Queue the check when a journal export or import adds investigations.
+    enabled: false
+    # Which release: latest (the newest release) or latest-applied (the newest
+    # release tagged after applying a plan).
+    release: latest

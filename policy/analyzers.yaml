@@ -1,0 +1,45 @@
+# Settings for the analyzers (src/server/analyzers/).
+#
+# memoryReads: how the memory reads analyzer finds index listings, requested
+# memory paths and missing files in a journal, and what it calls each listing.
+# Patterns are Python-style regular expressions; the analyzer compiles them
+# with the Unicode rules Python uses for \b, \d and \w.
+#
+# The kind rules below are the generic ones. A space whose memories follow a
+# naming scheme can add rules for it in an overlay or a history repository's
+# policy/analyzers.yaml. Arrays replace, so an overlay lists every rule it wants,
+# in order.
+
+memoryReads:
+  # One entry line of an index listing, as the agent reads it: "<n><TAB>- [name](./target): description".
+  # Groups: entry number, name, link target, description.
+  entry: '^\s*(\d+)\t- \[([^\]]+)\]\(\./([^)]+)\)(?::\s*(.*))?$'
+  # A requested path quoted in text. Group 1 is the path.
+  filePath: '"file_path":\s*"([^"]+)"'
+  # Keys of a tool call's input that hold a requested path.
+  filePathKeys:
+    - file_path
+  # A path counts as a memory path when it contains this text (the DevOps Agent mounts memories here).
+  memoryPathMarker: /aidevops/memory
+  # A tool result saying a file was not found. Group 1 is the path.
+  fileNotFound: 'FileNotFoundError - file not found: (\S+)'
+
+  # A memory that holds failure patterns to look for in listings and results.
+  # Leave both empty to track none; the output fields stay false and empty.
+  failpatContent: ""
+  failpatName: ""
+
+  # First matching rule names the kind of a listing (the keys of indexes_read).
+  classes:
+    # Listings of folders: the kind carries the first three folder names.
+    - kind: other-dir
+      anyTargetSuffix: /INDEX.md
+      appendNames: 3
+    # A long listing whose descriptions say "monitor".
+    - kind: monitors
+      descriptionsInclude: monitor
+      minEntries: 11
+
+  # Any other listing is "other" with its first three entry names.
+  fallbackKind: other
+  fallbackNames: 3

@@ -1,0 +1,6 @@
+blank_issues_enabled: false
+contact_links:
+  # Replace the URL with https://github.com/<owner>/<repo>/security/policy once the repository name is final.
+  - name: Report a security vulnerability
+    url: https://docs.github.com/en/code-security/how-tos/report-and-fix-vulnerabilities/report-a-vulnerability/privately-reporting-a-security-vulnerability
+    about: Do not open a public issue. Use "Report a vulnerability" on the Security tab of this repository, and read SECURITY.md first.

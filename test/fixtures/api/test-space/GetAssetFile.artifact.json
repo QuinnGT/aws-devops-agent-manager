@@ -1,0 +1,21 @@
+{
+  "request": {
+    "agentSpaceId": "00000000-0000-4000-8000-0000000000bb",
+    "assetId": "ki-83909e28-f98d-4d39-8179-02ca7555b4d4",
+    "path": "Agent-Space-Summary-Report.json"
+  },
+  "response": {
+    "file": {
+      "path": "Agent-Space-Summary-Report.json",
+      "content": {
+        "text": "{\"elements\":[{\"type\":\"text\",\"content\":\"## Overview\\n\\nCaptures the architecture, environments, and resource topology of a Bedrock AgentCore development account (111122223333) spanning us-west-2 (dev-pdx) and us-east-1 (dev-iad). Use during incident investigation to identify affected components, find relevant logs, and understand resource relationships.\\n\\n## Environments\\n\\n- **dev-pdx**: AWS(111122223333, us-west-2) \u2014 Primary development environment. Hosts the Bedrock AgentCore runtime logging and CDK bootstrap tooling.\\n- **dev-iad**: AWS(111122223333, us-east-1) \u2014 Secondary development/test environment. Hosts the EMR Test Cluster and the N. Virginia Bedrock model-invocation log group.\"},{\"type\":\"data_table\",\"title\":\"High-level Architecture\",\"columns\":[{\"key\":\"container\",\"label\":\"Container\"},{\"key\":\"description\",\"label\":\"Description\"},{\"key\":\"key_components\",\"label\":\"Key Components\"}],\"data\":[{\"container\":\"Bedrock AgentCore\",\"description\":\"AI agent runtime workload; runtime and model-invocation activity captured via CloudWatch log groups, supported by CDK bootstrap tooling\",\"key_components\":\"AgentCore Runtime Logs (AWS::Logs::LogGroup), Invocation Logs (AWS::Logs::LogGroup), CDK Bootstrap (AWS::CloudFormation::Stack)\"},{\"container\":\"EMR Test Cluster\",\"description\":\"EC2-based single-instance compute for data-processing test and experimentation\",\"key_components\":\"Test Instance (AWS::EC2::Instance), Instance Storage (AWS::EC2::Volume), Cluster Network (AWS::EC2::VPC)\"}]},{\"type\":\"text\",\"content\":\"## Container Summary\\n\\n**EMR Test Cluster** \u2014 The EMR Test Cluster container is a single EC2 instance in us-east-1 (dev-iad) used for data-processing test and experimentation workloads. It is named \\\"emr-test-cluster\\\" via its SSH key pair, suggesting it was provisioned for EMR or similar data-processing testing. The instance runs in a dedicated VPC and subnet with an attached EBS volume, ENI, and security group.\\n\\n## Notes\\n\\n- Two additional security groups exist in us-east-1 (sg-04f42ff8fc1e0a1cd, sg-0c91abd6e0217049e) with no discovered edge to the instance; they are likely unused and are not confirmed as workload-attached.\\n\\n\\n**Bedrock AgentCore** \u2014 The Bedrock AgentCore container represents the AI agent runtime workload in this account. Its primary deployment is in us-west-2 (dev-pdx), where a CloudWatch log group captures runtime execution; a second cell in us-east-1 (dev-iad) captures Bedrock model-invocation logs. The workload is supported by CDK bootstrap tooling (CDKToolkit stack, ECR asset repo, S3 asset bucket, and IAM roles) provisioned for us-west-2 deployments.\\n\\nNote: the AgentCore runtime resource (`harness_harness_atvai-W4gOUEEv2z-DEFAULT`) is not currently present as a discrete resource in the topology graph \u2014 it was probed as both `AWS::Bedrock::AgentCore` and `AWS::BedrockAgentCore::Runtime` in us-west-2 with no results. Its runtime CloudWatch log group persists and encodes the runtime name, so the runtime identity is inferred from log-group evidence.\"}]}"
+      },
+      "version": 2,
+      "createdAt": "2026-06-17T20:23:01.000Z",
+      "updatedAt": "2026-07-08T15:16:10.000Z",
+      "metadata": {
+        "mimeType": "application/json"
+      }
+    }
+  }
+}

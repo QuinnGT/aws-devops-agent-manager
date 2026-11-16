@@ -1,0 +1,95 @@
+# Output rules (account ID masking, DESTRUCTIVE labels, ...).
+#
+# The defaults cover account ID masking (to the last 4 digits), a dash check on
+# the report, a DESTRUCTIVE prefix on destructive pod and deployment steps, and
+# conclusions the agent must not state.
+# Patterns are JavaScript regular expressions.
+
+# Journal records that count as agent output. Final summaries and the agent's
+# own records; the JSON twins of the summaries are left out to avoid counting
+# the same text twice. Add "assistant" to messageRoles to check chat turns too.
+agentOutput:
+  recordTypes:
+    - investigation_summary_md
+    - mitigation_summary_md
+    - finding
+    - observation
+    - symptom
+    - investigation_gap
+  messageRoles: []
+  includeMessagesWithoutRole: false
+
+excerptChars: 80
+
+rules:
+  - id: unmasked-account-id
+    description: A full 12-digit AWS account ID. Mask it to the last 4 digits.
+    kind: forbid
+    pattern: '\b\d{12}\b'
+    severity: error
+    # 111122223333 is the documented placeholder used in masked captures.
+    allow: ['111122223333']
+    redact: mask-digits
+
+  - id: destructive-label
+    description: A pod or deployment delete, restart, rollback or scale step without a DESTRUCTIVE label nearby.
+    kind: require-near
+    pattern: 'kubectl\b[^\n]*?\b(?:delete\s+(?:pods?|deployments?|deploy|rs|replicasets?|statefulsets?|sts)\b|rollout\s+(?:restart|undo)\b|scale\b)'
+    flags: i
+    requires: '(?<![A-Za-z-])DESTRUCTIVE\b'
+    window: 600
+    severity: error
+    appliesTo: [agent-output, report]
+
+  - id: forbidden-false-alert
+    description: Calls the alert false or says there was no real issue (forbidden conclusion).
+    kind: forbid
+    pattern: '\b(?:false (?:alert|alarm|positive|breach)|no real issue)\b'
+    flags: i
+    severity: warning
+    appliesTo: [agent-output]
+
+  - id: forbidden-no-impact
+    description: States there was no customer impact (forbidden conclusion).
+    kind: forbid
+    pattern: '\b(?:no customer impact|not user-facing)\b'
+    flags: i
+    severity: warning
+    appliesTo: [agent-output]
+
+  - id: forbidden-monitoring-issue
+    description: Blames the monitor or calls the alert too sensitive or flapping (forbidden conclusion).
+    kind: forbid
+    pattern: '\b(?:monitoring issue|alert (?:is )?too sensitive|flapping)\b'
+    flags: i
+    severity: warning
+    appliesTo: [agent-output]
+
+  - id: forbidden-threshold-tuning
+    description: Recommends adjusting or tuning the alert threshold (forbidden conclusion).
+    kind: forbid
+    pattern: '\b(?:adjust|tune)(?:\s+the)?\s+(?:alert\s+)?threshold\b'
+    flags: i
+    severity: warning
+    appliesTo: [agent-output]
+
+  - id: forbidden-no-action
+    description: Says no action is needed or to continue monitoring (forbidden conclusion).
+    kind: forbid
+    pattern: '\b(?:no (?:\w+ ){0,2}action (?:is )?(?:needed|warranted|required)|continue monitoring)\b'
+    flags: i
+    severity: warning
+    appliesTo: [agent-output]
+
+  - id: iam-wildcard
+    description: An IAM statement with "Action" or "Resource" set to "*".
+    kind: forbid
+    pattern: '"(?:Action|Resource)"\s*:\s*"\*"'
+    severity: warning
+
+  - id: report-dashes
+    description: Em or en dash in a shareable report.
+    kind: forbid
+    pattern: '[\u2013\u2014]'
+    severity: error
+    appliesTo: [report]

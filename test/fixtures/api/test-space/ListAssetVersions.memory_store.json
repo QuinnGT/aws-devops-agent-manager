@@ -1,0 +1,61 @@
+{
+  "request": {
+    "agentSpaceId": "00000000-0000-4000-8000-0000000000bb",
+    "assetId": "ki-63edd778-1a7a-483f-8b18-479742a15a04",
+    "maxResults": 50
+  },
+  "response": {
+    "items": [
+      {
+        "version": 10,
+        "createdAt": "2026-07-07T18:43:41.000Z",
+        "updatedAt": "2026-08-10T18:37:45.000Z"
+      },
+      {
+        "version": 9,
+        "createdAt": "2026-07-07T18:43:41.000Z",
+        "updatedAt": "2026-08-07T18:37:38.000Z"
+      },
+      {
+        "version": 8,
+        "createdAt": "2026-07-07T18:43:41.000Z",
+        "updatedAt": "2026-07-31T18:36:45.000Z"
+      },
+      {
+        "version": 7,
+        "createdAt": "2026-07-07T18:43:41.000Z",
+        "updatedAt": "2026-07-27T18:44:03.000Z"
+      },
+      {
+        "version": 6,
+        "createdAt": "2026-07-07T18:43:41.000Z",
+        "updatedAt": "2026-07-24T18:51:10.000Z"
+      },
+      {
+        "version": 5,
+        "createdAt": "2026-07-07T18:43:41.000Z",
+        "updatedAt": "2026-07-21T18:40:45.000Z"
+      },
+      {
+        "version": 4,
+        "createdAt": "2026-07-07T18:43:41.000Z",
+        "updatedAt": "2026-07-17T18:43:26.000Z"
+      },
+      {
+        "version": 3,
+        "createdAt": "2026-07-07T18:43:41.000Z",
+        "updatedAt": "2026-07-14T18:37:59.000Z"
+      },
+      {
+        "version": 2,
+        "createdAt": "2026-07-07T18:43:41.000Z",
+        "updatedAt": "2026-07-11T18:38:14.000Z"
+      },
+      {
+        "version": 1,
+        "createdAt": "2026-07-07T18:43:41.000Z",
+        "updatedAt": "2026-07-07T18:43:41.000Z"
+      }
+    ]
+  }
+}

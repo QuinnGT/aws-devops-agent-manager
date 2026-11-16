@@ -1,0 +1,51 @@
+{
+  "incident": "INCIDENT-20108",
+  "title": "INC-3108: Venue maps not loading for some users",
+  "score": "4/5",
+  "ground_truth": "venue-cdn's origin group failed over from venue-maps-primary (S3 503 under on-sale load) to venue-maps-secondary, which lacks the 605 maps published after replication stopped on 2026-10-28. Requests for those maps returned 404. It was not a network issue.",
+  "ground_truth_uncertain": false,
+  "agent_final_answer": "The scored summary says a regional network issue is the root cause (R35). The agent's findings and closing message name the origin failover and the stale secondary bucket (R25, R29, R32).",
+  "summaries": [
+    {
+      "record": "R35",
+      "utc": "2026-11-01T18:52:53Z",
+      "conclusion": "Regional network issue as the root cause, with origin failover and a stale secondary listed as other findings; confidence mid.",
+      "prompted_by": "initial run"
+    }
+  ],
+  "scored_summary_record": "R35 (investigation_summary_md)",
+  "timing": {
+    "incident_created": "2026-11-01 10:40 PT (18:40 UTC)",
+    "agent_start_utc": "2026-11-01T18:41:30Z",
+    "first_summary_utc": "2026-11-01T18:52:53Z",
+    "ran_while_incident_minutes_old": false,
+    "decisive_evidence_existed_at_run_time": "yes",
+    "note": "The failures began at about 18:18 UTC, 23 minutes before the agent started. The agent had the evidence by R24."
+  },
+  "reachability": "reachable",
+  "reachability_reason": "The CMDB entry names the origin group and its failover target (R13 ('Failover on status 500, 502, 503 and 504')), the metrics show the failover counter (R18) and use_aws and a subagent showed the bucket difference (R23, R24). All of it was within the agent's tools.",
+  "near_miss": "Yes. The agent opened R15 early (R14), rejected it in R20 and found the right causes (R25, R29). It never marked the hypothesis as ruled out, so the platform summary kept it as a cause (R35).",
+  "failure_modes": [
+    "J_summary_mismatch"
+  ],
+  "primary_failure_mode": "J_summary_mismatch",
+  "blocking_errors": [],
+  "scorecard_fair": "mostly",
+  "scorecard_notes": "The score of 4/5 is fair to generous. The scored summary (R35) names a network issue as its root cause, and a reader who stops there looks in the wrong place. The credit is for the correct findings (R25, R29) and the closing message (R32).",
+  "quality_notes": [
+    "The closing message states the correct root cause and rules out the network with data (R32, R20).",
+    "The summary's Root Cause section still reads R35 ('A regional network issue between some users and the CDN edge') with mid confidence, although the agent's own findings contradict it (R25).",
+    "The finding hyp-regional-network (R15) has no resolution record. The summary lists it first, typed as a cause, before the two real causes (R35)."
+  ],
+  "fixes": [
+    {
+      "owner": "aws_service",
+      "fix": "The investigation summary should follow the agent's latest findings. It listed the open hypothesis R15 as a cause and wrote a Root Cause section from it (R35), although two findings with resolutions ruled_in_as_cause came later (R25, R29). A hypothesis without a resolution should not be promoted to a cause."
+    },
+    {
+      "owner": "instructions",
+      "fix": "In the INCIDENT_RCA instructions, require a last pass before the report: give every hypothesis a resolution (ruled out or ruled in), and restate the root cause in one sentence that matches the findings. The agent ruled out the network in prose (R20) but not in a finding (R15)."
+    }
+  ],
+  "one_line": "Found the failover and the stale secondary, but left the network hypothesis open and the summary led with it."
+}

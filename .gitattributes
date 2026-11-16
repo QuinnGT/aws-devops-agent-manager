@@ -1,0 +1,10 @@
+# Keep line endings the same on every computer. A shell script or Containerfile checked out with
+# Windows line endings (CRLF) fails inside a Linux container. Clone inside WSL when you can; these
+# attributes keep the scripts working if someone clones on the Windows side anyway.
+* text=auto eol=lf
+*.sh text eol=lf
+Containerfile text eol=lf
+
+# Images are not text.
+*.png binary
+*.ico binary

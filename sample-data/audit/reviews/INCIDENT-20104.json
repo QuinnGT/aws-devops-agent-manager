@@ -1,0 +1,78 @@
+{
+  "incident": "INCIDENT-20104",
+  "title": "INC-3104: Mobile sign-in failures",
+  "score": "1/5",
+  "ground_truth": "After a signing key rotation at 20:40 UTC identity-service published a JWKS without the previous key, so tokens signed before the rotation failed validation in mobile-bff. Users who signed in after the rotation were not affected.",
+  "ground_truth_uncertain": false,
+  "agent_final_answer": "A client side session refresh bug in the 6.3 app line, confidence low, with identity-service unverified because of 403 responses (R29, R44).",
+  "summaries": [
+    {
+      "record": "R34",
+      "utc": "2026-10-29T21:22:48Z",
+      "conclusion": "Client side session refresh bug in app 6.3.x; identity-service unverified (403); confidence low.",
+      "prompted_by": "initial run"
+    },
+    {
+      "record": "R44",
+      "utc": "2026-10-29T21:29:50Z",
+      "conclusion": "Same conclusion after a second set of 403 responses; the identity side is unverified; confidence low.",
+      "prompted_by": "human: 'Identity logs are restricted for you, we know. Can you check identity-service another way'"
+    }
+  ],
+  "scored_summary_record": "R44 (the last investigation_summary_md)",
+  "timing": {
+    "incident_created": "2026-10-29 14:10 PT (21:10 UTC)",
+    "agent_start_utc": "2026-10-29T21:11:40Z",
+    "first_summary_utc": "2026-10-29T21:22:48Z",
+    "ran_while_incident_minutes_old": false,
+    "decisive_evidence_existed_at_run_time": "yes",
+    "note": "The failures began at about 20:41 UTC, 30 minutes before the agent started (R27). The evidence existed in identity-service, which the agent's role cannot read."
+  },
+  "reachability": "out_of_reach",
+  "reachability_reason": "The decisive evidence is in the identity-service logs and metrics. Every read of them returned 403, in R18, R22 and again in R41. The reachable data in mobile-bff (R27) shows 401 responses with session ages above 1,900 seconds, which is as far as the agent's access reaches.",
+  "near_miss": "Partly. Every sampled failure is a 401 on a session older than 1,950 seconds (R27 ('session_age_s ranges from 1950 to 3590')), and the ratio rises in the 20:50 bucket across all versions (R27). That pattern fits tokens issued before 20:40, but the agent read it as a 6.3.1 problem (R28) because 6.3.1 had 0.19 against 0.16.",
+  "failure_modes": [
+    "B_access_failure",
+    "A_out_of_reach"
+  ],
+  "primary_failure_mode": "B_access_failure",
+  "blocking_errors": [
+    {
+      "record": "R18",
+      "error": "anyco_logs_search returned 403 AccessDenied for /anyco/prod/identity-service",
+      "blocked": "Reading identity-service logs for JWKS and token validation messages (R16)."
+    },
+    {
+      "record": "R22",
+      "error": "anyco_logs_search, anyco_metrics_query and anyco_traces_search all returned 403 for identity-service",
+      "blocked": "Any view of identity-service: key rotation, token validation failures and traces (R20)."
+    },
+    {
+      "record": "R41",
+      "error": "A second round of 403 responses, including the audit log group",
+      "blocked": "The key rotation record in the audit log (R39)."
+    }
+  ],
+  "scorecard_fair": "mostly",
+  "scorecard_notes": "The score is fair for the outcome: the scored summary blames the client (R44). It does not take into account that the agent's role could not read the component that held the cause, which the agent reported as a gap (R42).",
+  "quality_notes": [
+    "The agent reported the 403 responses as a gap in both summaries (R34, R44) and set confidence to low.",
+    "Even so, the headline in both summaries is a concrete cause, 'client side session refresh bug', based on a difference of 0.19 to 0.16 between app versions (R28).",
+    "The memory has no identity-service entry (R11 ('FileNotFoundError - file not found')), and the routing note names no owner for it (R12 ('Page team-checkout for checkout-api')). The agent found team-identity only in the CMDB."
+  ],
+  "fixes": [
+    {
+      "owner": "customer_access",
+      "fix": "Give the DevOps Agent role read access to the log groups /anyco/prod/identity-service and /anyco/prod/identity-service-audit and to the namespace AnyCompany/identity-service. All reads were denied (R18, R22, R41), and the cause was in that data."
+    },
+    {
+      "owner": "instructions",
+      "fix": "Make the agent load the skill token-signing-check and keep its step 6. The skill's description fits this incident (sign-in fails for some users) and it already says to report the gap and not to blame the client app when identity log searches are refused. The agent loaded only bounded-log-query (R9) and named a client cause from weak differences (R28). Add to the INCIDENT_RCA instructions: when every read of the suspect component fails with 403, say that the component is unreviewed, and offer the checks a person with access should run, such as the JWKS and the key rotation log."
+    },
+    {
+      "owner": "customer_memory",
+      "fix": "Add identity-service to the memory incident-patterns/roles/on-call-routing, which names only three services (R12 ('Page team-checkout for checkout-api')). The agent could then name team-identity as the contact for the missing check (R31)."
+    }
+  ],
+  "one_line": "Every identity-service read returned 403, and the agent still named a client bug from a 0.03 difference between app versions."
+}

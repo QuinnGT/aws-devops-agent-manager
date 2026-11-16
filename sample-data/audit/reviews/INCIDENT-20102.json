@@ -1,0 +1,56 @@
+{
+  "incident": "INCIDENT-20102",
+  "title": "INC-3102: Card payments declining for one acquirer",
+  "score": "2/5",
+  "ground_truth": "ExamplePay rotated its mutual-TLS CA at 14:45 UTC and payments-gateway rejected the new chain (PKIX path building failed), so every card charge failed fast. ExamplePay's status page announced the rotation.",
+  "ground_truth_uncertain": false,
+  "agent_final_answer": "Checkout-api release 231 (14:52 UTC) changed card error mapping and caused the 502 failures (R30); recommends rolling back to release 230 (R32).",
+  "summaries": [
+    {
+      "record": "R35",
+      "utc": "2026-10-27T15:23:21Z",
+      "conclusion": "Release 231 of checkout-api broke card error mapping; ExamplePay latency ruled out; confidence mid.",
+      "prompted_by": "initial run"
+    }
+  ],
+  "scored_summary_record": "R35 (investigation_summary_md)",
+  "timing": {
+    "incident_created": "2026-10-27 08:12 PT (15:12 UTC)",
+    "agent_start_utc": "2026-10-27T15:13:20Z",
+    "first_summary_utc": "2026-10-27T15:23:21Z",
+    "ran_while_incident_minutes_old": false,
+    "decisive_evidence_existed_at_run_time": "yes",
+    "note": "The failures began at about 14:46 UTC, 26 minutes before the agent started. The gateway's TLS errors were in its log group for that whole time. The agent's own ratio series shows the rise in the 14:45 bucket (R18)."
+  },
+  "reachability": "reachable",
+  "reachability_reason": "The agent could search the log group /anyco/prod/payments-gateway with the same tool it used for checkout-api (R24). The traces already pointed at payments-gateway and a failed connect to examplepay (R26). The vendor status page has no tool, so that check was only partly within reach.",
+  "near_miss": "Yes. R26 ('examplepay connect failed (18 ms)') sits in the agent's own traces, and R27 calls the failures fast, not slow. That is a connection or handshake failure at the gateway. The agent kept the release hypothesis (R22) and never opened the gateway logs.",
+  "failure_modes": [
+    "C_change_anchoring",
+    "D_wrong_component"
+  ],
+  "primary_failure_mode": "C_change_anchoring",
+  "blocking_errors": [],
+  "scorecard_fair": "yes",
+  "scorecard_notes": "The score is fair. The scored summary names release 231 as the cause (R35) and says nothing about TLS or the acquirer's certificate change. The agent did identify the failing hop as the gateway call to ExamplePay (R27).",
+  "quality_notes": [
+    "R22 dismisses the timing with 'a few minutes of skew between a metric bucket and a deploy event is normal'. The 14:45 bucket holds the whole jump from 0.004 to 0.19 (R18) and the release is at 14:52. The rise came first.",
+    "The log search returns the newest 200 lines, starting at 15:01 UTC (R26). The agent did not ask for the first failure, and the observation says so (R27).",
+    "The final report lists 'payments-gateway logs were not read' as a gap (R35) and still recommends a rollback as the main action (R37)."
+  ],
+  "fixes": [
+    {
+      "owner": "instructions",
+      "fix": "Revise the skill change-window-search. Step 1 starts from the alert time (R13 ('Take the alert time, or the onset if triage gave one')), so the agent never looked for the first bad data point. Step 5 says a change after the onset cannot be the trigger, but it only helps once the onset is known. Add a step that finds the onset in the metrics first. Here release 231 came after the 14:45 bucket (R18, R22)."
+    },
+    {
+      "owner": "customer_memory",
+      "fix": "Extend the memories services/payments-gateway and services/checkout-api. The gateway entry only describes a slow acquirer (R12 ('A charge fails when ExamplePay takes longer than 3 seconds')), which sent the agent to latency (R21, R23). Add that ExamplePay posts incidents on its status page and that the gateway's own TLS and auth errors come first. Add that a 5xx from payments-gateway appears in checkout-api as HTTP 502 code PGW_UPSTREAM (R26)."
+    },
+    {
+      "owner": "instructions",
+      "fix": "Revise the skill vendor-status-check and make the agent load it. Its description fits this incident (card payments fail for one acquirer), but the agent read only the change window skill (R9). Step 4 of the skill treats a deploy shortly before the failures as the likely cause, which repeats the anchoring in R22. Add a step that reads the gateway's own TLS and auth errors before any deploy is blamed."
+    }
+  ],
+  "one_line": "Anchored on a checkout-api release that came after the onset and never opened the payments-gateway TLS errors."
+}

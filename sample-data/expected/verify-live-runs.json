@@ -1,0 +1,182 @@
+{
+  "description": "What check 2 (what the agent read) reports for release v2 with v1 as the earlier version, over the four live runs of 2026-11-03. Release v2 was sent on 2026-11-02. Checked by src/server/verify/sample-live-runs.test.ts.",
+  "release": "v2",
+  "earlierVersion": "v1",
+  "layouts": {
+    "release": "anycompany-v2",
+    "earlierVersion": "anycompany-v1"
+  },
+  "investigations": [
+    "INCIDENT-20201",
+    "INCIDENT-20202",
+    "INCIDENT-20203",
+    "INCIDENT-20204"
+  ],
+  "verdict": "failed",
+  "fileCounts": {
+    "older-body": 4,
+    "other-body": 0,
+    "newer-body": 0,
+    "release-body": 6,
+    "near-release": 0,
+    "requested-no-body": 0,
+    "not-requested": 8
+  },
+  "readAsV1": [
+    "/aidevops/memory/incident-patterns/patterns/cache-evictions.md",
+    "/aidevops/memory/runbooks/change-feed-windows.md",
+    "/aidevops/memory/runbooks/log-query-limits.md",
+    "/aidevops/memory/service-catalog/services/seat-map-service.md"
+  ],
+  "readAsRelease": [
+    "/aidevops/skills/user/bounded-log-query/SKILL.md",
+    "/aidevops/skills/user/cache-path-check/SKILL.md",
+    "/aidevops/skills/user/change-window-search/SKILL.md",
+    "/aidevops/skills/user/low-sample-size-check/SKILL.md",
+    "/aidevops/skills/user/vendor-status-check/SKILL.md",
+    "/aidevops/memory/incident-patterns/roles/on-call-routing.md"
+  ],
+  "filesRead": [
+    {
+      "deployedPath": "/aidevops/memory/incident-patterns/patterns/cache-evictions.md",
+      "verdict": "older-body",
+      "matchedVersions": [
+        1
+      ],
+      "counts": {
+        "older-body": 2,
+        "not-requested": 2
+      }
+    },
+    {
+      "deployedPath": "/aidevops/memory/runbooks/change-feed-windows.md",
+      "verdict": "older-body",
+      "matchedVersions": [
+        1
+      ],
+      "counts": {
+        "older-body": 2,
+        "not-requested": 2
+      }
+    },
+    {
+      "deployedPath": "/aidevops/memory/runbooks/log-query-limits.md",
+      "verdict": "older-body",
+      "matchedVersions": [
+        1
+      ],
+      "counts": {
+        "older-body": 3,
+        "not-requested": 1
+      }
+    },
+    {
+      "deployedPath": "/aidevops/memory/service-catalog/services/seat-map-service.md",
+      "verdict": "older-body",
+      "matchedVersions": [
+        1
+      ],
+      "counts": {
+        "older-body": 3,
+        "not-requested": 1
+      }
+    },
+    {
+      "deployedPath": "/aidevops/skills/user/bounded-log-query/SKILL.md",
+      "verdict": "release-body",
+      "matchedVersions": [],
+      "counts": {
+        "release-body": 1,
+        "not-requested": 3
+      }
+    },
+    {
+      "deployedPath": "/aidevops/skills/user/cache-path-check/SKILL.md",
+      "verdict": "release-body",
+      "matchedVersions": [],
+      "counts": {
+        "release-body": 2,
+        "not-requested": 2
+      }
+    },
+    {
+      "deployedPath": "/aidevops/skills/user/change-window-search/SKILL.md",
+      "verdict": "release-body",
+      "matchedVersions": [],
+      "counts": {
+        "release-body": 2,
+        "not-requested": 2
+      }
+    },
+    {
+      "deployedPath": "/aidevops/skills/user/low-sample-size-check/SKILL.md",
+      "verdict": "release-body",
+      "matchedVersions": [],
+      "counts": {
+        "release-body": 1,
+        "not-requested": 3
+      }
+    },
+    {
+      "deployedPath": "/aidevops/skills/user/vendor-status-check/SKILL.md",
+      "verdict": "release-body",
+      "matchedVersions": [],
+      "counts": {
+        "release-body": 1,
+        "not-requested": 3
+      }
+    },
+    {
+      "deployedPath": "/aidevops/memory/incident-patterns/roles/on-call-routing.md",
+      "verdict": "release-body",
+      "matchedVersions": [],
+      "counts": {
+        "release-body": 2,
+        "not-requested": 2
+      }
+    }
+  ],
+  "stores": [
+    {
+      "store": "incident-patterns",
+      "referencedIn": 4
+    },
+    {
+      "store": "runbooks",
+      "referencedIn": 4
+    },
+    {
+      "store": "service-catalog",
+      "referencedIn": 3
+    }
+  ],
+  "memoryPathsRequested": {
+    "INCIDENT-20201": [
+      "service-catalog/INDEX.md",
+      "service-catalog/services/seat-map-service.md",
+      "incident-patterns/INDEX.md",
+      "incident-patterns/patterns/cache-evictions.md",
+      "runbooks/INDEX.md",
+      "runbooks/log-query-limits.md"
+    ],
+    "INCIDENT-20202": [
+      "runbooks/INDEX.md",
+      "runbooks/change-feed-windows.md",
+      "runbooks/log-query-limits.md",
+      "incident-patterns/INDEX.md",
+      "incident-patterns/roles/on-call-routing.md"
+    ],
+    "INCIDENT-20203": [
+      "service-catalog/services/seat-map-service.md",
+      "runbooks/INDEX.md",
+      "runbooks/change-feed-windows.md",
+      "incident-patterns/roles/on-call-routing.md"
+    ],
+    "INCIDENT-20204": [
+      "service-catalog/services/seat-map-service.md",
+      "incident-patterns/INDEX.md",
+      "incident-patterns/patterns/cache-evictions.md",
+      "runbooks/log-query-limits.md"
+    ]
+  }
+}

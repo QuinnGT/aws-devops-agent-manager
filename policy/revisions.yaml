@@ -1,0 +1,116 @@
+# Revisions.
+#
+# A revision is a branch (history-layout.yaml revisionBranch,
+# revision/{spaceAlias}/{name}) in the space's history repository. The branch
+# holds an instruction package under history-layout.yaml packageDir
+# (packages/{spaceAlias}/{package}) in one of the layouts in
+# package-layouts.yaml. Each save is one commit on that branch; the working
+# copy stays on the default branch.
+
+name:
+  # A revision name becomes part of a branch name, a folder name and the name
+  # of the release tagged after its plan is applied, so it also has to pass
+  # the release name rules in releases.yaml.
+  pattern: "^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,62}[A-Za-z0-9])?$"
+  hint: Use 1 to 64 letters, numbers, dots, hyphens and underscores, starting and ending with a letter or number, for example v2.4.
+  maxLength: 64
+  # "V2.4" and "v2.4" collide as branches and folders on case-insensitive file systems.
+  uniqueIgnoringCase: true
+
+# The package folder ({package} in packageDir) and the zip's top folder.
+# Placeholders: {name} {spaceAlias}
+packageName: "{name}"
+
+# The author of each revision commit is the user who saved it.
+committer:
+  name: DevOps Agent Manager
+  email: revisions@devops-agent-manager.invalid
+
+create:
+  # Starting from the live space syncs it first (a reconcile, as a release of
+  # HEAD does), so the package matches the space at that moment. Starting
+  # from a release reads the release's commit and never syncs.
+  syncBeforeCreate: true
+  # Placeholders: {name} {spaceAlias} {base} ("the live space" or "release v2.3")
+  commitMessage: "Start revision {name} of {spaceAlias} from {base}"
+  noteMaxChars: 2000
+  # How the base is named in commit messages, the change record and pages.
+  baseLabels:
+    live: the live space
+    # Placeholder: {release}
+    release: "release {release}"
+
+save:
+  # A save that links no accepted finding: refuse, reason (a written reason
+  # is required and goes into the change record), or allow.
+  unlinked: reason
+  messageMaxChars: 200
+  reasonMinChars: 10
+  reasonMaxChars: 1000
+  maxFindings: 20
+  maxFiles: 500
+  # Bytes of file content one save may carry (10 MB).
+  maxBytes: 10485760
+
+trailers:
+  revisionId: Revision-Id
+  # One trailer per linked finding.
+  findingId: Finding-Id
+  changeId: Revision-Change-Id
+  unlinkedReason: Unlinked-Reason
+
+changelog:
+  # Written into the package on every save, so the exported package carries
+  # it. The revision's section sits between the markers below, at the top of
+  # the file, above the hand-written history. null turns the file off (the
+  # detail page still shows a preview).
+  path: reference/CHANGELOG.md
+  title: "# Change record"
+  # Placeholders: {name} {date}
+  heading: "## {name}, {date}"
+  # Placeholders: {name} {base}
+  intro: "Source: {base}. Generated from the revision's changes and the accepted audit findings each change links to."
+  begin: "<!-- revision: {name} (generated from the revision's changes; edits between these markers are replaced on the next save) -->"
+  end: "<!-- /revision: {name} -->"
+  columns:
+    change: Change
+    files: Files
+    audit: Audit
+    incident: Incident
+    finding: Finding
+    evidence: Evidence
+  unlinked: "Not linked to a finding: {reason}"
+  none: None
+  noChanges: No changes yet.
+  maxFilesListed: 5
+  maxCitations: 5
+  maxQuoteChars: 120
+
+plan:
+  # Placeholders: {name} {spaceAlias}
+  title: "Apply revision {name}"
+  # Prefilled change reason (editable on the plan page).
+  # Placeholders: {name} {changes} {findings}
+  reason: "Revision {name}: {changes}. Findings: {findings}."
+  noFindings: none linked
+
+release:
+  # Tagged when a plan made from the revision finishes applying with no
+  # failed items. Placeholders: {name} {spaceAlias}
+  name: "{name}"
+  # Placeholders: {name} {planId}
+  note: "Applied from revision {name} (plan {planId})."
+
+export:
+  # Publishing is blocked until the build passes: no download before that.
+  requirePassingBuild: true
+
+# Push the revision branch after each commit when the repository has a remote
+# and pushes are on.
+pushBranches: true
+
+pages:
+  listPageSize: 50
+  maxDiffBytes: 200000
+  maxFileBytes: 512000
+  maxResults: 200

@@ -1,0 +1,40 @@
+{
+  "request": {
+    "agentSpaceId": "00000000-0000-4000-8000-0000000000bb",
+    "assetId": "ki-6e6624f9-cca2-4545-8c89-3519caa36a0f"
+  },
+  "response": {
+    "items": [
+      {
+        "path": "SKILL.md",
+        "version": 14,
+        "createdAt": "2026-09-26T18:42:37.000Z",
+        "updatedAt": "2026-09-26T18:42:37.000Z"
+      },
+      {
+        "path": "references/cross-region-privatelink-setup.md",
+        "version": 14,
+        "createdAt": "2026-09-26T18:42:37.000Z",
+        "updatedAt": "2026-09-26T18:42:37.000Z"
+      },
+      {
+        "path": "references/cross-region-privatelink-specs.md",
+        "version": 14,
+        "createdAt": "2026-09-26T18:42:37.000Z",
+        "updatedAt": "2026-09-26T18:42:37.000Z"
+      },
+      {
+        "path": "references/devops-agent-operations.md",
+        "version": 14,
+        "createdAt": "2026-09-26T18:42:37.000Z",
+        "updatedAt": "2026-09-26T18:42:37.000Z"
+      },
+      {
+        "path": "references/mcp-server-testing.md",
+        "version": 14,
+        "createdAt": "2026-09-26T18:42:37.000Z",
+        "updatedAt": "2026-09-26T18:42:37.000Z"
+      }
+    ]
+  }
+}

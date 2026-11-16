@@ -1,0 +1,11 @@
+{
+  "status": "passed",
+  "instruction_files": 5,
+  "skills": 8,
+  "stores": 3,
+  "memories": 9,
+  "largest_memory_bytes": 452,
+  "largest_index_bytes": 762,
+  "errors": [],
+  "scope": "Offline structure, references, budgets, safety messages and archive consistency only; no live model or connector validation."
+}

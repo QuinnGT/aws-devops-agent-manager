@@ -1,0 +1,13 @@
+{
+  "layout": "anycompany-v1",
+  "assets": [
+    { "assetType": "skill", "key": "bounded-log-query", "metadata": { "agent_types": ["GENERIC"], "status": "ACTIVE" } },
+    { "assetType": "skill", "key": "cache-path-check", "metadata": { "agent_types": ["INCIDENT_RCA"], "status": "ACTIVE" } },
+    { "assetType": "skill", "key": "change-window-search", "metadata": { "agent_types": ["INCIDENT_TRIAGE", "INCIDENT_RCA"], "status": "ACTIVE" } },
+    { "assetType": "skill", "key": "feature-flag-audit", "metadata": { "agent_types": ["INCIDENT_RCA"], "status": "ACTIVE" } },
+    { "assetType": "skill", "key": "legacy-dashboard-links", "metadata": { "agent_types": ["GENERIC"], "status": "ACTIVE" } },
+    { "assetType": "skill", "key": "low-sample-size-check", "metadata": { "agent_types": ["INCIDENT_TRIAGE"], "status": "ACTIVE" } },
+    { "assetType": "skill", "key": "token-signing-check", "metadata": { "agent_types": ["INCIDENT_RCA"], "status": "ACTIVE" } },
+    { "assetType": "skill", "key": "vendor-status-check", "metadata": { "agent_types": ["INCIDENT_RCA"], "status": "ACTIVE" } }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "request": {
+    "agentSpaceId": "00000000-0000-4000-8000-0000000000bb",
+    "assetId": "ki-6e6624f9-cca2-4545-8c89-3519caa36a0f",
+    "path": "SKILL.md"
+  },
+  "response": {
+    "file": {
+      "path": "SKILL.md",
+      "content": {
+        "text": "---\nname: chat-tool-use-best-practices\ndescription: \"Routing index for chat tool-use best practices across Chat session categories.\"\nclaim:\n- id: C1\n  text: \"Four Chat session categories have tool-use patterns meeting the 2-exec threshold: cross-region-privatelink-setup, cross-region-privatelink-specs, mcp-server-testing, and devops-agent-operations.\"\n  evidence:\n  - note: \"All four categories confirmed present in both prior state and current trajectory analysis with qualifying patterns across 7, 3, 8, and 4 executions respectively.\"\n    source:\n    - type: devopsagent:execution\n      id: \"7f244f86-3a73-457f-9b0e-cee3389df6a1\"\n      created_at: \"2026-09-13T18:46:36Z\"\n---\n<!-- Generated: 2026-09-26 -->\n\nFind the category below that best matches your current task, open the linked category item, then look up the MCP tool you are using \u2014 each category item is organized by tool name.\n\n## cross-region-privatelink-setup\n\nUser asks how to set up or configure AWS PrivateLink (interface or gateway endpoints) across two AWS regions, such as connecting us-west-2 to us-east-1 (N. Virginia). Includes questions about specific endpoint types like S3 gateway endpoints in a cross-region context.\n\nCovers: `verify_aws_claim`, `skill_read`, `get_skill`, `update_skill`, `list_skills`, `list_agents_md`, `update_agents_md`\n\n[references/cross-region-privatelink-setup.md](references/cross-region-privatelink-setup.md)\n\n## cross-region-privatelink-specs\n\nUser asks about AWS cross-region PrivateLink factual specifications such as quotas, bandwidth limits, latency benchmarks, or recent feature announcements rather than setup instructions.\n\nCovers: `verify_aws_claim`, `skill_read`\n\n[references/cross-region-privatelink-specs.md](references/cross-region-privatelink-specs.md)\n\n## mcp-server-testing\n\nUser asks the agent to test or validate a custom MCP server that was added to the agent space, such as verifying connectivity, tool availability, or basic functionality of the new MCP integration.\n\nCovers: `list_associations`, `gather_context`, `searxng-mcp_searxng_instance_info`, `searxng-mcp_searxng_web_search`\n\n[references/mcp-server-testing.md](references/mcp-server-testing.md)\n\n## devops-agent-operations\n\nUser asks product or capability questions about AWS DevOps Agent \u2014 such as data retention policies, API rate limiting, investigation journal access, performance tuning, security and compliance, or operational metrics.\n\nCovers: `verify_aws_claim`, `skill_read`\n\n[references/devops-agent-operations.md](references/devops-agent-operations.md)\n"
+      },
+      "version": 14,
+      "createdAt": "2026-07-07T18:43:41.000Z",
+      "updatedAt": "2026-09-26T18:42:37.000Z",
+      "metadata": {
+        "mimeType": "text/markdown"
+      }
+    }
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "request": {
+    "agentSpaceId": "00000000-0000-4000-8000-0000000000bb"
+  },
+  "response": {
+    "agentSpace": {
+      "name": "Customer-Demo-Space",
+      "createdAt": "2026-06-11T23:48:21.110Z",
+      "updatedAt": "2026-10-26T21:06:36.065Z",
+      "agentSpaceId": "00000000-0000-4000-8000-0000000000bb",
+      "locale": "en-US"
+    },
+    "tags": {}
+  }
+}

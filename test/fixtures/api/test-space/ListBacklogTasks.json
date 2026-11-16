@@ -1,0 +1,151 @@
+{
+  "request": {
+    "agentSpaceId": "00000000-0000-4000-8000-0000000000bb",
+    "limit": 10
+  },
+  "response": {
+    "tasks": [
+      {
+        "agentSpaceId": "00000000-0000-4000-8000-0000000000bb",
+        "taskId": "fb2f686b-612c-498c-8dc9-f1b7f1b84df1",
+        "title": "Create Chat Tool Use Best Practices Skills",
+        "taskType": "SYSTEM_LEARNING",
+        "priority": "HIGH",
+        "status": "COMPLETED",
+        "createdAt": "2026-10-23T18:28:25.982Z",
+        "updatedAt": "2026-10-23T18:39:13.500Z",
+        "version": 3,
+        "executionId": "dd57cf48-883b-4f78-bc32-5ad9de66e225",
+        "description": "chat-tool-use-best-practices: Create the 'chat-tool-use-best-practices' skill.",
+        "hasLinkedTasks": false
+      },
+      {
+        "agentSpaceId": "00000000-0000-4000-8000-0000000000bb",
+        "taskId": "ea3854f0-863b-4095-95e1-a2c348495743",
+        "title": "Create Chat Tool Use Best Practices Skills",
+        "taskType": "SYSTEM_LEARNING",
+        "priority": "HIGH",
+        "status": "COMPLETED",
+        "createdAt": "2026-08-29T18:28:25.972Z",
+        "updatedAt": "2026-08-29T18:51:06.042Z",
+        "version": 3,
+        "executionId": "437a7628-1414-4eab-b05c-7f01b3f44d0d",
+        "description": "chat-tool-use-best-practices: Create the 'chat-tool-use-best-practices' skill.",
+        "hasLinkedTasks": false
+      },
+      {
+        "agentSpaceId": "00000000-0000-4000-8000-0000000000bb",
+        "taskId": "e684f9ee-e26c-4dde-8c7a-db38642dd0ca",
+        "title": "Create Chat Tool Use Best Practices Skills",
+        "taskType": "SYSTEM_LEARNING",
+        "priority": "HIGH",
+        "status": "COMPLETED",
+        "createdAt": "2026-08-25T18:28:25.970Z",
+        "updatedAt": "2026-08-25T18:40:17.139Z",
+        "version": 3,
+        "executionId": "8a3cdc89-2a5b-48c3-990c-51f60e6b7979",
+        "description": "chat-tool-use-best-practices: Create the 'chat-tool-use-best-practices' skill.",
+        "hasLinkedTasks": false
+      },
+      {
+        "agentSpaceId": "00000000-0000-4000-8000-0000000000bb",
+        "taskId": "de9b10ce-70f8-4684-ae39-3d54966e11ea",
+        "title": "Create Chat Tool Use Best Practices Skills",
+        "taskType": "SYSTEM_LEARNING",
+        "priority": "HIGH",
+        "status": "COMPLETED",
+        "createdAt": "2026-10-19T18:28:26.013Z",
+        "updatedAt": "2026-10-19T18:39:44.053Z",
+        "version": 3,
+        "executionId": "7c8f02a9-4c6c-402a-84c0-b646076b376d",
+        "description": "chat-tool-use-best-practices: Create the 'chat-tool-use-best-practices' skill.",
+        "hasLinkedTasks": false
+      },
+      {
+        "agentSpaceId": "00000000-0000-4000-8000-0000000000bb",
+        "taskId": "d9e4ea08-2cb5-4a51-b9b5-e3e171fd6f37",
+        "title": "Create Chat Tool Use Best Practices Skills",
+        "taskType": "SYSTEM_LEARNING",
+        "priority": "HIGH",
+        "status": "COMPLETED",
+        "createdAt": "2026-08-17T18:28:26.035Z",
+        "updatedAt": "2026-08-17T18:44:29.713Z",
+        "version": 3,
+        "executionId": "18d20265-e63c-4412-b2e1-219efd973885",
+        "description": "chat-tool-use-best-practices: Create the 'chat-tool-use-best-practices' skill.",
+        "hasLinkedTasks": false
+      },
+      {
+        "agentSpaceId": "00000000-0000-4000-8000-0000000000bb",
+        "taskId": "ce315262-91ef-4496-b485-cc22873a9d24",
+        "title": "Create Chat Tool Use Best Practices Skills",
+        "taskType": "SYSTEM_LEARNING",
+        "priority": "HIGH",
+        "status": "COMPLETED",
+        "createdAt": "2026-08-13T18:28:26.063Z",
+        "updatedAt": "2026-08-13T18:37:47.079Z",
+        "version": 3,
+        "executionId": "ea029ec2-3f01-4c02-8bf4-cd24c684536a",
+        "description": "chat-tool-use-best-practices: Create the 'chat-tool-use-best-practices' skill.",
+        "hasLinkedTasks": false
+      },
+      {
+        "agentSpaceId": "00000000-0000-4000-8000-0000000000bb",
+        "taskId": "cb4be198-1d70-435a-b84e-0006a41854b8",
+        "title": "Create Chat Tool Use Best Practices Skills",
+        "taskType": "SYSTEM_LEARNING",
+        "priority": "HIGH",
+        "status": "COMPLETED",
+        "createdAt": "2026-07-27T18:28:25.924Z",
+        "updatedAt": "2026-07-27T18:44:27.407Z",
+        "version": 3,
+        "executionId": "4f32863f-2712-4cb7-8d2b-609db78b8475",
+        "description": "chat-tool-use-best-practices: Create the 'chat-tool-use-best-practices' skill.",
+        "hasLinkedTasks": false
+      },
+      {
+        "agentSpaceId": "00000000-0000-4000-8000-0000000000bb",
+        "taskId": "c055ff06-98d2-4a49-80a7-2a177a0ba216",
+        "title": "Create Chat Tool Use Best Practices Skills",
+        "taskType": "SYSTEM_LEARNING",
+        "priority": "HIGH",
+        "status": "COMPLETED",
+        "createdAt": "2026-07-14T18:28:26.006Z",
+        "updatedAt": "2026-07-14T18:38:16.366Z",
+        "version": 3,
+        "executionId": "8a633309-9144-43ea-bb0d-b243f0d587ec",
+        "description": "chat-tool-use-best-practices: Create the 'chat-tool-use-best-practices' skill.",
+        "hasLinkedTasks": false
+      },
+      {
+        "agentSpaceId": "00000000-0000-4000-8000-0000000000bb",
+        "taskId": "bd88eae6-15e7-49cd-9365-7324ccccc47b",
+        "title": "Create Chat Tool Use Best Practices Skills",
+        "taskType": "SYSTEM_LEARNING",
+        "priority": "HIGH",
+        "status": "COMPLETED",
+        "createdAt": "2026-07-11T18:28:25.974Z",
+        "updatedAt": "2026-07-11T18:38:31.380Z",
+        "version": 3,
+        "executionId": "e2b327e6-ad94-4cfc-b992-e87da9b96839",
+        "description": "chat-tool-use-best-practices: Create the 'chat-tool-use-best-practices' skill.",
+        "hasLinkedTasks": false
+      },
+      {
+        "agentSpaceId": "00000000-0000-4000-8000-0000000000bb",
+        "taskId": "b5d1ef0f-bb7f-4285-9198-2cde3e5e323c",
+        "title": "Create Chat Tool Use Best Practices Skills",
+        "taskType": "SYSTEM_LEARNING",
+        "priority": "HIGH",
+        "status": "COMPLETED",
+        "createdAt": "2026-10-31T18:28:25.926Z",
+        "updatedAt": "2026-10-31T18:39:31.989Z",
+        "version": 3,
+        "executionId": "3986c2f4-f385-401e-8722-e3c3aa6b084d",
+        "description": "chat-tool-use-best-practices: Create the 'chat-tool-use-best-practices' skill.",
+        "hasLinkedTasks": false
+      }
+    ],
+    "nextToken": "REDACTED-NEXT-TOKEN"
+  }
+}

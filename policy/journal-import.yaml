@@ -1,0 +1,40 @@
+# Heading patterns for markdown journal imports.
+#
+# Patterns are JavaScript regular expressions, compiled with the "m" flag, and
+# read through named groups. The parser tries every format and uses the one
+# whose recordHeading matches the most lines (ties go to the first listed).
+# The em dash in the numbered heading is part of the exported data, so the
+# pattern accepts it (and "-", "--" or an en dash for hand-edited copies).
+
+formats:
+  # One INCIDENT-*-journal.md per incident, newest record first:
+  #   # Journal Log: INCIDENT-20201
+  #   ---
+  #   ## Record: message
+  #   **Created:** 2026-10-12 18:33:49.426000+00:00
+  #   **Role:** assistant
+  - id: record-created
+    description: "'## Record: <type>' heading with a '**Created:**' line, records separated by '---'"
+    documentHeader: '^# Journal Log: (?<incident>\S+)'
+    recordHeading: '^## Record: (?<type>[A-Za-z0-9_]+)[ \t]*$'
+    createdLine: '^\*\*Created:\*\* (?<time>\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?)[ \t]*$'
+    recordSeparator: '^---[ \t]*$'
+    roleLine: '^\*\*Role:\*\* (?<role>[A-Za-z_]+)[ \t]*$'
+    title: '^Title: (?<title>.+?)[ \t]*$'
+    thinking: '<details><summary>Thinking[^<\n]*</summary>\n(?<thinking>[\s\S]*?)\n?</details>'
+    toolCall: '^\*\*Tool call:\*\* `(?<name>[^`\n]+)`[ \t]*\n```(?:json)?[ \t]*\n(?<input>[\s\S]*?)\n```'
+    toolResult: '^\*\*Tool result\*\* \((?<status>[^)\n]*)\):[ \t]*\n```[^\n]*\n(?<text>[\s\S]*?)\n```'
+    partialInputKeys: [name, agent_type, tool_name, file_path]
+
+  # One INCIDENT-*/INCIDENT-*_full_journal.md per incident:
+  #   # INCIDENT-20101 — Full DevOps Agent Investigation Journal
+  #   _Execution: exe-... · Retrieved from ... · 161 records across 4 pages_
+  #   ## Record 2 — message (2026-10-19 07:49:21.933000+00:00)
+  #   **role: user**
+  # Messages without text are exported as their JSON content in a fenced block.
+  - id: numbered-record
+    description: "'## Record <n> — <type> (<UTC time>)' heading, one record per heading"
+    documentHeader: '^# (?<incident>\S+) (?:—|–|--?) [^\n]*\n+_?Execution: (?<execution>\S+) · [^\n]*? (?<records>\d+) records across (?<pages>\d+) pages'
+    recordHeading: '^## Record (?<n>\d+) (?:—|–|--?) (?<type>[a-z_]+) \((?<time>\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?)\)[ \t]*$'
+    roleLine: '^\*\*role: (?<role>[A-Za-z_]+)\*\*[ \t]*$'
+    title: '^Title: (?<title>.+?)[ \t]*$'

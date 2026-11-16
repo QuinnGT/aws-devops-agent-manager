@@ -1,0 +1,20 @@
+{
+  "assetId": "ki-00000000-0000-4000-8000-000000000115",
+  "assetType": "skill",
+  "metadata": {
+    "name": "low-sample-size-check",
+    "description": "Use when a ratio alarm such as an error rate or conversion rate fires at night or on a quiet service. Counts the requests behind the ratio before you call it an outage.",
+    "agent_types": [
+      "INCIDENT_TRIAGE"
+    ],
+    "status": "ACTIVE",
+    "skill_type": "USER"
+  },
+  "version": 1,
+  "createdAt": "2026-10-20 18:10:42+00:00",
+  "updatedAt": "2026-10-20 18:10:42+00:00",
+  "creator": {
+    "uid": "00000000-0000-4000-8000-0000000000bb",
+    "displayName": "AnyCompanyAgentSpaceAdmin"
+  }
+}

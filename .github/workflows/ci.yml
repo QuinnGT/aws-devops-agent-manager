@@ -1,0 +1,156 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# A new push to a pull request cancels the run it supersedes. Runs on main always finish.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  checks:
+    name: Typecheck, lint, unit tests, build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Reads the pnpm version from "packageManager" in package.json.
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm test
+      - run: pnpm build
+
+  integration:
+    name: Integration tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: dam
+          POSTGRES_PASSWORD: ci-only-throwaway
+          POSTGRES_DB: dam_ci
+        # No host port is named, so Docker picks a free one. The URL below reads it from the job context.
+        ports:
+          - 5432/tcp
+        options: >-
+          --health-cmd "pg_isready -U dam -d dam_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # POSTGRES_DB above creates dam_ci, so this database is empty until the migrations run.
+      - name: Migrate the database
+        run: pnpm db:migrate
+        env:
+          DATABASE_URL: postgres://dam:ci-only-throwaway@127.0.0.1:${{ job.services.postgres.ports['5432'] }}/dam_ci
+      - name: Run the integration tests
+        run: pnpm test:int
+        env:
+          TEST_DATABASE_URL: postgres://dam:ci-only-throwaway@127.0.0.1:${{ job.services.postgres.ports['5432'] }}/dam_ci
+
+  demo-seed:
+    name: Demo seed
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: dam
+          POSTGRES_PASSWORD: ci-only-throwaway
+          # The seed empties only a database whose name starts with "dam_" (and is not "dam").
+          POSTGRES_DB: dam_ci_demo
+        ports:
+          - 5432/tcp
+        options: >-
+          --health-cmd "pg_isready -U dam -d dam_ci_demo"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Migrate the database
+        run: pnpm db:migrate
+        env:
+          DATABASE_URL: postgres://dam:ci-only-throwaway@127.0.0.1:${{ job.services.postgres.ports['5432'] }}/dam_ci_demo
+      # A change that breaks the sample dataset in sample-data/ fails here.
+      - name: Seed the sample space
+        run: pnpm demo:seed
+        env:
+          DATABASE_URL: postgres://dam:ci-only-throwaway@127.0.0.1:${{ job.services.postgres.ports['5432'] }}/dam_ci_demo
+          DAM_DATA_DIR: ${{ runner.temp }}/dam-demo-data
+
+  container:
+    name: Container image build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: Containerfile
+          push: false
+          tags: devops-agent-manager:ci
+
+  secrets:
+    name: Secret scan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      # Official image, pinned by digest. Update the tag and digest together.
+      GITLEAKS_IMAGE: ghcr.io/gitleaks/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The scan reads every commit, not only the tip.
+          fetch-depth: 0
+          persist-credentials: false
+      # safe.directory: the checkout belongs to the runner user, the container runs as another user.
+      - name: Scan the history
+        run: >-
+          docker run --rm
+          -v "$GITHUB_WORKSPACE:/repo:ro"
+          -e GIT_CONFIG_COUNT=1 -e GIT_CONFIG_KEY_0=safe.directory -e GIT_CONFIG_VALUE_0=/repo
+          "$GITLEAKS_IMAGE" git /repo --config /repo/.gitleaks.toml --redact --no-banner
+      - name: Scan the working tree
+        run: >-
+          docker run --rm
+          -v "$GITHUB_WORKSPACE:/repo:ro"
+          "$GITLEAKS_IMAGE" dir /repo --config /repo/.gitleaks.toml --redact --no-banner

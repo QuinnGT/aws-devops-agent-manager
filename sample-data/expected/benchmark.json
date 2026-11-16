@@ -1,0 +1,470 @@
+{
+  "profile": "benchmark",
+  "incidents": 8,
+  "incidentIds": [
+    "INCIDENT-20101",
+    "INCIDENT-20102",
+    "INCIDENT-20103",
+    "INCIDENT-20104",
+    "INCIDENT-20105",
+    "INCIDENT-20106",
+    "INCIDENT-20107",
+    "INCIDENT-20108"
+  ],
+  "journals": {
+    "INCIDENT-20101": {
+      "title": "INC-3101: Seat holds released early during an on-sale",
+      "date": "2026-10-26",
+      "severity": "High",
+      "records": 41,
+      "investigationSummaries": 1,
+      "mitigationSummaries": 1,
+      "toolCallsLead": 17,
+      "skillsLoaded": [
+        "cache-path-check",
+        "change-window-search"
+      ],
+      "subagents": [],
+      "memoryFilesRead": [
+        "/aidevops/memory/incident-patterns/patterns/cache-evictions.md",
+        "/aidevops/memory/runbooks/change-feed-windows.md",
+        "/aidevops/memory/service-catalog/services/seat-map-service.md"
+      ],
+      "fileNotFound": [],
+      "cmdbRolePresent": true,
+      "descriptionPresent": true,
+      "firstSummaryMinutes": 9.1
+    },
+    "INCIDENT-20102": {
+      "title": "INC-3102: Card payments declining for one acquirer",
+      "date": "2026-10-27",
+      "severity": "High",
+      "records": 37,
+      "investigationSummaries": 1,
+      "mitigationSummaries": 1,
+      "toolCallsLead": 14,
+      "skillsLoaded": [
+        "change-window-search"
+      ],
+      "subagents": [],
+      "memoryFilesRead": [
+        "/aidevops/memory/runbooks/change-feed-windows.md",
+        "/aidevops/memory/service-catalog/services/checkout-api.md",
+        "/aidevops/memory/service-catalog/services/payments-gateway.md"
+      ],
+      "fileNotFound": [],
+      "cmdbRolePresent": true,
+      "descriptionPresent": true,
+      "firstSummaryMinutes": 10.0
+    },
+    "INCIDENT-20103": {
+      "title": "INC-3103: Order confirmation emails delayed",
+      "date": "2026-10-28",
+      "severity": "Medium",
+      "records": 37,
+      "investigationSummaries": 1,
+      "mitigationSummaries": 1,
+      "toolCallsLead": 14,
+      "skillsLoaded": [
+        "bounded-log-query"
+      ],
+      "subagents": [
+        "order-events-lag"
+      ],
+      "memoryFilesRead": [
+        "/aidevops/memory/runbooks/log-query-limits.md",
+        "/aidevops/memory/service-catalog/services/fulfillment-worker.md"
+      ],
+      "fileNotFound": [],
+      "cmdbRolePresent": true,
+      "descriptionPresent": true,
+      "firstSummaryMinutes": 13.8
+    },
+    "INCIDENT-20104": {
+      "title": "INC-3104: Mobile sign-in failures",
+      "date": "2026-10-29",
+      "severity": "High",
+      "records": 44,
+      "investigationSummaries": 2,
+      "mitigationSummaries": 1,
+      "toolCallsLead": 18,
+      "skillsLoaded": [
+        "bounded-log-query"
+      ],
+      "subagents": [],
+      "memoryFilesRead": [
+        "/aidevops/memory/incident-patterns/roles/on-call-routing.md",
+        "/aidevops/memory/service-catalog/services/identity-service.md"
+      ],
+      "fileNotFound": [
+        "/aidevops/memory/service-catalog/services/identity-service.md"
+      ],
+      "cmdbRolePresent": true,
+      "descriptionPresent": true,
+      "firstSummaryMinutes": 11.1
+    },
+    "INCIDENT-20105": {
+      "title": "INC-3105: New events missing from search",
+      "date": "2026-10-30",
+      "severity": "Medium",
+      "records": 35,
+      "investigationSummaries": 1,
+      "mitigationSummaries": 1,
+      "toolCallsLead": 15,
+      "skillsLoaded": [],
+      "subagents": [],
+      "memoryFilesRead": [
+        "/aidevops/memory/runbooks/change-feed-windows.md",
+        "/aidevops/memory/runbooks/log-query-limits.md"
+      ],
+      "fileNotFound": [],
+      "cmdbRolePresent": true,
+      "descriptionPresent": true,
+      "firstSummaryMinutes": 6.3
+    },
+    "INCIDENT-20106": {
+      "title": "INC-3106: Price at checkout differs from the event page",
+      "date": "2026-10-30",
+      "severity": "Medium",
+      "records": 33,
+      "investigationSummaries": 1,
+      "mitigationSummaries": 1,
+      "toolCallsLead": 11,
+      "skillsLoaded": [],
+      "subagents": [],
+      "memoryFilesRead": [
+        "/aidevops/memory/incident-patterns/patterns/pricing-mismatch.md",
+        "/aidevops/memory/service-catalog/services/checkout-api.md"
+      ],
+      "fileNotFound": [],
+      "cmdbRolePresent": false,
+      "descriptionPresent": false,
+      "firstSummaryMinutes": 8.9
+    },
+    "INCIDENT-20107": {
+      "title": "INC-3107: Checkout error-rate alarm at 03:10 PT",
+      "date": "2026-10-31",
+      "severity": "Low",
+      "records": 36,
+      "investigationSummaries": 1,
+      "mitigationSummaries": 1,
+      "toolCallsLead": 14,
+      "skillsLoaded": [],
+      "subagents": [],
+      "memoryFilesRead": [
+        "/aidevops/memory/incident-patterns/roles/on-call-routing.md",
+        "/aidevops/memory/runbooks/log-query-limits.md",
+        "/aidevops/memory/service-catalog/services/checkout-api.md"
+      ],
+      "fileNotFound": [],
+      "cmdbRolePresent": true,
+      "descriptionPresent": true,
+      "firstSummaryMinutes": 8.3
+    },
+    "INCIDENT-20108": {
+      "title": "INC-3108: Venue maps not loading for some users",
+      "date": "2026-11-01",
+      "severity": "Medium",
+      "records": 37,
+      "investigationSummaries": 1,
+      "mitigationSummaries": 1,
+      "toolCallsLead": 14,
+      "skillsLoaded": [
+        "bounded-log-query"
+      ],
+      "subagents": [
+        "bucket-compare"
+      ],
+      "memoryFilesRead": [
+        "/aidevops/memory/runbooks/log-query-limits.md"
+      ],
+      "fileNotFound": [],
+      "cmdbRolePresent": true,
+      "descriptionPresent": true,
+      "firstSummaryMinutes": 11.4
+    }
+  },
+  "scorecards": {
+    "INCIDENT-20101": {
+      "score": "1/5",
+      "verdict": "Missed (wrong root cause)",
+      "comparisonScore": "3/5"
+    },
+    "INCIDENT-20102": {
+      "score": "2/5",
+      "verdict": "Symptom only (partial / shallow)",
+      "comparisonScore": "4/5"
+    },
+    "INCIDENT-20103": {
+      "score": "2/5",
+      "verdict": "Symptom only (partial / shallow)",
+      "comparisonScore": "3/5"
+    },
+    "INCIDENT-20104": {
+      "score": "1/5",
+      "verdict": "Missed (wrong root cause)",
+      "comparisonScore": "2/5"
+    },
+    "INCIDENT-20105": {
+      "score": "3/5",
+      "verdict": "Partly right (right area, wrong mechanism)",
+      "comparisonScore": "3/5"
+    },
+    "INCIDENT-20106": {
+      "score": "2/5",
+      "verdict": "Symptom only (partial / shallow)",
+      "comparisonScore": "4/5"
+    },
+    "INCIDENT-20107": {
+      "score": "3/5",
+      "verdict": "Partly right (right area, wrong mechanism)",
+      "comparisonScore": "4/5"
+    },
+    "INCIDENT-20108": {
+      "score": "4/5",
+      "verdict": "Mostly correct (mechanism found, summary off)",
+      "comparisonScore": "4/5"
+    }
+  },
+  "reviews": {
+    "INCIDENT-20101": {
+      "score": "1/5",
+      "primaryFailureMode": "F_premature_ruleout",
+      "failureModes": [
+        "F_premature_ruleout",
+        "C_change_anchoring",
+        "I_memory_or_skill_misled"
+      ],
+      "reachability": "reachable",
+      "scorecardFair": "yes",
+      "groundTruthUncertain": true,
+      "summaries": 1,
+      "scoredSummaryRecord": 39,
+      "blockingErrors": 0,
+      "fixOwners": [
+        "customer_memory",
+        "instructions",
+        "customer_memory"
+      ],
+      "citationsChecked": 32,
+      "findings": {
+        "diagnosis": 1,
+        "fix": 3
+      }
+    },
+    "INCIDENT-20102": {
+      "score": "2/5",
+      "primaryFailureMode": "C_change_anchoring",
+      "failureModes": [
+        "C_change_anchoring",
+        "D_wrong_component"
+      ],
+      "reachability": "reachable",
+      "scorecardFair": "yes",
+      "groundTruthUncertain": false,
+      "summaries": 1,
+      "scoredSummaryRecord": 35,
+      "blockingErrors": 0,
+      "fixOwners": [
+        "instructions",
+        "customer_memory",
+        "instructions"
+      ],
+      "citationsChecked": 27,
+      "findings": {
+        "diagnosis": 1,
+        "fix": 3
+      }
+    },
+    "INCIDENT-20103": {
+      "score": "2/5",
+      "primaryFailureMode": "D_wrong_component",
+      "failureModes": [
+        "D_wrong_component",
+        "E_symptom_stop"
+      ],
+      "reachability": "reachable",
+      "scorecardFair": "yes",
+      "groundTruthUncertain": false,
+      "summaries": 1,
+      "scoredSummaryRecord": 35,
+      "blockingErrors": 0,
+      "fixOwners": [
+        "instructions",
+        "customer_memory",
+        "instructions"
+      ],
+      "citationsChecked": 26,
+      "findings": {
+        "diagnosis": 1,
+        "fix": 3
+      }
+    },
+    "INCIDENT-20104": {
+      "score": "1/5",
+      "primaryFailureMode": "B_access_failure",
+      "failureModes": [
+        "B_access_failure",
+        "A_out_of_reach"
+      ],
+      "reachability": "out_of_reach",
+      "scorecardFair": "mostly",
+      "groundTruthUncertain": false,
+      "summaries": 2,
+      "scoredSummaryRecord": 44,
+      "blockingErrors": 3,
+      "fixOwners": [
+        "customer_access",
+        "instructions",
+        "customer_memory"
+      ],
+      "citationsChecked": 32,
+      "findings": {
+        "diagnosis": 1,
+        "fix": 3
+      }
+    },
+    "INCIDENT-20105": {
+      "score": "3/5",
+      "primaryFailureMode": "H_ran_too_early",
+      "failureModes": [
+        "H_ran_too_early"
+      ],
+      "reachability": "partially_reachable",
+      "scorecardFair": "no",
+      "groundTruthUncertain": false,
+      "summaries": 1,
+      "scoredSummaryRecord": 33,
+      "blockingErrors": 1,
+      "fixOwners": [
+        "none_feasible",
+        "instructions"
+      ],
+      "citationsChecked": 23,
+      "findings": {
+        "diagnosis": 1,
+        "fix": 2
+      }
+    },
+    "INCIDENT-20106": {
+      "score": "2/5",
+      "primaryFailureMode": "I_memory_or_skill_misled",
+      "failureModes": [
+        "I_memory_or_skill_misled",
+        "G_thin_trigger_context"
+      ],
+      "reachability": "reachable",
+      "scorecardFair": "yes",
+      "groundTruthUncertain": false,
+      "summaries": 1,
+      "scoredSummaryRecord": 31,
+      "blockingErrors": 0,
+      "fixOwners": [
+        "customer_memory",
+        "customer_trigger",
+        "instructions"
+      ],
+      "citationsChecked": 25,
+      "findings": {
+        "diagnosis": 1,
+        "fix": 3
+      }
+    },
+    "INCIDENT-20107": {
+      "score": "3/5",
+      "primaryFailureMode": "K_chronic_noise",
+      "failureModes": [
+        "K_chronic_noise"
+      ],
+      "reachability": "reachable",
+      "scorecardFair": "mostly",
+      "groundTruthUncertain": false,
+      "summaries": 1,
+      "scoredSummaryRecord": 34,
+      "blockingErrors": 0,
+      "fixOwners": [
+        "customer_memory",
+        "instructions"
+      ],
+      "citationsChecked": 26,
+      "findings": {
+        "diagnosis": 1,
+        "fix": 2
+      }
+    },
+    "INCIDENT-20108": {
+      "score": "4/5",
+      "primaryFailureMode": "J_summary_mismatch",
+      "failureModes": [
+        "J_summary_mismatch"
+      ],
+      "reachability": "reachable",
+      "scorecardFair": "mostly",
+      "groundTruthUncertain": false,
+      "summaries": 1,
+      "scoredSummaryRecord": 35,
+      "blockingErrors": 0,
+      "fixOwners": [
+        "aws_service",
+        "instructions"
+      ],
+      "citationsChecked": 33,
+      "findings": {
+        "diagnosis": 1,
+        "fix": 2
+      }
+    }
+  },
+  "totals": {
+    "records": 300,
+    "citationsChecked": 224,
+    "findings": {
+      "diagnosis": 8,
+      "fix": 21
+    },
+    "scoreCounts": {
+      "1/5": 2,
+      "2/5": 3,
+      "3/5": 2,
+      "4/5": 1
+    },
+    "reportCounts": {
+      "failure-modes": {
+        "Ruled out too early": 1,
+        "Anchored on a change": 1,
+        "Wrong component": 1,
+        "Access failure": 1,
+        "Ran too early": 1,
+        "Misled by memory or a skill": 1,
+        "Chronic noise": 1,
+        "Summary mismatch": 1
+      },
+      "reachability": {
+        "Within reach": 6,
+        "Out of reach": 1,
+        "Partly within reach": 1
+      },
+      "scorecard-fairness": {
+        "Fair": 4,
+        "Mostly fair": 3,
+        "Not fair": 1
+      },
+      "fixes-by-owner-id": {
+        "aws_service": 1,
+        "customer_access": 1,
+        "customer_memory": 7,
+        "customer_trigger": 1,
+        "instructions": 10,
+        "none_feasible": 1
+      }
+    },
+    "ownersUsed": [
+      "aws_service",
+      "customer_access",
+      "customer_memory",
+      "customer_trigger",
+      "instructions",
+      "none_feasible"
+    ]
+  }
+}

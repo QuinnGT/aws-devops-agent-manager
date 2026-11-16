@@ -1,0 +1,184 @@
+{
+  "server": "AnyCompany-Tickets-Sample",
+  "exported": "2026-11-13 (sample export of the AnyCompany-Tickets-Sample Agent Space)",
+  "note": "One folder per asset, named by agent type or skill name. assetId is the asset to update. memory/ uses STORE.md files and has no descriptors.",
+  "assets": [
+    {
+      "dir": "agents_md/chat",
+      "type": "agents_md",
+      "name": "CHAT",
+      "assetId": "ki-00000000-0000-4000-8000-000000000105",
+      "version": 1,
+      "status": "ACTIVE",
+      "files": [
+        "AGENTS.md"
+      ]
+    },
+    {
+      "dir": "agents_md/global",
+      "type": "agents_md",
+      "name": "GENERIC",
+      "assetId": "ki-00000000-0000-4000-8000-000000000101",
+      "version": 2,
+      "status": "ACTIVE",
+      "files": [
+        "AGENTS.md"
+      ]
+    },
+    {
+      "dir": "agents_md/incident-mitigation",
+      "type": "agents_md",
+      "name": "INCIDENT_MITIGATION",
+      "assetId": "ki-00000000-0000-4000-8000-000000000104",
+      "version": 1,
+      "status": "ACTIVE",
+      "files": [
+        "AGENTS.md"
+      ]
+    },
+    {
+      "dir": "agents_md/incident-rca",
+      "type": "agents_md",
+      "name": "INCIDENT_RCA",
+      "assetId": "ki-00000000-0000-4000-8000-000000000103",
+      "version": 2,
+      "status": "ACTIVE",
+      "files": [
+        "AGENTS.md"
+      ]
+    },
+    {
+      "dir": "agents_md/incident-triage",
+      "type": "agents_md",
+      "name": "INCIDENT_TRIAGE",
+      "assetId": "ki-00000000-0000-4000-8000-000000000102",
+      "version": 2,
+      "status": "ACTIVE",
+      "files": [
+        "AGENTS.md"
+      ]
+    },
+    {
+      "dir": "skill/bounded-log-query",
+      "type": "skill",
+      "name": "bounded-log-query",
+      "assetId": "ki-00000000-0000-4000-8000-000000000118",
+      "version": 2,
+      "status": "ACTIVE",
+      "files": [
+        "SKILL.md"
+      ]
+    },
+    {
+      "dir": "skill/cache-path-check",
+      "type": "skill",
+      "name": "cache-path-check",
+      "assetId": "ki-00000000-0000-4000-8000-000000000112",
+      "version": 2,
+      "status": "ACTIVE",
+      "files": [
+        "SKILL.md",
+        "references/cache-metrics.md"
+      ]
+    },
+    {
+      "dir": "skill/cache-path-check.v1",
+      "type": "skill",
+      "name": "cache-path-check",
+      "assetId": "ki-00000000-0000-4000-8000-000000000113",
+      "version": 2,
+      "status": "INACTIVE",
+      "files": [
+        "SKILL.md"
+      ]
+    },
+    {
+      "dir": "skill/change-window-search",
+      "type": "skill",
+      "name": "change-window-search",
+      "assetId": "ki-00000000-0000-4000-8000-000000000111",
+      "version": 2,
+      "status": "ACTIVE",
+      "files": [
+        "SKILL.md"
+      ]
+    },
+    {
+      "dir": "skill/consumer-lag-check",
+      "type": "skill",
+      "name": "consumer-lag-check",
+      "assetId": "ki-00000000-0000-4000-8000-000000000119",
+      "version": 1,
+      "status": "ACTIVE",
+      "files": [
+        "SKILL.md"
+      ]
+    },
+    {
+      "dir": "skill/feature-flag-audit",
+      "type": "skill",
+      "name": "feature-flag-audit",
+      "assetId": "ki-00000000-0000-4000-8000-000000000116",
+      "version": 1,
+      "status": "ACTIVE",
+      "files": [
+        "SKILL.md"
+      ]
+    },
+    {
+      "dir": "skill/low-sample-size-check",
+      "type": "skill",
+      "name": "low-sample-size-check",
+      "assetId": "ki-00000000-0000-4000-8000-000000000115",
+      "version": 1,
+      "status": "ACTIVE",
+      "files": [
+        "SKILL.md"
+      ]
+    },
+    {
+      "dir": "skill/token-signing-check",
+      "type": "skill",
+      "name": "token-signing-check",
+      "assetId": "ki-00000000-0000-4000-8000-000000000117",
+      "version": 1,
+      "status": "ACTIVE",
+      "files": [
+        "SKILL.md"
+      ]
+    },
+    {
+      "dir": "skill/vendor-status-check",
+      "type": "skill",
+      "name": "vendor-status-check",
+      "assetId": "ki-00000000-0000-4000-8000-000000000114",
+      "version": 2,
+      "status": "ACTIVE",
+      "files": [
+        "SKILL.md"
+      ]
+    },
+    {
+      "dir": "custom_agent/capacity-reviewer",
+      "type": "custom_agent",
+      "name": "capacity-reviewer",
+      "assetId": "ki-00000000-0000-4000-8000-000000000122",
+      "version": 1,
+      "status": "ACTIVE",
+      "files": [
+        "capacity-reviewer.md"
+      ]
+    },
+    {
+      "dir": "custom_agent/postmortem-writer",
+      "type": "custom_agent",
+      "name": "postmortem-writer",
+      "assetId": "ki-00000000-0000-4000-8000-000000000121",
+      "version": 1,
+      "status": "ACTIVE",
+      "files": [
+        "postmortem-writer.md"
+      ]
+    }
+  ]
+}

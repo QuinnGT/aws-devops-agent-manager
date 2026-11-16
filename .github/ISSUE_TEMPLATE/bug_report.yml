@@ -1,0 +1,55 @@
+name: Bug report
+description: Something in DevOps Agent Manager does not work as documented.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not post credentials, AWS account details, Agent Space content or customer data. Use the sample data (`pnpm demo:seed`) to reproduce the problem when you can.
+        To report a security vulnerability, follow SECURITY.md instead of opening an issue.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what you saw instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Run `pnpm demo:seed`.
+        2. Open ...
+        3. Click ...
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The release tag, image tag or commit hash.
+    validations:
+      required: true
+  - type: dropdown
+    id: how-run
+    attributes:
+      label: How you run it
+      options:
+        - Container image (compose or another runtime)
+        - Built from source (pnpm start)
+        - Development server (pnpm dev)
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Operating system, Node.js version, container runtime, browser.
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots
+      description: Remove account IDs, Agent Space IDs, email addresses and anything else you would not post in public.
+      render: text

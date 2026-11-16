@@ -1,0 +1,46 @@
+# Roles and permissions.
+# Bind roles to users or IdP groups per Agent Space in Settings.
+roles:
+  viewer:
+    rank: 10
+    description: Can view assets, history, journals and audits, and export journals, packages and audit reports.
+    permissions:
+      - assets.read
+      - history.read
+      - journals.read
+      - journals.export
+      - audits.read
+  editor:
+    rank: 20
+    description: Can view everything, sync the space, write change reasons, and draft changes and turn them into plans.
+    inherits: [viewer]
+    permissions:
+      - journals.import
+      - sync.run
+      - reasons.write
+      - drafts.write
+      - plans.create
+      - audits.run
+      - findings.review
+      - revisions.build
+  publisher:
+    rank: 30
+    description: Can draft and plan changes, approve and apply plans, restore older versions and create releases.
+    inherits: [editor]
+    permissions:
+      - plans.approve
+      - plans.apply
+      - rollbacks.apply
+      - revisions.apply
+      - releases.create
+  admin:
+    rank: 40
+    description: "Can do everything, and manage the app: register spaces, change settings, give people roles and read the audit log."
+    inherits: [publisher]
+    permissions:
+      - spaces.manage
+      - policy.edit
+      - bindings.manage
+      # Until replay permissions are designed, only Admins can start a replay.
+      - replays.start
+      - auditlog.read

@@ -1,0 +1,139 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  The read role and the optional write role that DevOps Agent Manager assumes for one Agent Space.
+  See docs/aws-setup.md. Create the stack with CAPABILITY_NAMED_IAM.
+
+Parameters:
+  AgentSpaceArn:
+    Type: String
+    Description: ARN of the Agent Space, for example arn:aws:aidevops:us-west-2:111122223333:agentspace/<agent-space-id>
+    AllowedPattern: "arn:aws[a-z-]*:aidevops:[a-z0-9-]+:[0-9]{12}:agentspace/[A-Za-z0-9-]+"
+  TrustedPrincipalArn:
+    Type: String
+    Description: The IAM user or role that DevOps Agent Manager runs as (the identity of your AWS profile).
+    AllowedPattern: "arn:aws[a-z-]*:iam::[0-9]{12}:(user|role)/.+"
+  ExternalId:
+    Type: String
+    Description: The external ID that DevOps Agent Manager shows in the space settings (it starts with dam-).
+    AllowedPattern: "[\\w+=,.@:/-]{2,1224}"
+  CreateWriteRole:
+    Type: String
+    Default: "true"
+    AllowedValues: ["true", "false"]
+    Description: Set to false if this app should only read. Without a write role, plans cannot be applied.
+
+Conditions:
+  WithWriteRole: !Equals [!Ref CreateWriteRole, "true"]
+
+Resources:
+  ReadRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: DevOpsAgentManagerRead
+      Description: Read access to one Agent Space, CloudTrail lookups and Amazon Bedrock for DevOps Agent Manager.
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AssumeWithExternalId
+            Effect: Allow
+            Principal:
+              AWS: !Ref TrustedPrincipalArn
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                sts:ExternalId: !Ref ExternalId
+          - Sid: AllowSourceIdentity
+            Effect: Allow
+            Principal:
+              AWS: !Ref TrustedPrincipalArn
+            Action: sts:SetSourceIdentity
+      Policies:
+        - PolicyName: DevOpsAgentManagerRead
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: ReadAgentSpace
+                Effect: Allow
+                Action:
+                  - aidevops:GetAgentSpace
+                  - aidevops:ListAssets
+                  - aidevops:GetAsset
+                  - aidevops:ListAssetVersions
+                  - aidevops:ListAssetFiles
+                  - aidevops:GetAssetFile
+                  - aidevops:GetAssetContent
+                  - aidevops:ListBacklogTasks
+                  - aidevops:GetBacklogTask
+                  - aidevops:ListExecutions
+                  - aidevops:ListJournalRecords
+                Resource: !Ref AgentSpaceArn
+              - Sid: ListAssetTypes
+                Effect: Allow
+                Action: aidevops:ListAssetTypes
+                Resource: "*"
+              - Sid: FindWhoChangedAssets
+                Effect: Allow
+                Action: cloudtrail:LookupEvents
+                Resource: "*"
+              - Sid: ListBedrockModels
+                Effect: Allow
+                Action:
+                  - bedrock:ListFoundationModels
+                  - bedrock:ListInferenceProfiles
+                Resource: "*"
+              - Sid: RunAuditModels
+                Effect: Allow
+                Action: bedrock:InvokeModel
+                Resource:
+                  - !Sub arn:${AWS::Partition}:bedrock:*::foundation-model/*
+                  - !Sub arn:${AWS::Partition}:bedrock:*:${AWS::AccountId}:inference-profile/*
+                  - !Sub arn:${AWS::Partition}:bedrock:*:${AWS::AccountId}:application-inference-profile/*
+
+  WriteRole:
+    Type: AWS::IAM::Role
+    Condition: WithWriteRole
+    Properties:
+      RoleName: DevOpsAgentManagerWrite
+      Description: Asset writes to one Agent Space, used only when DevOps Agent Manager applies a plan.
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AssumeWithExternalId
+            Effect: Allow
+            Principal:
+              AWS: !Ref TrustedPrincipalArn
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                sts:ExternalId: !Ref ExternalId
+          - Sid: AllowSourceIdentity
+            Effect: Allow
+            Principal:
+              AWS: !Ref TrustedPrincipalArn
+            Action: sts:SetSourceIdentity
+      Policies:
+        - PolicyName: DevOpsAgentManagerWrite
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: ApplyPlans
+                Effect: Allow
+                Action:
+                  - aidevops:CreateAsset
+                  - aidevops:UpdateAsset
+                  - aidevops:DeleteAsset
+                  - aidevops:CreateAssetFile
+                  - aidevops:UpdateAssetFile
+                  - aidevops:DeleteAssetFile
+                Resource: !Ref AgentSpaceArn
+
+Outputs:
+  ReadRoleArn:
+    Description: Enter this as the read role ARN of the space.
+    Value: !GetAtt ReadRole.Arn
+  WriteRoleArn:
+    Condition: WithWriteRole
+    Description: Enter this as the write role ARN of the space.
+    Value: !GetAtt WriteRole.Arn

@@ -1,0 +1,20 @@
+{
+  "assetId": "ki-00000000-0000-4000-8000-000000000116",
+  "assetType": "skill",
+  "metadata": {
+    "name": "feature-flag-audit",
+    "description": "Use when behavior or a price differs between users, or when a change in rollout may explain an incident. Lists the flags that changed and the share of traffic each one reaches.",
+    "agent_types": [
+      "INCIDENT_RCA"
+    ],
+    "status": "ACTIVE",
+    "skill_type": "USER"
+  },
+  "version": 1,
+  "createdAt": "2026-10-20 18:10:42+00:00",
+  "updatedAt": "2026-10-20 18:10:42+00:00",
+  "creator": {
+    "uid": "00000000-0000-4000-8000-0000000000bb",
+    "displayName": "AnyCompanyAgentSpaceAdmin"
+  }
+}

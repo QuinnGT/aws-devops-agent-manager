@@ -1,0 +1,21 @@
+{
+  "request": {
+    "agentSpaceId": "00000000-0000-4000-8000-0000000000bb",
+    "assetId": "ki-9184fa09-8e79-4a11-90fa-a6b81ab5fe6b"
+  },
+  "response": {
+    "asset": {
+      "assetId": "ki-9184fa09-8e79-4a11-90fa-a6b81ab5fe6b",
+      "assetType": "memory",
+      "metadata": {
+        "memory_store_id": "ki-63edd778-1a7a-483f-8b18-479742a15a04",
+        "description": "The routing index of tool-use best practices for this agent space's Chat sessions, pointing to one item per kind of user request with the tools each item covers. Read when starting a Chat session to find the matching category for your current task.",
+        "name": "overview",
+        "status": "ACTIVE"
+      },
+      "version": 24,
+      "createdAt": "2026-08-13T18:37:05.000Z",
+      "updatedAt": "2026-11-10T23:38:13.000Z"
+    }
+  }
+}

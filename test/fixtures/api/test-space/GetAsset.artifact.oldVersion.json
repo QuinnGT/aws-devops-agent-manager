@@ -1,0 +1,20 @@
+{
+  "request": {
+    "agentSpaceId": "00000000-0000-4000-8000-0000000000bb",
+    "assetId": "ki-83909e28-f98d-4d39-8179-02ca7555b4d4",
+    "assetVersion": 1
+  },
+  "response": {
+    "asset": {
+      "assetId": "ki-83909e28-f98d-4d39-8179-02ca7555b4d4",
+      "assetType": "artifact",
+      "metadata": {
+        "title": "Agent Space Summary Report",
+        "status": "ACTIVE"
+      },
+      "version": 1,
+      "createdAt": "2026-06-17T20:23:01.000Z",
+      "updatedAt": "2026-06-17T20:23:01.000Z"
+    }
+  }
+}

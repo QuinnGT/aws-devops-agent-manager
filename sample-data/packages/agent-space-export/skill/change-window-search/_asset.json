@@ -1,0 +1,25 @@
+{
+  "assetId": "ki-00000000-0000-4000-8000-000000000111",
+  "assetType": "skill",
+  "metadata": {
+    "name": "change-window-search",
+    "description": "Use when you need to know what changed before an incident. Searches the change feed in adjacent 24-hour windows back to the onset and past it, covering deploys, config changes and flag changes.",
+    "agent_types": [
+      "INCIDENT_TRIAGE",
+      "INCIDENT_RCA"
+    ],
+    "status": "ACTIVE",
+    "skill_type": "USER"
+  },
+  "version": 2,
+  "createdAt": "2026-10-20 18:10:42+00:00",
+  "updatedAt": "2026-11-02 17:45:30+00:00",
+  "creator": {
+    "uid": "00000000-0000-4000-8000-0000000000bb",
+    "displayName": "AnyCompanyAgentSpaceAdmin"
+  },
+  "editor": {
+    "uid": "00000000-0000-4000-8000-0000000000bb",
+    "displayName": "AnyCompanyAgentSpaceAdmin"
+  }
+}

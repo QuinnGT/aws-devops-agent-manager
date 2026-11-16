@@ -1,0 +1,7 @@
+# AWS SDK behavior. The SDK uses adaptive retry for throttling.
+maxAttempts: 8
+defaultConcurrency: 4
+roleSessionSeconds: 3600
+pageSize: 100
+# Seconds a queued job waits before the UI says the background worker may not be running.
+workerWaitSeconds: 20

@@ -1,0 +1,53 @@
+# Change capture defaults; per-space settings override
+# the interval and the store commit policies.
+
+# Minutes between scheduled syncs of one space.
+intervalMinutes: 15
+# Full reconcile (finds deleted assets), cron in UTC.
+reconcileCron: "17 3 * * *"
+# Scheduler tick that enqueues the syncs that are due.
+tickCron: "* * * * *"
+
+# Memory store commit policy: every-version, daily (only the last version of
+# each UTC day, committed once that day is over) or ignore. The policy covers
+# the store and its memories. Example for a noisy store:
+#   storeCommitPolicies:
+#     monitors: daily
+defaultStoreCommitPolicy: every-version
+storeCommitPolicies: {}
+
+committer:
+  name: DevOps Agent Manager sync
+  email: sync@devops-agent-manager.invalid
+# Authors without an email (role sessions, IAM ARNs, the agent) get
+# <principal-slug>@<syntheticEmailDomain>.
+syntheticEmailDomain: devops-agent-manager.invalid
+
+# ListAssets is called with updatedAfter = last cursor minus this many seconds.
+cursorOverlapSeconds: 300
+concurrency: 4
+batchSize: 100
+versionsPageSize: 50
+# Versions with at least this many files are read with GetAssetContent (zip).
+zipMinFiles: 3
+lockWaitSeconds: 300
+
+reconcile:
+  # Refuse to commit deletions when more than this fraction of live assets
+  # appear deleted at once (for example after an access problem).
+  maxDeleteFraction: 0.5
+  guardMinAssets: 10
+  # A sync runs as a reconcile when none has run yet, or the last one is older
+  # than this. The cron above is missed while the worker isn't running.
+  maxAgeHours: 25
+
+# Changes with the same timestamp are committed in this type order.
+typeOrder: [memory_store, agents_md, skill, custom_agent, memory]
+
+commitMessages:
+  created: "Add {assetType} {name} (version {version})"
+  baseline: "Import {assetType} {name} at version {version}"
+  content: "Update {assetType} {name} to version {version}"
+  metadata: "Update metadata of {assetType} {name} (version {version})"
+  deleted: "Delete {assetType} {name}"
+  space: "Record space {spaceAlias}"

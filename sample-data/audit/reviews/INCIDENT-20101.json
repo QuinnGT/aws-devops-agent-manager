@@ -1,0 +1,58 @@
+{
+  "incident": "INCIDENT-20101",
+  "title": "INC-3101: Seat holds released early during an on-sale",
+  "score": "1/5",
+  "ground_truth": "A parameter group change on Sunday removed maxmemory-policy volatile-ttl from seat-hold-cache. The cluster fell back to allkeys-lru and evicted live seat holds when the on-sale filled its memory at 17:02 UTC. The trigger of the config change is not known.",
+  "ground_truth_uncertain": true,
+  "agent_final_answer": "Seat holds are lost because seat-map-web release 412 (16:31 UTC) drops batched hold writes (R34); the cache was ruled out (R27). Recommends rolling back to release 411 (R36).",
+  "summaries": [
+    {
+      "record": "R39",
+      "utc": "2026-10-26T17:52:09Z",
+      "conclusion": "Release 412 of seat-map-web drops batched hold writes; the cache is ruled out; confidence mid.",
+      "prompted_by": "initial run"
+    }
+  ],
+  "scored_summary_record": "R39 (investigation_summary_md)",
+  "timing": {
+    "incident_created": "2026-10-26 10:42 PT (17:42 UTC)",
+    "agent_start_utc": "2026-10-26T17:43:05Z",
+    "first_summary_utc": "2026-10-26T17:52:09Z",
+    "ran_while_incident_minutes_old": false,
+    "decisive_evidence_existed_at_run_time": "yes",
+    "note": "The agent started one minute after the alert, but the fault began at 17:02 UTC, 40 minutes earlier. The agent's own queries cover that period (R19), and the prompt gives the alert time (R2). The config change itself was made two days before the run."
+  },
+  "reachability": "reachable",
+  "reachability_reason": "The agent could query ElastiCache metrics through anyco_metrics_query and already did so for CPU and connections (R23, R25). evicted_keys and used_memory sit in the same tool and namespace. The change feed answers one day per query (R15 ('The change feed returns one day of events per query')), so the Sunday parameter group change was one extra query away.",
+  "near_miss": "Yes. R22 opened 'The seat hold cache is evicting holds'. The agent then checked only engine CPU and connections (R23) and ruled the hypothesis out (R27) on HTTP status, latency and CPU. Its own traces showed the symptom of eviction: R30 ('redis.GET key=hold:h-9b21d4 hit=false') right after successful writes (R31).",
+  "failure_modes": [
+    "F_premature_ruleout",
+    "C_change_anchoring",
+    "I_memory_or_skill_misled"
+  ],
+  "primary_failure_mode": "F_premature_ruleout",
+  "blocking_errors": [],
+  "scorecard_fair": "yes",
+  "scorecard_notes": "The score is fair. The scored summary blames release 412 and keeps the cache ruled out (R39). It does not mention evictions or the parameter group, which is the confirmed cause.",
+  "quality_notes": [
+    "The ruling out in R26 rests on HTTP 200 and flat latency. The same message says a failing cache 'would show up as errors or slower reads', but a missing hold returns an empty body with HTTP 200 (R31).",
+    "The baseline for latency and status is the previous day (R19), as the skill asks (R13 ('Query the same metrics for the same hour on the previous day')). 2026-10-25 was a Sunday with no on-sale, so it says nothing about load.",
+    "The final report states mid confidence and lists 'Cache memory metrics were not queried' as a gap (R39), so the weakness is visible to a reader, but the recommendation to roll back still goes out as the main action (R41).",
+    "The agent read the cache pattern memory and the cache path skill (R9) and followed the skill's steps to the letter. The memory pushes toward a client bug (R12 ('usually come from a client bug')) and the skill ends at the status and latency check (R13 ('the cache path is healthy'))."
+  ],
+  "fixes": [
+    {
+      "owner": "customer_memory",
+      "fix": "Rewrite the memory incident-patterns/patterns/cache-evictions. It now says early hold loss 'usually' comes from a client bug (R12 ('usually come from a client bug in the seat map page')), which sent the agent to release 412 (R34). State that evictions are the more common cause and name evicted_keys and used_memory as the first checks. Add the same hint to services/seat-map-service."
+    },
+    {
+      "owner": "instructions",
+      "fix": "Revise the skills cache-path-check and change-window-search. Step 4 of cache-path-check calls the cache healthy when status and latency match the previous day (R13 ('the cache path is healthy')). Require evicted_keys, used_memory and the cluster's maxmemory-policy before the cache is ruled out, and say that HTTP status and latency cannot show lost keys (R27). Step 2 of change-window-search queries only the day of the alert (R14 ('Query the change feed for the day of the alert')), so a change from the day before is never shown."
+    },
+    {
+      "owner": "customer_memory",
+      "fix": "Extend the runbook memory runbooks/change-feed-windows. It says the feed returns one day per query (R15 ('The change feed returns one day of events per query')), and the agent queried only 2026-10-26 (R19). Tell the agent to search adjacent 24-hour windows back to the onset, weekends included, before it calls the feed empty."
+    }
+  ],
+  "one_line": "Ruled out the cache on HTTP 200 and flat latency without checking evictions, and anchored on a seat map release."
+}

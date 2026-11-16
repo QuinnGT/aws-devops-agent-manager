@@ -1,0 +1,56 @@
+{
+  "incident": "INCIDENT-20106",
+  "title": "INC-3106: Price at checkout differs from the event page",
+  "score": "2/5",
+  "ground_truth": "The flag dynamic-pricing-v2 was turned on for 10 percent of traffic at 15:30 UTC while pricing-service kept a stale cache for that cohort (the cache key had no variant). Page and checkout read different entries. The CDN was not involved.",
+  "ground_truth_uncertain": false,
+  "agent_final_answer": "CDN caching of the event page price path on venue-cdn, with a purge recommended (R26, R28).",
+  "summaries": [
+    {
+      "record": "R31",
+      "utc": "2026-10-30T16:31:36Z",
+      "conclusion": "CDN caching of /api/events/*/prices on venue-cdn; purge recommended; confidence low.",
+      "prompted_by": "initial run"
+    }
+  ],
+  "scored_summary_record": "R31 (investigation_summary_md)",
+  "timing": {
+    "incident_created": "2026-10-30 09:21 PT (16:21 UTC)",
+    "agent_start_utc": "2026-10-30T16:22:40Z",
+    "first_summary_utc": "2026-10-30T16:31:36Z",
+    "ran_while_incident_minutes_old": false,
+    "decisive_evidence_existed_at_run_time": "yes",
+    "note": "The flag was enabled at 15:30 UTC, 52 minutes before the agent started. The mismatch lines in checkout-api begin at 15:36 UTC (R17)."
+  },
+  "reachability": "reachable",
+  "reachability_reason": "The flag change sits in the change feed for pricing-service. The agent queried checkout-api, venue-cdn and search-api only (R15), so it never saw it. The log lines carry variant=v2 (R17), and the traces name pricing-service (R22).",
+  "near_miss": "Yes. R17 ('All 100 carry variant=v2') appears in the agent's own log result, and the agent dismissed it in R19. R22 shows checkout reading its price from pricing-service with cache=hit, which names the service that held the stale entries.",
+  "failure_modes": [
+    "I_memory_or_skill_misled",
+    "G_thin_trigger_context"
+  ],
+  "primary_failure_mode": "I_memory_or_skill_misled",
+  "blocking_errors": [],
+  "scorecard_fair": "yes",
+  "scorecard_notes": "The score is fair. The scored summary names the CDN and recommends a purge (R31), and the confirmed cause is a pricing flag and a pricing-service cache.",
+  "quality_notes": [
+    "The agent states the missing context at the start (R4) and gives low confidence in the report (R31), which fits the evidence.",
+    "The report still ranks CDN caching first on the strength of the memory pattern (R14), although the observation shows that checkout prices come from pricing-service (R23).",
+    "A 60 second CDN cache cannot explain 112 mismatch lines that persist over 46 minutes (R17)."
+  ],
+  "fixes": [
+    {
+      "owner": "customer_memory",
+      "fix": "Rewrite the memory incident-patterns/patterns/pricing-mismatch. It states a cause and a fix as fact: R11 ('is CDN caching. Purge the CDN path'). Add that a price flag served to part of the traffic is another common cause and that flag changes in the window are checked before anything is purged. The agent followed the memory (R14, R24)."
+    },
+    {
+      "owner": "customer_trigger",
+      "fix": "Fill in the description and the CMDB role when the incident is created. This ticket had neither (R4), so the agent guessed venue-cdn (R9) and left pricing-service out of its change query (R15)."
+    },
+    {
+      "owner": "instructions",
+      "fix": "In the INCIDENT_RCA instructions, require the feature-flag-audit skill when a symptom affects only part of the traffic, and before any cache purge. All 100 sampled lines carried variant=v2 (R17) and the agent did not load the skill (R19)."
+    }
+  ],
+  "one_line": "Followed a memory that blames the CDN, ignored variant=v2 on every mismatch line and never queried the pricing flag."
+}

@@ -1,0 +1,54 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ReadAgentSpace",
+      "Effect": "Allow",
+      "Action": [
+        "aidevops:GetAgentSpace",
+        "aidevops:ListAssets",
+        "aidevops:GetAsset",
+        "aidevops:ListAssetVersions",
+        "aidevops:ListAssetFiles",
+        "aidevops:GetAssetFile",
+        "aidevops:GetAssetContent",
+        "aidevops:ListBacklogTasks",
+        "aidevops:GetBacklogTask",
+        "aidevops:ListExecutions",
+        "aidevops:ListJournalRecords"
+      ],
+      "Resource": "<agent-space-arn>"
+    },
+    {
+      "Sid": "ListAssetTypes",
+      "Effect": "Allow",
+      "Action": "aidevops:ListAssetTypes",
+      "Resource": "*"
+    },
+    {
+      "Sid": "FindWhoChangedAssets",
+      "Effect": "Allow",
+      "Action": "cloudtrail:LookupEvents",
+      "Resource": "*"
+    },
+    {
+      "Sid": "ListBedrockModels",
+      "Effect": "Allow",
+      "Action": [
+        "bedrock:ListFoundationModels",
+        "bedrock:ListInferenceProfiles"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "RunAuditModels",
+      "Effect": "Allow",
+      "Action": "bedrock:InvokeModel",
+      "Resource": [
+        "arn:aws:bedrock:*::foundation-model/*",
+        "arn:aws:bedrock:*:<account-id>:inference-profile/*",
+        "arn:aws:bedrock:*:<account-id>:application-inference-profile/*"
+      ]
+    }
+  ]
+}

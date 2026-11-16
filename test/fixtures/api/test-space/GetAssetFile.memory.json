@@ -1,0 +1,21 @@
+{
+  "request": {
+    "agentSpaceId": "00000000-0000-4000-8000-0000000000bb",
+    "assetId": "ki-9184fa09-8e79-4a11-90fa-a6b81ab5fe6b",
+    "path": "overview.md"
+  },
+  "response": {
+    "file": {
+      "path": "overview.md",
+      "content": {
+        "text": "---\nname: overview\ndescription: 'The routing index of tool-use best practices for this agent space''s Chat sessions, pointing to one item per kind of user request with the tools each item covers. Read when starting a Chat session to find the matching category for your current task.'\nclaim:\n- id: C1\n  text: 'This agent space''s Chat sessions fall into four categories with qualifying tool-use patterns: privatelink-cross-region-setup, privatelink-facts-and-limits, testing-mcp-servers, and devops-agent-product-questions.'\n  provenance:\n  - note: All four categories re-confirmed in this run's categories.json from the recent Chat sessions.\n    source:\n    - type: devopsagent:execution\n      id: 42aac4cf-a388-42b6-9d17-12b584e72f15\n      created_at: '2026-11-03T18:38:34Z'\n- id: C2\n  text: skill_read(verity) returns roughly 10,500 to 22,000 characters, growing as users edit the verity skill, and skill_read has no parameter to limit its output.\n  provenance:\n  - note: Recent sessions measured skill_read(verity) at 10,577, 10,956, 14,792 and 21,805 characters.\n    source:\n    - type: devopsagent:execution\n      id: 073f8eab-b8d0-4c0c-9c9d-792992e54be4\n      created_at: '2026-11-07T18:33:31Z'\n- id: C3\n  text: The shared AGENTS.md already contains the core verity verification requirements (SCORE bars format, trust badge, grounding breakdown, self-check checklist), so standard post-response verification does not require reading the full verity skill via skill_read.\n  provenance:\n  - note: Validation confirmed AGENTS.md contains the report format, SCORE bars template, grounding breakdown, flagged claims section and self-check.\n    source:\n    - type: devopsagent:execution\n      id: e6fb1e46-77de-40eb-bddb-2b3e952565c0\n      created_at: '2026-10-15T18:41:03Z'\n---\n<!-- Generated: 2026-11-07 -->\n\nFind the category below that best matches your current task, open its item, then look up the MCP tool you are using: each category item is organized by tool name.\n\n## privatelink-cross-region-setup\n\nSetting up or configuring cross-region AWS PrivateLink connectivity, including interface endpoints between regions and updating verification skills or AGENTS.md. Tools: verify_aws_claim, skill_read, get_skill, update_skill, list_skills, list_agents_md, update_agents_md.\n\n[categories/privatelink-cross-region-setup](./categories/privatelink-cross-region-setup.md)\n\n## privatelink-facts-and-limits\n\nLooking up specific PrivateLink factual data \u2014 service quotas, bandwidth limits, latency benchmarks, or recent feature announcements. Tools: verify_aws_claim, skill_read.\n\n[categories/privatelink-facts-and-limits](./categories/privatelink-facts-and-limits.md)\n\n## testing-mcp-servers\n\nTesting or validating a custom MCP server added to the agent space \u2014 confirming connectivity, tool availability, and end-to-end functionality. Tools: list_associations, gather_context, searxng-mcp_searxng_instance_info, searxng-mcp_searxng_web_search.\n\n[categories/testing-mcp-servers](./categories/testing-mcp-servers.md)\n\n## devops-agent-product-questions\n\nQuestions about DevOps Agent product capabilities, security posture, compliance, performance tuning, journal access, or operational metrics. Tools: verify_aws_claim, skill_read.\n\n[categories/devops-agent-product-questions](./categories/devops-agent-product-questions.md)\n"
+      },
+      "version": 24,
+      "createdAt": "2026-08-13T18:37:05.000Z",
+      "updatedAt": "2026-11-10T23:38:13.000Z",
+      "metadata": {
+        "mimeType": "text/markdown"
+      }
+    }
+  }
+}

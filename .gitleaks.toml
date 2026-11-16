@@ -1,0 +1,35 @@
+# gitleaks configuration for CI (the `secrets` job in .github/workflows/ci.yml).
+#
+# The default rules stay on. The allowlists below cover the few fake values that
+# tests and fixtures contain on purpose. Each entry needs both the path and the
+# exact value to match (condition = "AND"), so a new key in the same file is
+# still reported. Add an entry only for a value that is not a credential, and
+# say why.
+
+title = "DevOps Agent Manager"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Made-up AWS access key IDs that the error-redaction tests feed to the redaction code"
+condition = "AND"
+targetRules = ["aws-access-token"]
+paths = [
+  '''src/server/jobs/error-text\.test\.ts$''',
+  '''src/server/review/index\.test\.ts$''',
+]
+regexes = [
+  '''^(AKIA|ASIA)ABCDEFGHIJKLMNOP$''',
+]
+
+[[allowlists]]
+description = "Pagination cursor (NextToken) in a captured CloudTrail LookupEvents response; it is not a credential"
+condition = "AND"
+targetRules = ["generic-api-key"]
+paths = [
+  '''test/fixtures/api/test-space/CloudTrail\.LookupEvents\.memory\.json$''',
+]
+regexes = [
+  '''^sfJLtNMfmLYONvEnNDgux9YF6WpjKKXjnqgD/MNZLC7m7zKM0AOzSHpZyfRbXtg9$''',
+]

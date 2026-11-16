@@ -1,0 +1,16 @@
+{
+  "request": {
+    "agentSpaceId": "00000000-0000-4000-8000-0000000000bb",
+    "assetId": "ki-9184fa09-8e79-4a11-90fa-a6b81ab5fe6b"
+  },
+  "response": {
+    "items": [
+      {
+        "path": "overview.md",
+        "version": 24,
+        "createdAt": "2026-08-13T18:37:05.000Z",
+        "updatedAt": "2026-11-07T18:33:31.000Z"
+      }
+    ]
+  }
+}

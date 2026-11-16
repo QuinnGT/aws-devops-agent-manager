@@ -1,0 +1,259 @@
+# Audit profiles. A customer's history repository
+# can override any of this in its own policy/audits.yaml.
+# Paths are relative to a policy directory and read at run time.
+
+maxItemsPerAudit: 500
+maxEvidenceUploadBytes: 52428800
+defaultProfile: benchmark
+
+profiles:
+  benchmark:
+    label: Benchmark against ground truth
+    description: >-
+      Reviews each investigation against the confirmed root cause and the benchmark
+      scorecard, the way a team audits its lowest-scoring incidents.
+    incidentIdTemplate: "INCIDENT-{id}"
+    inputs:
+      - kind: actual_rca
+        label: Confirmed root cause
+        fileNamePattern: '^(?:INCIDENT-)?(?<id>\d+)_actual_rca\.md$'
+        fileNameExample: INCIDENT-20101_actual_rca.md
+        required: true
+      - kind: scorecard
+        label: Benchmark scorecard
+        fileNamePattern: '^INCIDENT-(?<id>\d+)_scorecard\.md$'
+        fileNameExample: INCIDENT-20101_scorecard.md
+        required: true
+        fields:
+          score:
+            label: Score
+            pattern: 'DevOps RCA score[^|]*\|\s*\*{0,2}(?<value>\d/5)'
+            column: true
+            description: The benchmark's score for this space's agent on this incident, 1 to 5, against the confirmed root cause.
+          verdict:
+            label: Verdict
+            pattern: '\|\s*Verdict\s*\|\s*\*{0,2}(?<value>[^*|]+?)\*{0,2}\s*\|'
+          comparisonScore:
+            label: Comparison agent score
+            pattern: 'Comparison agent[^|]*\|\s*\*{0,2}(?<value>\d/5)'
+            description: The score the benchmark gave another RCA agent (the comparison agent named in the scorecard) on the same incident, against the same confirmed root cause. It is context only; the audit reviews this space's agent.
+    analyzers: [run-metrics, condensed-trace, memory-reads, output-rules]
+    review:
+      runner: ai-sdk
+      # The review model is chosen in the app: on the audit, or as the space default in
+      # Space settings. A customer's policy may set review.modelId as a last fallback.
+      stepLimit: 40
+      maxOutputTokens: 16000
+      concurrency: 4
+      timeoutSeconds: 900
+      systemPrompt: prompts/reviewer-system.md
+      promptTemplate: audit-profiles/benchmark/brief.md
+      outputSchema: audit-profiles/benchmark/review.schema.json
+      traceCharsInPrompt: 120000
+      toolOutputCapChars: 8000
+      # Sent with the last allowed step: tools are withdrawn and the model writes its output.
+      finalStepPrompt: prompts/reviewer-final-step.md
+      analyzerCharsInPrompt: 12000
+      groundTruthCharsInPrompt: 40000
+      # A cache point after the brief lets the 40 steps reuse it. Turn off if the model rejects it.
+      promptCache: true
+    failureModes:
+      - { id: A_out_of_reach, label: Evidence out of reach, description: The decisive evidence was not accessible to the agent. }
+      - { id: B_access_failure, label: Access failure, description: "A tool or auth error (401, 403, timeout, no matching role, empty data source) blocked a decisive check." }
+      - { id: C_change_anchoring, label: Anchored on a change, description: "Latched onto a deploy, PR, A/B test or flag by timing or naming without confirming the mechanism." }
+      - { id: D_wrong_component, label: Wrong component, description: "Investigated an upstream, downstream or neighboring component instead of the faulty one." }
+      - { id: E_symptom_stop, label: Stopped at the symptom, description: Described the symptom accurately but did not go one level deeper. }
+      - { id: F_premature_ruleout, label: Ruled out too early, description: Ruled out the true cause on weak evidence. }
+      - { id: G_thin_trigger_context, label: Thin trigger context, description: "The trigger prompt lacked a description or CMDB role, and that misdirected scoping." }
+      - { id: H_ran_too_early, label: Ran too early, description: The incident was minutes old and the key signal appeared later. }
+      - { id: I_memory_or_skill_misled, label: Misled by memory or a skill, description: "A memory entry, skill or instruction pushed it the wrong way." }
+      - { id: J_summary_mismatch, label: Summary mismatch, description: "The platform summary does not reflect the agent's best final conclusion." }
+      - { id: K_chronic_noise, label: Chronic noise, description: "Picked a pre-existing, low-rate or unrelated error as the cause." }
+      - { id: L_other, label: Other, description: Explained in the review. }
+    fixOwners:
+      - { id: customer_access, label: Customer tool or data access }
+      - { id: customer_trigger, label: Customer trigger context }
+      - { id: customer_memory, label: Customer memory or runbook content }
+      - { id: instructions, label: Instruction and skill package }
+      - { id: aws_service, label: DevOps Agent service behavior }
+      - { id: none_feasible, label: No feasible fix }
+    findings:
+      - kind: diagnosis
+        label: Diagnosis
+        from: "$"
+        title: "{incidentId}: {one_line}"
+        fields: [primary_failure_mode, failure_modes, reachability, reachability_reason, near_miss, scorecard_fair, scorecard_notes, ground_truth, agent_final_answer, one_line, score]
+        editable: [primary_failure_mode, failure_modes, reachability, scorecard_fair, one_line]
+        linkable: true
+        summaryField: primary_failure_mode
+        # Labels on the review pages (field keys stay the identity in the output and the report).
+        fieldLabels:
+          primary_failure_mode: Primary failure mode
+          failure_modes: Also seen
+          reachability: Within reach
+          reachability_reason: Why
+          near_miss: Near miss
+          scorecard_fair: Scorecard fair
+          scorecard_notes: Scorecard notes
+          ground_truth: Confirmed root cause
+          agent_final_answer: Agent's final answer
+          one_line: In one line
+          score: Score
+        valueLabels:
+          reachability: { reachable: Reachable, partially_reachable: Partly reachable, out_of_reach: Out of reach }
+          scorecard_fair: { "yes": "Yes", mostly: Mostly, "no": "No", not_applicable: Not applicable }
+        # Shown elsewhere on the incident page: the title, the header score and the evidence column.
+        cardHidden: [one_line, score, ground_truth, agent_final_answer]
+      - kind: fix
+        label: Fix
+        from: fixes
+        title: "{fix}"
+        fields: [owner, fix, evidence]
+        editable: [owner, fix]
+        linkable: true
+        fieldLabels: { owner: Owner, fix: Fix, evidence: Evidence }
+    report:
+      title: Journal audit
+      # Narrative drafts use the audit's report model (chosen in the app), else its review model.
+      systemPrompt: audit-profiles/benchmark/report-system.md
+      maxOutputTokens: 4000
+      sections:
+        - { id: summary, title: Summary, kind: narrative, audience: shareable, prompt: audit-profiles/benchmark/report-summary.md }
+        - { id: failure-modes, title: Primary failure modes, kind: count-table, audience: shareable, findingKind: diagnosis, field: primary_failure_mode, labels: failureModes, headers: { primary_failure_mode: Primary failure mode } }
+        - id: reachability
+          title: Was the cause within reach
+          kind: count-table
+          audience: shareable
+          findingKind: diagnosis
+          field: reachability
+          headers: { reachability: Decisive evidence }
+          valueLabels: { reachable: Within reach, partially_reachable: Partly within reach, out_of_reach: Out of reach }
+        - { id: fixes-by-owner, title: Fixes by owner, kind: count-table, audience: shareable, findingKind: fix, field: owner, labels: fixOwners, headers: { owner: Owner } }
+        - { id: fixes, title: Fixes, kind: findings-table, audience: shareable, findingKind: fix, columns: [owner, fix], headers: { owner: Owner, fix: Fix }, columnLabels: { owner: fixOwners } }
+        - id: incidents
+          title: Incidents
+          kind: incident-list
+          audience: shareable
+          findingKind: diagnosis
+          columns: [primary_failure_mode, reachability, ground_truth, agent_final_answer, near_miss]
+          evidenceFields: [score]
+          headers:
+            primary_failure_mode: Primary failure mode
+            reachability: Decisive evidence
+            ground_truth: Confirmed root cause
+            agent_final_answer: Agent's answer
+            near_miss: Near miss
+          columnLabels:
+            primary_failure_mode: failureModes
+            reachability: { reachable: Within reach, partially_reachable: Partly within reach, out_of_reach: Out of reach }
+        - id: run-metrics
+          title: Run metrics
+          kind: metrics-table
+          audience: internal
+          analyzer: run-metrics
+          columns: [span_min, first_summary_min, finalize_min, tool_calls_lead, n_inv_summaries]
+          headers:
+            span_min: Run span (min)
+            first_summary_min: First summary (min)
+            finalize_min: Finalization (min)
+            tool_calls_lead: Lead tool calls
+            n_inv_summaries: Summaries
+        - id: scorecard-fairness
+          title: Scorecard fairness
+          kind: count-table
+          audience: internal
+          findingKind: diagnosis
+          field: scorecard_fair
+          headers: { scorecard_fair: Scorecard }
+          valueLabels: { "yes": Fair, mostly: Mostly fair, "no": Not fair, not_applicable: Not applicable }
+
+  before-after:
+    label: Before and after a revision
+    description: >-
+      Reviews investigations from two cohorts, runs before a revision and runs after it,
+      to see whether a change to the instruction package helped. No ground truth is
+      required: each run is judged on whether its own records support its conclusion, and
+      issues are tagged by area and owner so the cohorts can be compared.
+    incidentIdTemplate: "INCIDENT-{id}"
+    inputs:
+      - kind: actual_rca
+        label: Confirmed root cause
+        fileNamePattern: '^(?:INCIDENT-)?(?<id>\d+)_actual_rca\.md$'
+        fileNameExample: INCIDENT-20101_actual_rca.md
+        required: false
+    cohorts:
+      - { id: before, label: Before the revision }
+      - { id: after, label: After the revision }
+    analyzers: [run-metrics, condensed-trace, memory-reads, output-rules]
+    review:
+      runner: ai-sdk
+      stepLimit: 40
+      maxOutputTokens: 16000
+      concurrency: 4
+      timeoutSeconds: 900
+      systemPrompt: prompts/reviewer-system.md
+      promptTemplate: audit-profiles/before-after/brief.md
+      outputSchema: audit-profiles/before-after/review.schema.json
+      traceCharsInPrompt: 120000
+      toolOutputCapChars: 8000
+    # Issue areas. A before-after review tags each issue with one; the report counts them.
+    failureModes:
+      - { id: final_output, label: Final output consistency, description: "The final summaries keep a diagnosis the run had already refuted, or mix confirmed and unresolved text." }
+      - { id: mitigation_safety, label: Mitigation safety, description: "A recommended action is unsafe, unlabeled as destructive, or changes semantics without saying so." }
+      - { id: causal_support, label: Causal claim outruns evidence, description: A positive causal claim rests on narrative or timing rather than an exported result. }
+      - { id: cross_incident, label: Related incidents not reconciled, description: Overlapping alerts were treated separately before choosing a root fix. }
+      - { id: deployed_config, label: Deployed code and settings not checked, description: "A feature was called missing without reading the deployed code or runtime settings." }
+      - { id: tool_use, label: Tool contract mistakes, description: "Bad paths or arguments, datasource hunting, or reuse of a generic task." }
+      - { id: finalization, label: Finalization and delivery, description: The time from the last lead message to the summary is long or the delivery is not visible. }
+      - { id: memory_retrieval, label: Memory retrieval, description: "Memory entries were not found, paths were not recovered, or retired evidence was used." }
+      - { id: runbook, label: Runbook defect, description: A runbook or memory entry the run followed is wrong. }
+      - { id: telemetry_export, label: Export or context limits, description: The export or the context window hides what is needed for a stronger claim. }
+      - { id: output_rules, label: Customer output rules, description: "Time, wording or masking rules for customer output were not kept." }
+      - { id: other, label: Other, description: Explained in the review. }
+    fixOwners:
+      - { id: access, label: Tool or data access }
+      - { id: trigger, label: Trigger context }
+      - { id: memory, label: Memory or runbook content }
+      - { id: instructions, label: Instruction and skill package }
+      - { id: aws_service, label: DevOps Agent service behavior }
+      - { id: none_feasible, label: No feasible fix }
+    findings:
+      - kind: case
+        label: Case review
+        from: "$"
+        title: "{incidentId} ({cohort}): {verdict}"
+        fields: [cohort, verdict, conclusion_support, supported, improved, concerns, next, one_line]
+        editable: [verdict, conclusion_support, concerns, next, one_line]
+        linkable: false
+        summaryField: conclusion_support
+        fieldLabels:
+          cohort: Cohort
+          verdict: Verdict
+          conclusion_support: Conclusion supported
+          supported: What the records support
+          improved: Better than before
+          concerns: Concerns
+          next: Confirm next
+          one_line: In one line
+        valueLabels:
+          conclusion_support: { supported: Supported, partly_supported: Partly supported, unsupported: Not supported, not_determinable: Can't tell }
+        cardHidden: [one_line, cohort]
+      - kind: issue
+        label: Issue
+        from: issues
+        title: "{issue}"
+        fields: [area, priority, issue, detail, action, owner, evidence]
+        editable: [area, priority, issue, detail, action, owner]
+        linkable: true
+        fieldLabels: { area: Area, priority: Priority, issue: Issue, detail: Detail, action: Action, owner: Owner, evidence: Evidence }
+        valueLabels:
+          priority: { P0: "P0: unsafe as is", P1: "P1: fix before relying on it", P2: "P2: limits the claims" }
+    report:
+      title: Before and after a revision
+      sections:
+        - { id: support, title: Is the conclusion supported, kind: count-table, audience: shareable, findingKind: case, field: conclusion_support }
+        - { id: issues-by-area, title: Issues by area, kind: count-table, audience: shareable, findingKind: issue, field: area, labels: failureModes }
+        - { id: issues-by-owner, title: Issues by owner, kind: count-table, audience: shareable, findingKind: issue, field: owner, labels: fixOwners }
+        - { id: issues, title: Issues, kind: findings-table, audience: shareable, findingKind: issue, columns: [priority, area, issue, action, owner] }
+        - { id: cases, title: Case reviews, kind: incident-list, audience: shareable, findingKind: case }
+        - { id: run-metrics, title: Run metrics, kind: metrics-table, audience: internal, analyzer: run-metrics, columns: [span_min, first_summary_min, finalize_min, tool_calls_lead, n_inv_summaries] }

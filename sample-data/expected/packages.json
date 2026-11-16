@@ -1,0 +1,309 @@
+{
+  "description": "What the sample package tests assert (src/server/packages/sample-data.test.ts): asset counts by type, check results, the v1 to v2 comparison and the Agent Space export. The memory bodies are the contract with the journals.",
+  "packages": {
+    "v1": {
+      "layout": "anycompany-v1",
+      "assetsByType": {
+        "agents_md": 5,
+        "skill": 8,
+        "memory_store": 3,
+        "memory": 9
+      },
+      "total": 25,
+      "checks": {
+        "ok": true,
+        "errors": 0,
+        "warnings": 0
+      },
+      "zipsBuilt": [
+        "bounded-log-query",
+        "cache-path-check",
+        "change-window-search",
+        "feature-flag-audit",
+        "legacy-dashboard-links",
+        "low-sample-size-check",
+        "token-signing-check",
+        "vendor-status-check"
+      ],
+      "validation": {
+        "status": "passed",
+        "instruction_files": 5,
+        "skills": 8,
+        "stores": 3,
+        "memories": 9,
+        "errors": []
+      },
+      "skillAgentTypes": {
+        "bounded-log-query": [
+          "GENERIC"
+        ],
+        "cache-path-check": [
+          "INCIDENT_RCA"
+        ],
+        "change-window-search": [
+          "INCIDENT_TRIAGE",
+          "INCIDENT_RCA"
+        ],
+        "feature-flag-audit": [
+          "INCIDENT_RCA"
+        ],
+        "low-sample-size-check": [
+          "INCIDENT_TRIAGE"
+        ],
+        "token-signing-check": [
+          "INCIDENT_RCA"
+        ],
+        "vendor-status-check": [
+          "INCIDENT_RCA"
+        ],
+        "legacy-dashboard-links": [
+          "GENERIC"
+        ]
+      }
+    },
+    "v2": {
+      "layout": "anycompany-v2",
+      "assetsByType": {
+        "agents_md": 5,
+        "skill": 8,
+        "memory_store": 3,
+        "memory": 10
+      },
+      "total": 26,
+      "checks": {
+        "ok": true,
+        "errors": 0,
+        "warnings": 0
+      },
+      "zipsBuilt": [
+        "bounded-log-query",
+        "cache-path-check",
+        "change-window-search",
+        "consumer-lag-check",
+        "feature-flag-audit",
+        "low-sample-size-check",
+        "token-signing-check",
+        "vendor-status-check"
+      ],
+      "validation": {
+        "status": "passed",
+        "instruction_files": 5,
+        "skills": 8,
+        "stores": 3,
+        "memories": 10,
+        "errors": []
+      },
+      "skillAgentTypes": {
+        "bounded-log-query": [
+          "GENERIC"
+        ],
+        "cache-path-check": [
+          "INCIDENT_RCA"
+        ],
+        "change-window-search": [
+          "INCIDENT_TRIAGE",
+          "INCIDENT_RCA"
+        ],
+        "feature-flag-audit": [
+          "INCIDENT_RCA"
+        ],
+        "low-sample-size-check": [
+          "INCIDENT_TRIAGE"
+        ],
+        "token-signing-check": [
+          "INCIDENT_RCA"
+        ],
+        "vendor-status-check": [
+          "INCIDENT_RCA"
+        ],
+        "consumer-lag-check": [
+          "INCIDENT_RCA"
+        ]
+      }
+    },
+    "agentSpaceExport": {
+      "layout": "anycompany-folders",
+      "assetsByType": {
+        "agents_md": 5,
+        "skill": 9,
+        "custom_agent": 2,
+        "memory_store": 3,
+        "memory": 10
+      },
+      "total": 29,
+      "checks": {
+        "ok": true,
+        "errors": 0,
+        "warnings": 1
+      },
+      "checkResults": [
+        [
+          "warning",
+          "import.duplicate-left-out"
+        ]
+      ],
+      "assetIds": [
+        "ki-00000000-0000-4000-8000-000000000101",
+        "ki-00000000-0000-4000-8000-000000000102",
+        "ki-00000000-0000-4000-8000-000000000103",
+        "ki-00000000-0000-4000-8000-000000000104",
+        "ki-00000000-0000-4000-8000-000000000105",
+        "ki-00000000-0000-4000-8000-000000000111",
+        "ki-00000000-0000-4000-8000-000000000112",
+        "ki-00000000-0000-4000-8000-000000000113",
+        "ki-00000000-0000-4000-8000-000000000114",
+        "ki-00000000-0000-4000-8000-000000000115",
+        "ki-00000000-0000-4000-8000-000000000116",
+        "ki-00000000-0000-4000-8000-000000000117",
+        "ki-00000000-0000-4000-8000-000000000118",
+        "ki-00000000-0000-4000-8000-000000000119",
+        "ki-00000000-0000-4000-8000-000000000121",
+        "ki-00000000-0000-4000-8000-000000000122"
+      ],
+      "olderSkill": [
+        "ki-00000000-0000-4000-8000-000000000113",
+        "INACTIVE"
+      ],
+      "indexDirs": [
+        "agents_md/chat",
+        "agents_md/global",
+        "agents_md/incident-mitigation",
+        "agents_md/incident-rca",
+        "agents_md/incident-triage",
+        "skill/bounded-log-query",
+        "skill/cache-path-check",
+        "skill/cache-path-check.v1",
+        "skill/change-window-search",
+        "skill/consumer-lag-check",
+        "skill/feature-flag-audit",
+        "skill/low-sample-size-check",
+        "skill/token-signing-check",
+        "skill/vendor-status-check",
+        "custom_agent/capacity-reviewer",
+        "custom_agent/postmortem-writer"
+      ],
+      "againstV2": {
+        "onlyInExport": [
+          "custom_agent:capacity-reviewer",
+          "custom_agent:postmortem-writer",
+          "skill:cache-path-check@ki-00000000-0000-4000-8000-000000000113"
+        ],
+        "onlyInV2": [],
+        "different": []
+      },
+      "customAgentRefs": {
+        "capacity-reviewer": {
+          "skills": [
+            "bounded-log-query",
+            "cache-path-check"
+          ]
+        },
+        "postmortem-writer": {
+          "skills": [
+            "change-window-search",
+            "bounded-log-query"
+          ]
+        }
+      }
+    }
+  },
+  "v1ToV2": {
+    "added": [
+      "memory:incident-patterns/patterns/low-traffic-alarms",
+      "skill:consumer-lag-check"
+    ],
+    "removed": [
+      "skill:legacy-dashboard-links"
+    ],
+    "changed": [
+      "agents_md:GENERIC",
+      "agents_md:INCIDENT_RCA",
+      "agents_md:INCIDENT_TRIAGE",
+      "memory:incident-patterns/patterns/cache-evictions",
+      "memory:incident-patterns/patterns/pricing-mismatch",
+      "memory:incident-patterns/roles/on-call-routing",
+      "memory:runbooks/change-feed-windows",
+      "memory:runbooks/log-query-limits",
+      "memory:service-catalog/services/checkout-api",
+      "memory:service-catalog/services/fulfillment-worker",
+      "memory:service-catalog/services/payments-gateway",
+      "memory:service-catalog/services/seat-map-service",
+      "skill:bounded-log-query",
+      "skill:cache-path-check",
+      "skill:change-window-search",
+      "skill:vendor-status-check"
+    ],
+    "unchanged": [
+      "agents_md:CHAT",
+      "agents_md:INCIDENT_MITIGATION",
+      "memory_store:incident-patterns",
+      "memory_store:runbooks",
+      "memory_store:service-catalog",
+      "skill:feature-flag-audit",
+      "skill:low-sample-size-check",
+      "skill:token-signing-check"
+    ]
+  },
+  "memoryBodies": [
+    [
+      "service-catalog",
+      "services/checkout-api",
+      "checkout-api takes the cart, holds seats through seat-map-service and charges the card through payments-gateway. Logs: /anyco/prod/checkout-api. Owner: team-checkout.",
+      "checkout-api takes the cart, holds seats through seat-map-service and charges the card through payments-gateway. Logs: /anyco/prod/checkout-api. Owner: team-checkout.\n\nA 5xx from payments-gateway shows up here as HTTP 502 with error code PGW_UPSTREAM."
+    ],
+    [
+      "service-catalog",
+      "services/seat-map-service",
+      "seat-map-service serves the venue seat map and seat holds. Holds live in the seat-hold-cache Redis cluster (cluster mode, 3 shards) with a 10-minute TTL. Owner: team-venue.",
+      "seat-map-service serves the venue seat map and seat holds. Holds live in the seat-hold-cache Redis cluster (cluster mode, 3 shards) with a 10-minute TTL. Owner: team-venue.\n\nA hold that disappears before its TTL points at evictions. Check the evicted_keys and used_memory metrics before you rule the cache out."
+    ],
+    [
+      "service-catalog",
+      "services/payments-gateway",
+      "payments-gateway routes card payments to the ExamplePay acquirer. A charge fails when ExamplePay takes longer than 3 seconds. Owner: team-payments.",
+      "payments-gateway routes card payments to the ExamplePay acquirer. A charge fails when ExamplePay takes longer than 3 seconds. Owner: team-payments.\n\nExamplePay posts its incidents on its status page. Check that page and the gateway's own TLS and auth errors before you blame a checkout-api deploy."
+    ],
+    [
+      "service-catalog",
+      "services/fulfillment-worker",
+      "fulfillment-worker consumes the order-events topic (12 partitions), issues tickets and asks notification-service to send the confirmation email. Owner: team-fulfillment.",
+      "fulfillment-worker consumes the order-events topic (12 partitions), issues tickets and asks notification-service to send the confirmation email. Owner: team-fulfillment.\n\nConsumer lag on one partition while the others are at zero means a stuck message, not load."
+    ],
+    [
+      "incident-patterns",
+      "patterns/cache-evictions",
+      "Seat holds that vanish early usually come from a client bug in the seat map page.",
+      "Seat holds that vanish early come from cache evictions more often than from client bugs. Compare evicted_keys and used_memory with the number of active holds."
+    ],
+    [
+      "incident-patterns",
+      "patterns/pricing-mismatch",
+      "A price that differs between the event page and checkout is CDN caching. Purge the CDN path.",
+      "A price that differs between the event page and checkout can be CDN caching or a pricing flag served to part of the traffic. Check flag changes in the window before you purge anything."
+    ],
+    [
+      "incident-patterns",
+      "patterns/low-traffic-alarms",
+      null,
+      "Ratio alarms at night can fire on a handful of requests. Count the requests behind the ratio before you call it an outage."
+    ],
+    [
+      "incident-patterns",
+      "roles/on-call-routing",
+      "Page team-checkout for checkout-api, team-venue for seat-map-service and team-payments for payments-gateway.",
+      "Page team-checkout for checkout-api, team-venue for seat-map-service and team-payments for payments-gateway.\n\nPage team-identity for identity-service."
+    ],
+    [
+      "runbooks",
+      "change-feed-windows",
+      "The change feed returns one day of events per query.",
+      "The change feed returns one day of events per query. Search adjacent 24-hour windows back to the onset, weekends included, before you call the feed empty."
+    ],
+    [
+      "runbooks",
+      "log-query-limits",
+      "Log searches return at most 500 lines.",
+      "Log searches return at most 500 lines and time out after 60 seconds. State the time window, the log group and the line limit of every query you cite."
+    ]
+  ]
+}

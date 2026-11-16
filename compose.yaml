@@ -1,0 +1,83 @@
+# Local mode: the full app on one PC. Start it with `./scripts/stack.sh up`, which builds or pulls the
+# image, creates .env on first use and checks your AWS setup. Plain `podman compose up -d --build` works too.
+#
+# Exposure:
+#  - The web app is published to 127.0.0.1 only (port DAM_PORT, default 3000). Do not widen this
+#    mapping; to reach it from another machine, use an SSH local port-forward.
+#  - Postgres has no published port; only the app and worker reach it on the compose network.
+#  - Inside the container the server binds 0.0.0.0 so the published port works; the
+#    127.0.0.1 publish is the boundary. DAM_LOOPBACK_PUBLISH_ONLY=true states that, and is
+#    what allows AUTH_DEV_BYPASS in this file. Remove both if you change the mapping.
+#
+# Secrets: values come from .env (not committed); compose fails fast if they're missing.
+#
+# AWS credentials, set up by `./scripts/stack.sh up --profile <name>` (see docs/getting-started.md):
+#  - Bridge mode (default, needs the AWS CLI on the host). No ~/.aws in the containers. stack.sh sets
+#    DAM_AWS_DIR to an empty folder and the two DAM_CONTAINER_AWS_* variables to files in the app-data
+#    volume. It writes temporary credentials there and renews them in the background. The AWS SDK reads them
+#    through a credential_process, so IAM Identity Center and credential_process profiles work.
+#  - Mount mode (`--mount-aws-dir`, or no AWS CLI): the engineer's ~/.aws (or DAM_AWS_DIR) is mounted
+#    read-only and AWS_PROFILE selects the profile. With none of the variables set, this is also what plain
+#    `podman compose up` does.
+# No credential is ever passed in an environment variable. AWS_PROFILE has no value here on purpose:
+# compose passes it on only when it is set in the shell that runs it.
+#
+# Policy: DAM_POLICY_OVERLAY_HOST_DIR (set by `./scripts/stack.sh up --policy <folder>`) is mounted
+# read-only at /app/policy-overlay and merged over policy/. Unset, it is an empty folder, which changes nothing.
+name: devops-agent-manager
+services:
+  postgres:
+    image: docker.io/library/postgres:18
+    environment:
+      POSTGRES_USER: dam
+      POSTGRES_DB: dam
+      POSTGRES_PASSWORD: ${DAM_POSTGRES_PASSWORD:?set DAM_POSTGRES_PASSWORD in .env}
+    volumes:
+      - pg-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dam"]
+      interval: 5s
+      retries: 20
+
+  web:
+    build: { context: ., dockerfile: Containerfile }
+    image: ${DAM_IMAGE:-localhost/devops-agent-manager:dev}
+    command: ["web"]
+    depends_on:
+      postgres: { condition: service_healthy }
+    ports:
+      - "127.0.0.1:${DAM_PORT:-3000}:3000"
+    environment: &app-env
+      DATABASE_URL: postgres://dam:${DAM_POSTGRES_PASSWORD:?set DAM_POSTGRES_PASSWORD in .env}@postgres:5432/dam
+      DAM_HOST: 0.0.0.0
+      DAM_LOOPBACK_PUBLISH_ONLY: "true"
+      AUTH_DEV_BYPASS: ${AUTH_DEV_BYPASS:-true}
+      AUTH_DEV_USER_EMAIL: ${AUTH_DEV_USER_EMAIL:-local@localhost}
+      AUTH_DEV_ROLE: ${AUTH_DEV_ROLE:-admin}
+      AWS_PROFILE:
+      AWS_CONFIG_FILE: ${DAM_CONTAINER_AWS_CONFIG_FILE:-/home/app/.aws/config}
+      AWS_SHARED_CREDENTIALS_FILE: ${DAM_CONTAINER_AWS_CREDENTIALS_FILE:-/home/app/.aws/credentials}
+      AWS_SDK_LOAD_CONFIG: "1"
+      DAM_DATA_DIR: /data
+      DAM_POLICY_OVERLAY_DIRS: /app/policy-overlay
+      DAM_ALLOWED_ORIGINS: http://127.0.0.1:${DAM_PORT:-3000},http://localhost:${DAM_PORT:-3000}
+    volumes:
+      - app-data:/data
+      - ${DAM_AWS_DIR:-${HOME}/.aws}:/home/app/.aws:ro
+      - ${DAM_POLICY_OVERLAY_HOST_DIR:-./scripts/empty}:/app/policy-overlay:ro
+
+  worker:
+    image: ${DAM_IMAGE:-localhost/devops-agent-manager:dev}
+    command: ["worker"]
+    depends_on:
+      postgres: { condition: service_healthy }
+      web: { condition: service_started }
+    environment: *app-env
+    volumes:
+      - app-data:/data
+      - ${DAM_AWS_DIR:-${HOME}/.aws}:/home/app/.aws:ro
+      - ${DAM_POLICY_OVERLAY_HOST_DIR:-./scripts/empty}:/app/policy-overlay:ro
+
+volumes:
+  pg-data: {}
+  app-data: {}

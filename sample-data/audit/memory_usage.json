@@ -1,0 +1,535 @@
+[
+ {
+  "incident": "INCIDENT-20101",
+  "indexes_read": {
+   "other:checkout-api,fulfillment-worker,payments-gateway": [
+    {
+     "rec": 7,
+     "n": 4
+    }
+   ],
+   "other:cache-evictions,pricing-mismatch,on-call-routing": [
+    {
+     "rec": 7,
+     "n": 3
+    }
+   ],
+   "other:change-feed-windows,log-query-limits": [
+    {
+     "rec": 7,
+     "n": 2
+    }
+   ]
+  },
+  "index_entries": {
+   "other:checkout-api,fulfillment-worker,payments-gateway": [
+    "checkout-api",
+    "fulfillment-worker",
+    "payments-gateway",
+    "seat-map-service"
+   ],
+   "other:cache-evictions,pricing-mismatch,on-call-routing": [
+    "cache-evictions",
+    "pricing-mismatch",
+    "on-call-routing"
+   ],
+   "other:change-feed-windows,log-query-limits": [
+    "change-feed-windows",
+    "log-query-limits"
+   ]
+  },
+  "memory_file_paths": [
+   [
+    5,
+    "/aidevops/memory/service-catalog/INDEX.md"
+   ],
+   [
+    5,
+    "/aidevops/memory/incident-patterns/INDEX.md"
+   ],
+   [
+    5,
+    "/aidevops/memory/runbooks/INDEX.md"
+   ],
+   [
+    9,
+    "/aidevops/memory/service-catalog/services/seat-map-service.md"
+   ],
+   [
+    9,
+    "/aidevops/memory/incident-patterns/patterns/cache-evictions.md"
+   ],
+   [
+    9,
+    "/aidevops/memory/runbooks/change-feed-windows.md"
+   ]
+  ],
+  "file_not_found": [],
+  "failpat_listed_in_index": false,
+  "failpat_content_records": []
+ },
+ {
+  "incident": "INCIDENT-20102",
+  "indexes_read": {
+   "other:checkout-api,fulfillment-worker,payments-gateway": [
+    {
+     "rec": 7,
+     "n": 4
+    }
+   ],
+   "other:cache-evictions,pricing-mismatch,on-call-routing": [
+    {
+     "rec": 7,
+     "n": 3
+    }
+   ],
+   "other:change-feed-windows,log-query-limits": [
+    {
+     "rec": 7,
+     "n": 2
+    }
+   ]
+  },
+  "index_entries": {
+   "other:checkout-api,fulfillment-worker,payments-gateway": [
+    "checkout-api",
+    "fulfillment-worker",
+    "payments-gateway",
+    "seat-map-service"
+   ],
+   "other:cache-evictions,pricing-mismatch,on-call-routing": [
+    "cache-evictions",
+    "pricing-mismatch",
+    "on-call-routing"
+   ],
+   "other:change-feed-windows,log-query-limits": [
+    "change-feed-windows",
+    "log-query-limits"
+   ]
+  },
+  "memory_file_paths": [
+   [
+    5,
+    "/aidevops/memory/service-catalog/INDEX.md"
+   ],
+   [
+    5,
+    "/aidevops/memory/incident-patterns/INDEX.md"
+   ],
+   [
+    5,
+    "/aidevops/memory/runbooks/INDEX.md"
+   ],
+   [
+    9,
+    "/aidevops/memory/service-catalog/services/checkout-api.md"
+   ],
+   [
+    9,
+    "/aidevops/memory/service-catalog/services/payments-gateway.md"
+   ],
+   [
+    9,
+    "/aidevops/memory/runbooks/change-feed-windows.md"
+   ]
+  ],
+  "file_not_found": [],
+  "failpat_listed_in_index": false,
+  "failpat_content_records": []
+ },
+ {
+  "incident": "INCIDENT-20103",
+  "indexes_read": {
+   "other:checkout-api,fulfillment-worker,payments-gateway": [
+    {
+     "rec": 7,
+     "n": 4
+    }
+   ],
+   "other:cache-evictions,pricing-mismatch,on-call-routing": [
+    {
+     "rec": 7,
+     "n": 3
+    }
+   ],
+   "other:change-feed-windows,log-query-limits": [
+    {
+     "rec": 7,
+     "n": 2
+    }
+   ]
+  },
+  "index_entries": {
+   "other:checkout-api,fulfillment-worker,payments-gateway": [
+    "checkout-api",
+    "fulfillment-worker",
+    "payments-gateway",
+    "seat-map-service"
+   ],
+   "other:cache-evictions,pricing-mismatch,on-call-routing": [
+    "cache-evictions",
+    "pricing-mismatch",
+    "on-call-routing"
+   ],
+   "other:change-feed-windows,log-query-limits": [
+    "change-feed-windows",
+    "log-query-limits"
+   ]
+  },
+  "memory_file_paths": [
+   [
+    5,
+    "/aidevops/memory/service-catalog/INDEX.md"
+   ],
+   [
+    5,
+    "/aidevops/memory/incident-patterns/INDEX.md"
+   ],
+   [
+    5,
+    "/aidevops/memory/runbooks/INDEX.md"
+   ],
+   [
+    9,
+    "/aidevops/memory/service-catalog/services/fulfillment-worker.md"
+   ],
+   [
+    9,
+    "/aidevops/memory/runbooks/log-query-limits.md"
+   ]
+  ],
+  "file_not_found": [],
+  "failpat_listed_in_index": false,
+  "failpat_content_records": []
+ },
+ {
+  "incident": "INCIDENT-20104",
+  "indexes_read": {
+   "other:checkout-api,fulfillment-worker,payments-gateway": [
+    {
+     "rec": 7,
+     "n": 4
+    }
+   ],
+   "other:cache-evictions,pricing-mismatch,on-call-routing": [
+    {
+     "rec": 7,
+     "n": 3
+    }
+   ],
+   "other:change-feed-windows,log-query-limits": [
+    {
+     "rec": 7,
+     "n": 2
+    }
+   ]
+  },
+  "index_entries": {
+   "other:checkout-api,fulfillment-worker,payments-gateway": [
+    "checkout-api",
+    "fulfillment-worker",
+    "payments-gateway",
+    "seat-map-service"
+   ],
+   "other:cache-evictions,pricing-mismatch,on-call-routing": [
+    "cache-evictions",
+    "pricing-mismatch",
+    "on-call-routing"
+   ],
+   "other:change-feed-windows,log-query-limits": [
+    "change-feed-windows",
+    "log-query-limits"
+   ]
+  },
+  "memory_file_paths": [
+   [
+    5,
+    "/aidevops/memory/service-catalog/INDEX.md"
+   ],
+   [
+    5,
+    "/aidevops/memory/incident-patterns/INDEX.md"
+   ],
+   [
+    5,
+    "/aidevops/memory/runbooks/INDEX.md"
+   ],
+   [
+    9,
+    "/aidevops/memory/service-catalog/services/identity-service.md"
+   ],
+   [
+    9,
+    "/aidevops/memory/incident-patterns/roles/on-call-routing.md"
+   ]
+  ],
+  "file_not_found": [
+   [
+    11,
+    "/aidevops/memory/service-catalog/services/identity-service.md"
+   ]
+  ],
+  "failpat_listed_in_index": false,
+  "failpat_content_records": []
+ },
+ {
+  "incident": "INCIDENT-20105",
+  "indexes_read": {
+   "other:checkout-api,fulfillment-worker,payments-gateway": [
+    {
+     "rec": 7,
+     "n": 4
+    }
+   ],
+   "other:cache-evictions,pricing-mismatch,on-call-routing": [
+    {
+     "rec": 7,
+     "n": 3
+    }
+   ],
+   "other:change-feed-windows,log-query-limits": [
+    {
+     "rec": 7,
+     "n": 2
+    }
+   ]
+  },
+  "index_entries": {
+   "other:checkout-api,fulfillment-worker,payments-gateway": [
+    "checkout-api",
+    "fulfillment-worker",
+    "payments-gateway",
+    "seat-map-service"
+   ],
+   "other:cache-evictions,pricing-mismatch,on-call-routing": [
+    "cache-evictions",
+    "pricing-mismatch",
+    "on-call-routing"
+   ],
+   "other:change-feed-windows,log-query-limits": [
+    "change-feed-windows",
+    "log-query-limits"
+   ]
+  },
+  "memory_file_paths": [
+   [
+    5,
+    "/aidevops/memory/service-catalog/INDEX.md"
+   ],
+   [
+    5,
+    "/aidevops/memory/incident-patterns/INDEX.md"
+   ],
+   [
+    5,
+    "/aidevops/memory/runbooks/INDEX.md"
+   ],
+   [
+    9,
+    "/aidevops/memory/runbooks/log-query-limits.md"
+   ],
+   [
+    9,
+    "/aidevops/memory/runbooks/change-feed-windows.md"
+   ]
+  ],
+  "file_not_found": [],
+  "failpat_listed_in_index": false,
+  "failpat_content_records": []
+ },
+ {
+  "incident": "INCIDENT-20106",
+  "indexes_read": {
+   "other:checkout-api,fulfillment-worker,payments-gateway": [
+    {
+     "rec": 7,
+     "n": 4
+    }
+   ],
+   "other:cache-evictions,pricing-mismatch,on-call-routing": [
+    {
+     "rec": 7,
+     "n": 3
+    }
+   ],
+   "other:change-feed-windows,log-query-limits": [
+    {
+     "rec": 7,
+     "n": 2
+    }
+   ]
+  },
+  "index_entries": {
+   "other:checkout-api,fulfillment-worker,payments-gateway": [
+    "checkout-api",
+    "fulfillment-worker",
+    "payments-gateway",
+    "seat-map-service"
+   ],
+   "other:cache-evictions,pricing-mismatch,on-call-routing": [
+    "cache-evictions",
+    "pricing-mismatch",
+    "on-call-routing"
+   ],
+   "other:change-feed-windows,log-query-limits": [
+    "change-feed-windows",
+    "log-query-limits"
+   ]
+  },
+  "memory_file_paths": [
+   [
+    5,
+    "/aidevops/memory/service-catalog/INDEX.md"
+   ],
+   [
+    5,
+    "/aidevops/memory/incident-patterns/INDEX.md"
+   ],
+   [
+    5,
+    "/aidevops/memory/runbooks/INDEX.md"
+   ],
+   [
+    9,
+    "/aidevops/memory/incident-patterns/patterns/pricing-mismatch.md"
+   ],
+   [
+    9,
+    "/aidevops/memory/service-catalog/services/checkout-api.md"
+   ]
+  ],
+  "file_not_found": [],
+  "failpat_listed_in_index": false,
+  "failpat_content_records": []
+ },
+ {
+  "incident": "INCIDENT-20107",
+  "indexes_read": {
+   "other:checkout-api,fulfillment-worker,payments-gateway": [
+    {
+     "rec": 7,
+     "n": 4
+    }
+   ],
+   "other:cache-evictions,pricing-mismatch,on-call-routing": [
+    {
+     "rec": 7,
+     "n": 3
+    }
+   ],
+   "other:change-feed-windows,log-query-limits": [
+    {
+     "rec": 7,
+     "n": 2
+    }
+   ]
+  },
+  "index_entries": {
+   "other:checkout-api,fulfillment-worker,payments-gateway": [
+    "checkout-api",
+    "fulfillment-worker",
+    "payments-gateway",
+    "seat-map-service"
+   ],
+   "other:cache-evictions,pricing-mismatch,on-call-routing": [
+    "cache-evictions",
+    "pricing-mismatch",
+    "on-call-routing"
+   ],
+   "other:change-feed-windows,log-query-limits": [
+    "change-feed-windows",
+    "log-query-limits"
+   ]
+  },
+  "memory_file_paths": [
+   [
+    5,
+    "/aidevops/memory/service-catalog/INDEX.md"
+   ],
+   [
+    5,
+    "/aidevops/memory/incident-patterns/INDEX.md"
+   ],
+   [
+    5,
+    "/aidevops/memory/runbooks/INDEX.md"
+   ],
+   [
+    9,
+    "/aidevops/memory/service-catalog/services/checkout-api.md"
+   ],
+   [
+    9,
+    "/aidevops/memory/incident-patterns/roles/on-call-routing.md"
+   ],
+   [
+    9,
+    "/aidevops/memory/runbooks/log-query-limits.md"
+   ]
+  ],
+  "file_not_found": [],
+  "failpat_listed_in_index": false,
+  "failpat_content_records": []
+ },
+ {
+  "incident": "INCIDENT-20108",
+  "indexes_read": {
+   "other:checkout-api,fulfillment-worker,payments-gateway": [
+    {
+     "rec": 7,
+     "n": 4
+    }
+   ],
+   "other:cache-evictions,pricing-mismatch,on-call-routing": [
+    {
+     "rec": 7,
+     "n": 3
+    }
+   ],
+   "other:change-feed-windows,log-query-limits": [
+    {
+     "rec": 7,
+     "n": 2
+    }
+   ]
+  },
+  "index_entries": {
+   "other:checkout-api,fulfillment-worker,payments-gateway": [
+    "checkout-api",
+    "fulfillment-worker",
+    "payments-gateway",
+    "seat-map-service"
+   ],
+   "other:cache-evictions,pricing-mismatch,on-call-routing": [
+    "cache-evictions",
+    "pricing-mismatch",
+    "on-call-routing"
+   ],
+   "other:change-feed-windows,log-query-limits": [
+    "change-feed-windows",
+    "log-query-limits"
+   ]
+  },
+  "memory_file_paths": [
+   [
+    5,
+    "/aidevops/memory/service-catalog/INDEX.md"
+   ],
+   [
+    5,
+    "/aidevops/memory/incident-patterns/INDEX.md"
+   ],
+   [
+    5,
+    "/aidevops/memory/runbooks/INDEX.md"
+   ],
+   [
+    9,
+    "/aidevops/memory/runbooks/log-query-limits.md"
+   ]
+  ],
+  "file_not_found": [],
+  "failpat_listed_in_index": false,
+  "failpat_content_records": []
+ }
+]

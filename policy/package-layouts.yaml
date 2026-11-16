@@ -1,0 +1,213 @@
+# How a package folder or zip maps to assets, and the
+# build and check rules the package tools run (the release build: shared
+# sections, memory indexes, skill zips; and the package checks).
+#
+# These are generic layouts. Rules that belong to one organization (the tool
+# names its instructions must not spell as dotted calls, safety responses its
+# global instructions must keep, shared sections, skill agent types) go in a
+# policy overlay: a layout there can `extends` one of these, and
+# DAM_POLICY_OVERLAY_DIRS (or a history repository's policy/ directory) merges
+# it over this file. sample-data/policy/package-layouts.yaml is an example.
+#
+# A layout may `extends` another layout: the parent is deep-merged first
+# (objects merge; arrays and scalars replace). Paths are package-relative with
+# forward slashes. Globs: `*` matches within one path segment, `**` matches any
+# number of segments, `?` one character.
+#
+# Frontmatter maps are `metadata key: frontmatter key`.
+defaultLayout: instruction-folders
+layouts:
+  # A package of instructions/, skills/ and memory/ folders, plus evaluation/,
+  # reference/, enrichment/ and tools/, which are not assets.
+  instruction-folders:
+    label: Instruction folders (instructions, skills, memory)
+    description: "For packages with instructions/, skills/ and memory/ folders, with evaluation/, reference/, enrichment/ and tools/ kept beside them."
+    # A zip whose files all sit under one folder (my-package/) is read from inside it.
+    stripSingleTopDir: true
+    ignore: ["**/.DS_Store", "**/__pycache__/**", "__MACOSX/**", "**/._*", "**/.git/**"]
+    # Package files that are not assets: kept in a revision, never uploaded.
+    nonAssets: [README.md, "evaluation/**", "reference/**", "enrichment/**", "tools/**"]
+    # How this layout writes agent types (STORE.md agent_types). Reading is
+    # case-insensitive and also accepts the IDs and the labels in agent-types.yaml.
+    agentTypeNames:
+      GENERIC: Generic (all agents)
+      CHAT: Chat
+      INCIDENT_TRIAGE: Incident Triage
+      INCIDENT_RCA: Incident RCA
+      INCIDENT_MITIGATION: Incident Mitigation
+      INCIDENT_UI: Incident UI
+      PREVENTION: Prevention
+      RELEASE_READINESS_REVIEW: Release Readiness Review
+      RELEASE_TESTING: Release Testing
+    # Metadata the files can't carry (skill agent types and status, for example).
+    # Written on export and read on import when present.
+    manifest: reference/ASSET-METADATA.json
+    # Values the manifest leaves out because the service uses them by default.
+    manifestDefaults: { status: ACTIVE, skill_type: USER }
+    instructions:
+      dir: instructions
+      # File name -> agent_type. null: the file has no documented agent_type
+      # value and is not imported (a warning says so).
+      files:
+        global.md: GENERIC
+        incident-triage.md: INCIDENT_TRIAGE
+        incident-rca.md: INCIDENT_RCA
+        incident-mitigation.md: INCIDENT_MITIGATION
+        incident-ui.md: INCIDENT_UI
+        chat.md: CHAT
+    skills:
+      dir: skills
+      mainFile: SKILL.md
+      # Built zip next to each skill folder ({name} is the folder name). null: none.
+      archive: "{name}.zip"
+      frontmatter: { name: name, description: description, agent_types: agent_types, enable_tools: enable_tools, status: status }
+      # Agent types when neither SKILL.md nor the manifest gives them
+      # (the "Agent types" map in the package README).
+      agentTypes:
+        default: [INCIDENT_TRIAGE, INCIDENT_RCA]
+        # By skill name, for skills that need other agent types, for example
+        # `bySkill: { my-skill: [GENERIC] }`.
+        bySkill: {}
+    memory:
+      dir: memory
+      # memory/<store>/STORE.md registers a store; every other .md under the
+      # store folder is one memory, named by its path without .md.
+      storeFile: STORE.md
+      indexFile: INDEX.md
+      storeFrontmatter: { name: store, description: description, agent_types: agent_types }
+      memoryFrontmatter: { name: name, description: description }
+      # The STORE.md body (without frontmatter) becomes this file of the memory_store asset.
+      storeContentFile: README.md
+      # The memory's file inside the asset; {basename} is the last name segment.
+      memoryFile: "{basename}.md"
+      # Memory files keep their frontmatter (the package uploads them as they are).
+      index:
+        header: ["# {store}", "", "Links are relative to this index. This is the validated local index preview.", ""]
+        line: "- [{stem}](./{path}): {description}"
+        descriptionKey: description
+    customAgents: null
+    sharedSections: []
+    build:
+      skillArchives: true
+      memoryIndexes: true
+      validationResult: reference/VALIDATION.json
+      # Sibling zip of the whole package, with every file under one {package}/ folder.
+      packageZip: "{package}.zip"
+    checks:
+      requireArchives: true
+      skillNamePattern: "^[a-z0-9-]{1,64}$"
+      # Design targets, not service limits.
+      memoryMaxBytes: 16384
+      indexMaxBytes: 4096
+      # A package without memories fails the checks.
+      requireMemory: true
+      # The rules below are empty here; an overlay layout fills them. Each rule
+      # has a `code` (the result code) and a `message`.
+      #
+      # Text that must not appear: a regular expression per matching file.
+      #   textPatterns:
+      #     - { code: package.dotted-invocation, dirs: [instructions, skills, memory], glob: "**/*.md", pattern: "\\b(?:tool_a|tool_b)\\.[a-z_]+", message: Unsupported dotted invocation example }
+      textPatterns: []
+      # Text a file must contain, line by line.
+      #   requiredText:
+      #     - { code: package.safety-message, file: instructions/global.md, texts: ["[READ-ONLY]: ..."], message: Existing safety response changed or missing }
+      requiredText: []
+      # Text a file must not contain.
+      #   forbiddenText:
+      #     - { code: package.lead-duty-in-global, file: instructions/global.md, texts: ["..."], message: Lead-only text found in global.md }
+      forbiddenText: []
+      # Files that should exist. `level: warning` reports a missing file without failing the package.
+      #   requiredFiles:
+      #     - { code: package.optional-agent-file, files: [instructions/learning.md], message: "Missing optional agent file: {file}", level: warning }
+      requiredFiles: []
+      scope: "Offline structure, references, budgets and archive consistency only; no live model or connector validation."
+
+  # The same folders, plus a section of text that the build copies into several
+  # instruction files between markers. The source is instructions/shared/common.md;
+  # the Triage and RCA files carry the copy. A layout in your own overlay names
+  # your own section, files and markers.
+  instruction-folders-shared:
+    extends: instruction-folders
+    label: Instruction folders with a shared section
+    description: "For packages that copy one shared section into the Triage and RCA files: the instruction folders, plus instructions/shared/common.md."
+    nonAssets: [README.md, "evaluation/**", "reference/**", "enrichment/**", "tools/**", "instructions/shared/**"]
+    sharedSections:
+      - name: common
+        source: "instructions/shared/{name}.md"
+        targets: [instructions/incident-triage.md, instructions/incident-rca.md]
+        begin: "<!-- shared: {name} (edit instructions/shared/{name}.md, then rebuild the package) -->"
+        end: "<!-- /shared: {name} -->"
+
+  # The Agent Space as folders, the way an export writes it (folders named
+  # <name>__<assetId>) and the way a package can ship it (folders named by agent
+  # or skill name, older duplicates as <name>.v<N>). One folder per asset under
+  # a folder per asset type, each with a descriptor (_asset.json: assetId,
+  # assetType, metadata). memory/ has no descriptors and keeps the STORE.md
+  # rules from instruction-folders.
+  agent-space-folders:
+    extends: instruction-folders
+    label: Agent Space folders (one folder per asset with _asset.json)
+    description: "For an Agent Space export, or a package laid out the same way: one folder per asset, each with an _asset.json descriptor."
+    nonAssets: [README.md, .gitignore, "optional/**", "evaluation/**", "reference/**", "enrichment/**", "tools/**"]
+    manifest: null
+    instructions: null
+    skills: null
+    assetFolders:
+      # Each asset folder's descriptor: assetId, assetType and metadata. Read
+      # for the asset's type, metadata and source asset ID; never uploaded.
+      descriptor: _asset.json
+      # Lists every asset folder (dir, type, name, assetId, version, status,
+      # files). Checked against the folders (warnings) and never uploaded.
+      index: INDEX.json
+      # Other files inside an asset folder that are never uploaded (globs
+      # relative to the folder). The descriptor is never uploaded either.
+      neverUpload: []
+      # Descriptor keys that are service bookkeeping, not asset content.
+      dropKeys: [version, createdAt, updatedAt, creator, editor]
+      # Type folder and main file per asset type. {name} is metadata.name.
+      # `folder` names the asset folder on export: {name}, {agentFolder}
+      # (from agentFolders), {assetId}.
+      types:
+        agents_md: { dir: agents_md, mainFile: AGENTS.md, folder: "{agentFolder}" }
+        skill: { dir: skill, mainFile: SKILL.md, folder: "{name}" }
+        custom_agent: { dir: custom_agent, mainFile: "{name}.md", folder: "{name}" }
+      # Export folder names for instruction files (the console's agent names).
+      agentFolders:
+        GENERIC: global
+        INCIDENT_TRIAGE: incident-triage
+        INCIDENT_RCA: incident-rca
+        INCIDENT_MITIGATION: incident-mitigation
+        INCIDENT_UI: incident-ui
+        CHAT: chat
+        PREVENTION: improvement
+        RELEASE_READINESS_REVIEW: release-readiness-review
+        RELEASE_TESTING: release-testing
+      # Export folder for a second asset with the same folder name (the space
+      # allows two skills with one name). {folder} is the name above.
+      duplicateFolder: "{folder}__{assetId}"
+    # Several assets with one identity (a skill and its older INACTIVE copy):
+    # imported into the space they came from, each updates its own asset ID.
+    # In any other space only the one whose metadata matches `keep` is planned
+    # (`defaults` fill keys the descriptor leaves out); the others are left out.
+    duplicates:
+      keep: { status: ACTIVE }
+      defaults: { status: ACTIVE }
+    build:
+      skillArchives: false
+      memoryIndexes: true
+      validationResult: null
+      packageZip: "{package}.zip"
+    # Memory budgets and indexes are checked as in instruction-folders. A text
+    # rule on a file in an asset folder names the asset instead of the file
+    # (found by descriptor, since an export names the folder by asset ID):
+    #   requiredText:
+    #     - code: package.safety-message
+    #       asset: { assetType: agents_md, metadata: { agent_type: GENERIC } }
+    #       # A package without those instructions doesn't change them, so there is nothing to check.
+    #       missing: skip
+    #       texts: ["[READ-ONLY]: ..."]
+    #       message: Existing safety response changed or missing
+    checks:
+      requireArchives: false
+      requireMemory: false
+      scope: "Offline structure, descriptors, memory budgets and indexes only; no live model or connector validation."

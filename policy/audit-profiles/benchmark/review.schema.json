@@ -1,0 +1,143 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "devops-agent-manager/audit-profiles/benchmark/review.schema.json",
+  "title": "Benchmark review of one investigation",
+  "description": "Keys follow the benchmark review brief. Record numbers are the 1-based record positions shown as R<n> in the condensed trace. `citations` lists the records behind every factual claim, each with a short verbatim quote, so the app can check them.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "incident",
+    "title",
+    "score",
+    "ground_truth",
+    "ground_truth_uncertain",
+    "agent_final_answer",
+    "summaries",
+    "scored_summary_record",
+    "timing",
+    "reachability",
+    "reachability_reason",
+    "near_miss",
+    "failure_modes",
+    "primary_failure_mode",
+    "blocking_errors",
+    "scorecard_fair",
+    "scorecard_notes",
+    "quality_notes",
+    "fixes",
+    "one_line",
+    "citations"
+  ],
+  "properties": {
+    "incident": { "type": "string", "maxLength": 100 },
+    "title": { "type": "string", "maxLength": 500 },
+    "score": { "type": ["string", "null"], "maxLength": 20, "description": "Benchmark score from the scorecard, e.g. \"2/5\"" },
+    "ground_truth": { "type": "string", "maxLength": 2000 },
+    "ground_truth_uncertain": { "type": "boolean" },
+    "agent_final_answer": { "type": "string", "maxLength": 2000 },
+    "summaries": {
+      "type": "array",
+      "maxItems": 20,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["record", "utc", "conclusion", "prompted_by"],
+        "properties": {
+          "record": { "type": "integer", "minimum": 1 },
+          "utc": { "type": "string", "maxLength": 40 },
+          "conclusion": { "type": "string", "maxLength": 1000 },
+          "prompted_by": { "type": "string", "maxLength": 500, "description": "\"initial run\" or \"human: '<short quote>'\"" }
+        }
+      }
+    },
+    "scored_summary_record": { "type": ["integer", "null"], "minimum": 1, "description": "The summary the benchmark scored, or null when not determinable" },
+    "timing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["incident_created", "agent_start_utc", "first_summary_utc", "ran_while_incident_minutes_old", "decisive_evidence_existed_at_run_time", "note"],
+      "properties": {
+        "incident_created": { "type": ["string", "null"], "maxLength": 100 },
+        "agent_start_utc": { "type": ["string", "null"], "maxLength": 40 },
+        "first_summary_utc": { "type": ["string", "null"], "maxLength": 40 },
+        "ran_while_incident_minutes_old": { "type": ["boolean", "null"] },
+        "decisive_evidence_existed_at_run_time": { "type": "string", "enum": ["yes", "no", "partly", "not_determinable"] },
+        "note": { "type": "string", "maxLength": 1000 }
+      }
+    },
+    "reachability": { "type": "string", "enum": ["reachable", "partially_reachable", "out_of_reach"] },
+    "reachability_reason": { "type": "string", "maxLength": 2000 },
+    "near_miss": { "type": ["string", "null"], "maxLength": 2000 },
+    "failure_modes": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 12,
+      "items": {
+        "type": "string",
+        "enum": ["A_out_of_reach", "B_access_failure", "C_change_anchoring", "D_wrong_component", "E_symptom_stop", "F_premature_ruleout", "G_thin_trigger_context", "H_ran_too_early", "I_memory_or_skill_misled", "J_summary_mismatch", "K_chronic_noise", "L_other"]
+      }
+    },
+    "primary_failure_mode": {
+      "type": "string",
+      "enum": ["A_out_of_reach", "B_access_failure", "C_change_anchoring", "D_wrong_component", "E_symptom_stop", "F_premature_ruleout", "G_thin_trigger_context", "H_ran_too_early", "I_memory_or_skill_misled", "J_summary_mismatch", "K_chronic_noise", "L_other"]
+    },
+    "blocking_errors": {
+      "type": "array",
+      "maxItems": 30,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["record", "error", "blocked"],
+        "properties": {
+          "record": { "type": "integer", "minimum": 1 },
+          "error": { "type": "string", "maxLength": 500 },
+          "blocked": { "type": "string", "maxLength": 500 }
+        }
+      }
+    },
+    "scorecard_fair": { "type": "string", "enum": ["yes", "mostly", "no", "not_applicable"] },
+    "scorecard_notes": { "type": "string", "maxLength": 2000 },
+    "quality_notes": { "type": "array", "maxItems": 20, "items": { "type": "string", "maxLength": 1000 } },
+    "fixes": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["owner", "fix", "evidence"],
+        "properties": {
+          "owner": { "type": "string", "enum": ["customer_access", "customer_trigger", "customer_memory", "instructions", "aws_service", "none_feasible"] },
+          "fix": { "type": "string", "maxLength": 1500 },
+          "evidence": {
+            "type": "array",
+            "maxItems": 10,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["record", "quote"],
+              "properties": {
+                "record": { "type": "integer", "minimum": 1 },
+                "quote": { "type": ["string", "null"], "maxLength": 300 }
+              }
+            }
+          }
+        }
+      }
+    },
+    "one_line": { "type": "string", "maxLength": 300, "description": "At most 30 words: why it missed" },
+    "citations": {
+      "type": "array",
+      "maxItems": 80,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["record", "quote", "supports"],
+        "properties": {
+          "record": { "type": "integer", "minimum": 1 },
+          "quote": { "type": ["string", "null"], "maxLength": 300, "description": "Short verbatim text from the record, or null" },
+          "supports": { "type": "string", "maxLength": 100, "description": "The output key the record supports, e.g. near_miss or reachability_reason" }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,57 @@
+{
+  "incident": "INCIDENT-20105",
+  "title": "INC-3105: New events missing from search",
+  "score": "3/5",
+  "ground_truth": "A mapping conflict on the new field doors_open_local (the index maps it as date, release 129 sent text) made OpenSearch reject documents. The indexer retried and logged the first ERROR at 12:25 UTC, 25 minutes after the alarm.",
+  "ground_truth_uncertain": false,
+  "agent_final_answer": "A replication delay after the events-search software update; the indexer fault is ruled out and the backlog should clear without action (R28, R30).",
+  "summaries": [
+    {
+      "record": "R33",
+      "utc": "2026-10-30T12:12:23Z",
+      "conclusion": "Replication delay after the domain software update, expected to recover; indexer fault ruled out; confidence mid.",
+      "prompted_by": "initial run"
+    }
+  ],
+  "scored_summary_record": "R33 (investigation_summary_md)",
+  "timing": {
+    "incident_created": "2026-10-30 05:00 PT (12:00 UTC)",
+    "agent_start_utc": "2026-10-30T12:06:05Z",
+    "first_summary_utc": "2026-10-30T12:12:23Z",
+    "ran_while_incident_minutes_old": true,
+    "decisive_evidence_existed_at_run_time": "partly",
+    "note": "The agent started 6 minutes after the alarm and said so (R4). The first ERROR line with mapper_parsing_exception was written at 12:25 UTC. Before that, only the retry counters existed (R25)."
+  },
+  "reachability": "partially_reachable",
+  "reachability_reason": "The rejection itself was not logged until 12:25 UTC, so the ERROR search returned no lines (R25). The retry lines for batch 8841 (R25) and the 0.2 documents per second rate (R17) were visible and show documents that do not go in, but not why.",
+  "near_miss": "Partly. R21 opened 'search-indexer rejects documents' with release 129 as the candidate (R17). The agent ruled it out (R27) because the ERROR search returned no lines. Its own finding says R28 ('The indexer retries its bulk batches while shards catch up'), and retries are what a rejected document produces.",
+  "failure_modes": [
+    "H_ran_too_early"
+  ],
+  "primary_failure_mode": "H_ran_too_early",
+  "blocking_errors": [
+    {
+      "record": "R25",
+      "error": "The ERROR search over the indexer log group returned 0 lines at 12:10 UTC",
+      "blocked": "Reading the mapper_parsing_exception, which was first logged at 12:25 UTC."
+    }
+  ],
+  "scorecard_fair": "no",
+  "scorecard_notes": "The scorecard compares the 12:12 answer (R33) with a root cause that became visible at 12:25 UTC. It marks the missing mapping error as a miss, but the line did not exist when the agent ran. The score of 3/5 gives credit for locating the indexer path, which is fair, but the 'what DevOps got wrong' text holds the agent to evidence from the future.",
+  "quality_notes": [
+    "The agent states the incident age at the start (R4) and in the report (R33), which is good. It still states an outcome: 'R26 ('This should recover on its own')'.",
+    "The report tells the reader to continue monitoring (R30) and the mitigation says no action is needed (R35). That is a firm no-action call from a run that was six minutes old.",
+    "The agent linked the retries to the software update at 11:41 UTC (R17), 11 minutes before the first retry. Release 129 at 11:40 is just as close, and the agent ruled it out first."
+  ],
+  "fixes": [
+    {
+      "owner": "none_feasible",
+      "fix": "No change to the package would have shown the mapping error at 12:10 UTC. The ERROR line did not exist yet (R25), and the retry lines carry no reason. The fix belongs in the indexer: log the first rejected bulk item at WARN with the reason."
+    },
+    {
+      "owner": "instructions",
+      "fix": "Add to the INCIDENT_RCA instructions: when the incident is under 10 minutes old and the only signs are growing retries or a backlog, say that the run is early. List the retry and backlog counters as open and schedule a re-check, and do not say the system will recover or tell the reader to continue monitoring (R26, R30)."
+    }
+  ],
+  "one_line": "Ran six minutes after the alarm, saw no ERROR lines yet and called the stuck indexer a replication delay."
+}

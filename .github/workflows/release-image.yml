@@ -1,0 +1,82 @@
+name: Release image
+
+# Builds the container image for linux/amd64 and linux/arm64 and pushes it to
+# ghcr.io/<owner>/devops-agent-manager.
+#
+# - Push a tag such as v1.2.3: pushes 1.2.3, 1.2 and (not for pre-releases) latest.
+# - Run it by hand from a tag (Actions tab, "Use workflow from: Tag"): pushes the same tags again.
+# - Run it by hand from a branch: builds both platforms and pushes nothing.
+on:
+  push:
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-image-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  image:
+    name: Build and push the image
+    runs-on: ubuntu-24.04
+    # The arm64 build runs under QEMU on an amd64 runner, which is slow.
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      packages: write # Push the image to GHCR with the workflow's own token.
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+        with:
+          platforms: arm64
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # The action lowercases the image name, which GHCR requires.
+      - id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        env:
+          # A multi-arch image keeps its package-page metadata in the manifest annotations, not in the labels.
+          DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest,index
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/devops-agent-manager
+          flavor: latest=false
+          tags: |
+            type=semver,pattern={{version}},enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+            type=semver,pattern={{major}}.{{minor}},enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, '-') }}
+          labels: |
+            org.opencontainers.image.title=DevOps Agent Manager
+            org.opencontainers.image.description=Manages an AWS DevOps Agent Space from outside the console. A community project, not an official AWS product.
+            org.opencontainers.image.licenses=MIT
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          annotations: |
+            org.opencontainers.image.title=DevOps Agent Manager
+            org.opencontainers.image.description=Manages an AWS DevOps Agent Space from outside the console. A community project, not an official AWS product.
+            org.opencontainers.image.licenses=MIT
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: Containerfile
+          platforms: linux/amd64,linux/arm64
+          push: ${{ startsWith(github.ref, 'refs/tags/v') }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
+          # BuildKit attestations, stored next to the image in the registry.
+          provenance: mode=max
+          sbom: true

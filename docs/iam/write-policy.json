@@ -1,0 +1,18 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ApplyPlans",
+      "Effect": "Allow",
+      "Action": [
+        "aidevops:CreateAsset",
+        "aidevops:UpdateAsset",
+        "aidevops:DeleteAsset",
+        "aidevops:CreateAssetFile",
+        "aidevops:UpdateAssetFile",
+        "aidevops:DeleteAssetFile"
+      ],
+      "Resource": "<agent-space-arn>"
+    }
+  ]
+}

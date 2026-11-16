@@ -1,0 +1,79 @@
+# This file is an example of a customer policy overlay. A history repository's
+# policy/ directory is deep-merged over the app's policy/ directory: objects
+# merge, arrays and scalars replace. Everything here is specific to the
+# fictional AnyCompany Tickets: the tool names the agent must not write as
+# dotted calls, and the two safety responses its global instructions must keep.
+#
+# The layouts named in `extends` are the app's own base layouts (policy/package-layouts.yaml).
+# `extends` takes everything from the base layout, so only what differs is listed.
+layouts:
+  # Package v1: the plain instruction folders (instructions/, skills/, memory/) with no shared section.
+  anycompany-v1:
+    extends: instruction-folders
+    label: AnyCompany instruction package v1
+    description: "AnyCompany's first package: instructions/, skills/ and memory/ folders, with the AnyCompany tool-call check and safety responses."
+    checks:
+      textPatterns:
+        - code: package.dotted-invocation
+          dirs: [instructions, skills, memory]
+          glob: "**/*.md"
+          pattern: "\\b(?:anyco_logs|anyco_metrics|anyco_changes|anyco_cmdb|anyco_traces)\\.[a-z_]+"
+          message: Unsupported dotted invocation example
+      requiredText:
+        - code: package.safety-message
+          file: instructions/global.md
+          texts:
+            - "[READ-ONLY]: This agent gives advice only. A person makes every infrastructure and code change."
+            - "[DATA REDACTED]: The request contains credentials or personal data and was not processed."
+          message: Existing safety response changed or missing
+      scope: "Offline structure, references, budgets, safety messages and archive consistency only; no live model or connector validation."
+
+  # Package v2: the same folders, plus the handoff section that the build copies into the triage and RCA files.
+  anycompany-v2:
+    extends: instruction-folders
+    label: AnyCompany instruction package v2
+    description: "AnyCompany's second package: the instruction folders plus instructions/shared/handoff.md, which the build copies into the triage and RCA files."
+    sharedSections:
+      - name: handoff
+        source: "instructions/shared/{name}.md"
+        targets: [instructions/incident-triage.md, instructions/incident-rca.md]
+        begin: "<!-- shared: {name} (edit instructions/shared/{name}.md, then build the package) -->"
+        end: "<!-- /shared: {name} -->"
+    checks:
+      textPatterns:
+        - code: package.dotted-invocation
+          dirs: [instructions, skills, memory]
+          glob: "**/*.md"
+          pattern: "\\b(?:anyco_logs|anyco_metrics|anyco_changes|anyco_cmdb|anyco_traces)\\.[a-z_]+"
+          message: Unsupported dotted invocation example
+      requiredText:
+        - code: package.safety-message
+          file: instructions/global.md
+          texts:
+            - "[READ-ONLY]: This agent gives advice only. A person makes every infrastructure and code change."
+            - "[DATA REDACTED]: The request contains credentials or personal data and was not processed."
+          message: Existing safety response changed or missing
+      scope: "Offline structure, references, budgets, safety messages and archive consistency only; no live model or connector validation."
+
+  # An Agent Space export of the AnyCompany space: one folder per asset with an _asset.json descriptor.
+  anycompany-folders:
+    extends: agent-space-folders
+    label: AnyCompany Agent Space folders
+    description: "The AnyCompany Agent Space as folders, with the AnyCompany tool-call check and safety responses."
+    checks:
+      textPatterns:
+        - code: package.dotted-invocation
+          dirs: [agents_md, skill, custom_agent, memory]
+          glob: "**/*.md"
+          pattern: "\\b(?:anyco_logs|anyco_metrics|anyco_changes|anyco_cmdb|anyco_traces)\\.[a-z_]+"
+          message: Unsupported dotted invocation example
+      requiredText:
+        - code: package.safety-message
+          asset: { assetType: agents_md, metadata: { agent_type: GENERIC } }
+          # A package without the GENERIC instructions doesn't change them, so there is nothing to check.
+          missing: skip
+          texts:
+            - "[READ-ONLY]: This agent gives advice only. A person makes every infrastructure and code change."
+            - "[DATA REDACTED]: The request contains credentials or personal data and was not processed."
+          message: Existing safety response changed or missing
+      scope: "Offline structure, descriptors, memory budgets and indexes, and safety messages only; no live model or connector validation."

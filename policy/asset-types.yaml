@@ -1,0 +1,288 @@
+# One entry per asset type. A new asset type needs an
+# entry here, not new code. Source: the asset guide,
+# https://docs.aws.amazon.com/devopsagent/latest/userguide/about-aws-devops-agent-managing-assets.html
+#
+# Keys per entry:
+#   label, content (single-file | multi-file | binary), mainFile, supportsStatus,
+#   editable, managedNames: UI and content shape.
+#   noun: { one, other } for counts in the UI ("4 skills", "1 instruction file").
+#   metadataSchema: JSON Schema (draft 2020-12) for `metadata`. Violations are
+#     errors. It drives generated forms. Two definitions are filled in from
+#     policy when the schema is used, so they have one source:
+#       "#/$defs/agentType"   an agent type ID from agent-types.yaml
+#       "#/$defs/description" a string of 1 to limits.descriptionMaxChars characters
+#     `x-hint` on a property is the plain message shown when it fails.
+#     The service drops metadata keys it doesn't know without an error (tested on
+#     a test space on 2026-11-13), so a key that `properties` doesn't list is an error.
+#   metadataWarningSchema: optional JSON Schema; violations are warnings.
+#   createSchema: optional JSON Schema checked only when the asset is created.
+#   identity: the asset's unique key within a space, from metadata keys and
+#     reference names, for example "{name}" or "{memoryStore}/{name}".
+#   mainFileRequired: the asset must contain mainFile.
+#   immutableKeys: metadata keys that can't change after the asset is created.
+#   frontmatter: rules for YAML frontmatter in the main file. mode is required,
+#     required-for-zip (only when the asset has more than one file), optional or
+#     forbidden; mirror maps frontmatter keys to metadata keys that must match.
+#   limits: per-file limits, as key names in limits.yaml.
+#   references: metadata keys holding asset IDs of other assets (`key`), and the
+#     matching name references a draft can use before the IDs exist (`ref`).
+#   counts: space-wide count limits (key names in limits.yaml), optionally per
+#     reference (`per`) and excluding some metadata values.
+assetTypes:
+  agents_md:
+    label: Instructions (AGENTS.md)
+    noun: { one: instruction file, other: instruction files }
+    content: single-file
+    mainFile: AGENTS.md
+    mainFileRequired: true
+    identity: "{agent_type}"
+    frontmatter: { mode: forbidden, level: warning }
+    limits: { mainFileMaxBytes: agentsMdMaxBytes, mainFileRecommendedLines: agentsMdRecommendedLines }
+    metadataSchema:
+      type: object
+      required: [agent_type]
+      properties:
+        agent_type:
+          $ref: "#/$defs/agentType"
+          x-hint: Choose the agent type these instructions apply to. Each agent type has at most one AGENTS.md.
+        status: { enum: [ACTIVE, INACTIVE] }
+
+  skill:
+    label: Skill
+    noun: { one: skill, other: skills }
+    content: multi-file
+    mainFile: SKILL.md
+    mainFileRequired: true
+    supportsStatus: true
+    identity: "{name}"
+    # Zip uploads take name and description from the SKILL.md frontmatter.
+    frontmatter: { mode: required-for-zip, mirror: { name: name, description: description } }
+    counts:
+      - { limit: maxUserSkills, exclude: { skill_type: [LEARNED] } }
+    metadataSchema:
+      type: object
+      required: [name, description, agent_types]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: "^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$"
+          x-hint: Use 1 to 64 lowercase letters, numbers and hyphens, not starting or ending with a hyphen.
+        description: { $ref: "#/$defs/description" }
+        agent_types:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: { $ref: "#/$defs/agentType" }
+          if: { contains: { const: GENERIC } }
+          then: { maxItems: 1 }
+          x-hint: Choose one or more agent types. GENERIC (all agents) can't be combined with other agent types.
+        skill_type: { enum: [USER, LEARNED] }
+        status:
+          enum: [ACTIVE, INACTIVE]
+          x-hint: Use ACTIVE or INACTIVE (uppercase).
+        enable_tools:
+          type: array
+          uniqueItems: true
+          items: { type: string, minLength: 1 }
+    createSchema:
+      type: object
+      properties:
+        skill_type:
+          const: USER
+          x-hint: The API creates only USER skills. LEARNED is reserved for skills the agent writes.
+
+  memory_store:
+    label: Memory store
+    noun: { one: memory store, other: memory stores }
+    content: single-file
+    mainFile: README.md
+    supportsStatus: true
+    managedNames: [understanding-agent-space, chat-tool-use-best-practices, monitors, reflections]
+    identity: "{name}"
+    counts:
+      - { limit: maxMemoryStores }
+    metadataSchema:
+      type: object
+      required: [name, description, agent_types]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 128
+          pattern: "^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$"
+          x-hint: Use 1 to 128 lowercase letters, numbers and hyphens, not starting or ending with a hyphen.
+        description: { $ref: "#/$defs/description" }
+        agent_types:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: { $ref: "#/$defs/agentType" }
+          x-hint: Choose one or more agent types that can see the store, or GENERIC for all of them.
+        status:
+          enum: [ACTIVE, INACTIVE]
+          x-hint: Use ACTIVE or INACTIVE (uppercase).
+    metadataWarningSchema:
+      type: object
+      properties:
+        agent_types:
+          if: { type: array, contains: { const: GENERIC } }
+          then: { maxItems: 1 }
+          x-hint: GENERIC already covers every agent type. Listing other agent types with it is not documented for memory stores.
+
+  memory:
+    label: Memory
+    noun: { one: memory, other: memories }
+    content: single-file
+    supportsStatus: true
+    identity: "{memoryStore}/{name}"
+    references:
+      - { key: memory_store_id, ref: memoryStore, assetType: memory_store, required: true }
+    counts:
+      - { limit: maxMemoriesPerStore, per: memoryStore }
+    limits: { mainFileMaxBytes: memoryMaxBytes }
+    frontmatter: { mode: optional, mirror: { name: name, description: description }, mirrorLevel: warning }
+    metadataSchema:
+      type: object
+      required: [name, description]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+          # The service's own rule (tested on a test space on 2026-11-13: CreateAsset rejected
+          # a memory name with an underscore under this pattern), so it is an error, not a warning.
+          pattern: "^[a-z0-9]+(?:-[a-z0-9]+)*(?:/[a-z0-9]+(?:-[a-z0-9]+)*)*$"
+          x-hint: Use a /-separated path of lowercase segments of letters, numbers and single hyphens (no underscores), 1 to 255 characters, for example databases/rds-failover.
+        description: { $ref: "#/$defs/description" }
+        memory_store_id:
+          type: string
+          minLength: 1
+          x-hint: The asset ID of the memory store this memory belongs to.
+        status:
+          enum: [ACTIVE, INACTIVE]
+          x-hint: Use ACTIVE or INACTIVE (uppercase).
+
+  custom_agent:
+    label: Custom agent
+    noun: { one: custom agent, other: custom agents }
+    content: single-file
+    mainFile: AGENT.md
+    identity: "{name}"
+    references:
+      - { key: skills, ref: skills, assetType: skill, many: true }
+      - { key: memory_stores, ref: memoryStores, assetType: memory_store, many: true }
+    metadataSchema:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: "^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$"
+          x-hint: Use 1 to 64 lowercase letters, numbers and hyphens, not starting or ending with a hyphen.
+        tools:
+          type: array
+          uniqueItems: true
+          items: { type: string, minLength: 1 }
+        skills:
+          type: array
+          uniqueItems: true
+          items: { type: string, minLength: 1 }
+          x-hint: Skill asset IDs (not names). Pick skills by name and the app writes their IDs.
+        memory_stores:
+          type: array
+          uniqueItems: true
+          items: { type: string, minLength: 1 }
+          x-hint: Memory store asset IDs (not names). Pick stores by name and the app writes their IDs.
+        # Not in the asset guide, but every custom agent in a real Agent Space export carries it.
+        status:
+          enum: [ACTIVE, INACTIVE]
+          x-hint: Use ACTIVE or INACTIVE (uppercase).
+
+  attachment:
+    label: Attachment
+    noun: { one: attachment, other: attachments }
+    content: binary
+    editable: false
+    identity: "{filename}"
+    limits: { mainFileMaxBytes: binaryFileMaxBytes }
+    metadataSchema:
+      type: object
+      required: [filename, extension, size]
+      properties:
+        filename:
+          type: string
+          minLength: 1
+          x-hint: The original file name with its extension, for example topology.png.
+        extension:
+          type: string
+          pattern: "^[^.]+$"
+          x-hint: The file extension without the leading dot, for example png.
+        size:
+          type: integer
+          minimum: 0
+          x-hint: The file size in bytes.
+
+  test_profile:
+    label: Test profile
+    noun: { one: test profile, other: test profiles }
+    content: single-file
+    identity: "{name}"
+    metadataSchema:
+      type: object
+      required: [test_agent_type, target_url]
+      properties:
+        test_agent_type:
+          enum: [releaseUiTesting, releaseApiTesting]
+        target_url:
+          type: string
+          pattern: "^https?://"
+          x-hint: The URL the test run targets, starting with https:// or http://.
+        name:
+          type: string
+          minLength: 1
+          maxLength: 128
+          pattern: "^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$"
+          x-hint: Use 1 to 128 lowercase letters, numbers and hyphens, not starting or ending with a hyphen.
+        description: { $ref: "#/$defs/description" }
+        test_personas:
+          type: array
+          uniqueItems: true
+          items: { enum: [guest, authenticated] }
+        api_spec: { type: string }
+        credentials_secret_arn:
+          type: string
+          pattern: "^arn:aws[a-z-]*:secretsmanager:"
+          x-hint: The ARN of a Secrets Manager secret.
+
+  feedback:
+    label: Feedback
+    noun: { one: feedback item, other: feedback items }
+    content: single-file
+    editable: false
+    immutableKeys: [execution_id]
+    metadataSchema:
+      type: object
+      required: [agent_types]
+      properties:
+        agent_types:
+          type: array
+          minItems: 1
+          items: { $ref: "#/$defs/agentType" }
+        execution_id: { type: string, minLength: 1 }
+
+  # Listed by ListAssetTypes but not creatable through the API.
+  artifact:
+    label: Artifact
+    noun: { one: artifact, other: artifacts }
+    content: single-file
+    editable: false
+    metadataSchema:
+      type: object
+      properties:
+        title: { type: string }
+        source_references: { type: array, items: { type: string } }
+        status: { enum: [ACTIVE, INACTIVE] }

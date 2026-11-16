@@ -1,0 +1,56 @@
+{
+  "incident": "INCIDENT-20103",
+  "title": "INC-3103: Order confirmation emails delayed",
+  "score": "2/5",
+  "ground_truth": "A malformed record on partition 7 of order-events made fulfillment-worker retry the same message forever. Lag grew on that partition only, so about 8 percent of orders got no ticket or confirmation email. SES was not the cause.",
+  "ground_truth_uncertain": false,
+  "agent_final_answer": "SES sending limits delay the emails: notification-service sends at 13.8 per second against a 14 per second limit and throttles about 10 sends per minute (R30). A consumer backlog was ruled out (R23). Recommends a higher SES quota (R32).",
+  "summaries": [
+    {
+      "record": "R35",
+      "utc": "2026-10-28T19:10:01Z",
+      "conclusion": "SES sending limit throttles confirmation emails; consumer lag ruled out; confidence mid.",
+      "prompted_by": "initial run"
+    }
+  ],
+  "scored_summary_record": "R35 (investigation_summary_md)",
+  "timing": {
+    "incident_created": "2026-10-28 11:55 PT (18:55 UTC)",
+    "agent_start_utc": "2026-10-28T18:56:10Z",
+    "first_summary_utc": "2026-10-28T19:10:01Z",
+    "ran_while_incident_minutes_old": false,
+    "decisive_evidence_existed_at_run_time": "yes",
+    "note": "The stuck message was 36 minutes old when the agent started. The per-partition lag that shows it was in the agent's own subagent report (R21)."
+  },
+  "reachability": "reachable",
+  "reachability_reason": "The subagent already listed the lag by partition with p7 at 912 and the other partitions between 0 and 4 (R21). The fulfillment-worker log group was reachable with the same log tool (R16), and the CMDB entry names fulfillment-worker as a dependency (R14 ('\"dependencies\": [ \"amazon-ses\", \"fulfillment-worker\"')).",
+  "near_miss": "Yes. R21 ('p7 912, p8 0') was in the report, and R21 ('Lag on p7 was 0 at 18:15 and has grown since 18:20'). The agent noted p7 in R22, called it a side effect, and ruled the consumer out (R23) by comparing the total lag with the traffic rate. It never read the fulfillment-worker logs.",
+  "failure_modes": [
+    "D_wrong_component",
+    "E_symptom_stop"
+  ],
+  "primary_failure_mode": "D_wrong_component",
+  "blocking_errors": [],
+  "scorecard_fair": "yes",
+  "scorecard_notes": "The score is fair. The scored summary names SES throttling as the cause (R35). The retry logs show every throttled send succeeded within 3.1 seconds (R26), which the agent's own observation records (R27).",
+  "quality_notes": [
+    "R22 compares the total lag of 925 messages with the traffic and calls it small. A delay of 11 minutes on one partition is not visible in a total. The per-partition numbers were in the same report (R21).",
+    "The throttle evidence cannot carry the conclusion. R26 shows each throttled send retried after 1.8 seconds and succeeding on attempt 2, and the first search shows 29 throttled sends in 500 lines (R18).",
+    "The notification-service send latency stayed between 1.19 and 1.24 seconds until 18:20 and was 3.1 to 3.6 seconds from 18:30 (R18). Even the worst value is far from 11 minutes, so the delay sits upstream of the send."
+  ],
+  "fixes": [
+    {
+      "owner": "instructions",
+      "fix": "Add a skill consumer-lag-check for INCIDENT_RCA. Compare lag per partition, not in total. One partition with lag while the others sit near zero means a stuck message, not load. Then read the consumer's logs for that partition. Here the subagent report had the numbers (R21) and the agent used the total (R22)."
+    },
+    {
+      "owner": "customer_memory",
+      "fix": "Extend the memory services/fulfillment-worker. It only says what the worker consumes (R11 ('fulfillment-worker consumes the order-events topic')). Add that lag on one partition with the others at zero means a stuck message, not load. The agent had no reason to look at one partition (R23)."
+    },
+    {
+      "owner": "instructions",
+      "fix": "In the RCA instructions, require a size check before a cause is named: compare the delay to explain with the delay the cause can produce. A throttle retry of 1.8 seconds (R26) cannot make an 11 minute delay (R28)."
+    }
+  ],
+  "one_line": "Blamed SES throttling and dismissed the lag on partition 7, which showed a stuck message in fulfillment-worker."
+}

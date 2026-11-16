@@ -1,0 +1,286 @@
+{
+  "request": {
+    "agentSpaceId": "00000000-0000-4000-8000-0000000000bb",
+    "maxResults": 100
+  },
+  "response": {
+    "items": [
+      {
+        "assetId": "ki-bfc466c0-77ed-42e7-a5dc-7881ca27d6cc",
+        "assetType": "skill",
+        "metadata": {
+          "status": "INACTIVE",
+          "name": "sample-skip-scheduled-maintenance",
+          "skill_type": "USER",
+          "description": "Skip low-priority incidents during a scheduled maintenance window. Use this skill to automatically filter MEDIUM and LOW severity alarms that fire during planned maintenance, avoiding unnecessary investigations for expected disruptions.",
+          "agent_types": [
+            "INCIDENT_TRIAGE"
+          ]
+        },
+        "version": 1,
+        "createdAt": "2026-06-11T23:48:23.000Z",
+        "updatedAt": "2026-06-11T23:48:23.000Z"
+      },
+      {
+        "assetId": "ki-4501c0e4-1362-41f6-a6c4-f1862400bcf2",
+        "assetType": "memory_store",
+        "metadata": {
+          "name": "understanding-agent-space",
+          "description": "Architecture, environments, and resource topology of the Bedrock AgentCore development account (111122223333). Read topology-summary first to orient, then the container-* items to locate affected components, log groups, and resource relationships during an incident investigation.",
+          "agent_types": [
+            "GENERIC"
+          ],
+          "status": "ACTIVE"
+        },
+        "version": 1,
+        "createdAt": "2026-07-07T03:29:34.000Z",
+        "updatedAt": "2026-07-07T03:29:34.000Z"
+      },
+      {
+        "assetId": "ki-f2b308eb-848d-4c4c-8311-437c3b806d39",
+        "assetType": "memory",
+        "metadata": {
+          "status": "ACTIVE",
+          "name": "container-emr-test-cluster",
+          "memory_store_id": "ki-4501c0e4-1362-41f6-a6c4-f1862400bcf2",
+          "description": "EMR Test Cluster container \u2014 single EC2 instance in us-east-1 (dev-iad) for data-processing test/experimentation in account 111122223333."
+        },
+        "version": 1,
+        "createdAt": "2026-07-07T03:29:34.000Z",
+        "updatedAt": "2026-07-07T03:29:34.000Z"
+      },
+      {
+        "assetId": "ki-bfd01609-34e9-4d4e-a0bb-463c9254cac8",
+        "assetType": "skill",
+        "metadata": {
+          "name": "understanding-agent-space",
+          "description": "Captures the architecture, environments, and resource topology of a Bedrock AgentCore development account (111122223333) spanning us-west-2 (dev-pdx) and us-east-1 (dev-iad). Use during incident investigation to identify affected components, find relevant logs, and understand resource relationships.",
+          "status": "ACTIVE",
+          "agent_types": [
+            "GENERIC"
+          ],
+          "skill_type": "LEARNED"
+        },
+        "version": 2,
+        "createdAt": "2026-06-11T23:56:56.000Z",
+        "updatedAt": "2026-07-07T03:29:34.000Z"
+      },
+      {
+        "assetId": "ki-c8f3686c-0a1a-46b8-93f6-53b0c59ab03d",
+        "assetType": "memory",
+        "metadata": {
+          "description": "Bedrock AgentCore container \u2014 AI agent runtime workload with runtime/invocation CloudWatch log groups and CDK bootstrap tooling in account 111122223333.",
+          "name": "container-bedrock-agentcore",
+          "status": "ACTIVE",
+          "memory_store_id": "ki-4501c0e4-1362-41f6-a6c4-f1862400bcf2"
+        },
+        "version": 1,
+        "createdAt": "2026-07-07T03:29:35.000Z",
+        "updatedAt": "2026-07-07T03:29:35.000Z"
+      },
+      {
+        "assetId": "ki-8025baa4-7a9c-4c02-84a8-d186636d67ae",
+        "assetType": "memory",
+        "metadata": {
+          "name": "topology-summary",
+          "memory_store_id": "ki-4501c0e4-1362-41f6-a6c4-f1862400bcf2",
+          "description": "Bedrock AgentCore development account (111122223333) \u2014 environments, container-level architecture, and critical-path status. Read during incident investigation to orient on the agent space.",
+          "status": "ACTIVE"
+        },
+        "version": 1,
+        "createdAt": "2026-07-07T03:29:35.000Z",
+        "updatedAt": "2026-07-07T03:29:35.000Z"
+      },
+      {
+        "assetId": "ki-83909e28-f98d-4d39-8179-02ca7555b4d4",
+        "assetType": "artifact",
+        "metadata": {
+          "title": "Agent Space Summary Report",
+          "status": "ACTIVE"
+        },
+        "version": 2,
+        "createdAt": "2026-06-17T20:23:01.000Z",
+        "updatedAt": "2026-07-08T15:16:10.000Z"
+      },
+      {
+        "assetId": "ki-e69ad174-2207-43d5-898a-86b605d93241",
+        "assetType": "artifact",
+        "metadata": {
+          "source_references": [
+            "execution:e3517460-478a-486a-8684-c961f3ca6b07.artifact-agent"
+          ],
+          "title": "HTML Rendering Test Card",
+          "status": "ACTIVE"
+        },
+        "version": 1,
+        "createdAt": "2026-07-08T21:12:11.000Z",
+        "updatedAt": "2026-07-08T21:12:11.000Z"
+      },
+      {
+        "assetId": "ki-fd2cd35d-ace7-4bed-923b-1d492849393d",
+        "assetType": "artifact",
+        "metadata": {
+          "status": "ACTIVE",
+          "source_references": [
+            "execution:e3517460-478a-486a-8684-c961f3ca6b07.artifact-agent"
+          ],
+          "title": "Verity Verification Report \u2014 AWS PrivateLink Cross-Region Setup"
+        },
+        "version": 1,
+        "createdAt": "2026-07-08T21:17:30.000Z",
+        "updatedAt": "2026-07-08T21:17:30.000Z"
+      },
+      {
+        "assetId": "ki-aa94f065-d420-4979-932c-41327da12ee3",
+        "assetType": "skill",
+        "metadata": {
+          "agent_types": [
+            "GENERIC"
+          ],
+          "status": "ACTIVE",
+          "name": "verity",
+          "description": "Automatically verifies factual accuracy of AI responses to substantive questions. Triggers on any question requiring grounded facts (AWS docs, account data, infrastructure state) \u2014 NOT on greetings, small talk, or creative requests. Flags claims that lack source grounding and rely only on training data.",
+          "skill_type": "USER"
+        },
+        "version": 1,
+        "createdAt": "2026-07-08T21:38:31.000Z",
+        "updatedAt": "2026-07-08T21:38:31.000Z"
+      },
+      {
+        "assetId": "ki-8578b1bb-b5ff-41d8-9368-4f106b846352",
+        "assetType": "agents_md",
+        "metadata": {
+          "agent_type": "GENERIC",
+          "status": "ACTIVE"
+        },
+        "version": 5,
+        "createdAt": "2026-07-08T20:38:48.000Z",
+        "updatedAt": "2026-08-05T20:39:44.000Z"
+      },
+      {
+        "assetId": "ki-63edd778-1a7a-483f-8b18-479742a15a04",
+        "assetType": "memory_store",
+        "metadata": {
+          "agent_types": [
+            "GENERIC"
+          ],
+          "status": "ACTIVE",
+          "name": "chat-tool-use-best-practices",
+          "description": "Tool-use best practices learned from Chat session trajectories. Records common errors, output management strategies, and effective tool selection patterns. Read when starting a Chat session to avoid repeating known mistakes."
+        },
+        "version": 10,
+        "createdAt": "2026-07-07T18:43:41.000Z",
+        "updatedAt": "2026-08-10T18:37:45.000Z"
+      },
+      {
+        "assetId": "ki-f7aad8aa-0449-4221-bd9d-bceee6f33d24",
+        "assetType": "memory_store",
+        "metadata": {
+          "name": "verity",
+          "description": "Knowledge regarding verity fact checker",
+          "agent_types": [
+            "GENERIC"
+          ],
+          "status": "ACTIVE"
+        },
+        "version": 1,
+        "createdAt": "2026-09-23T20:22:29.000Z",
+        "updatedAt": "2026-09-23T20:22:29.000Z"
+      },
+      {
+        "assetId": "ki-6e6624f9-cca2-4545-8c89-3519caa36a0f",
+        "assetType": "skill",
+        "metadata": {
+          "name": "chat-tool-use-best-practices",
+          "skill_type": "LEARNED",
+          "status": "ACTIVE",
+          "description": "Routing index for chat tool-use best practices across Chat session categories.",
+          "agent_types": [
+            "GENERIC"
+          ]
+        },
+        "version": 14,
+        "createdAt": "2026-07-07T18:43:41.000Z",
+        "updatedAt": "2026-09-26T18:42:37.000Z"
+      },
+      {
+        "assetId": "ki-53a8c21b-624a-41b5-bc0b-d8dee329f427",
+        "assetType": "memory",
+        "metadata": {
+          "status": "ACTIVE",
+          "memory_store_id": "ki-63edd778-1a7a-483f-8b18-479742a15a04",
+          "name": "categories/devops-agent-product-questions",
+          "description": "Questions about DevOps Agent product capabilities, security posture, compliance, performance tuning, journal access, or operational metrics, answered from AWS DevOps Agent documentation. Covers verify_aws_claim for claim-based and URL-based lookups of the DevOps Agent user guide (such as the aws-devops-agent-security page), and skill_read for loading the verity skill. Fixes re-fetching a documentation URL that is truncated at 10,000 characters of the page, which returns the same first part again, and output bloat from URL fetches. Records the claim-based query technique with topics reference_documentation and limit=3, and the skill_read plus verify_aws_claim parallel start. Read before answering questions about DevOps Agent features, security, privacy, data retention or compliance in a Chat session."
+        },
+        "version": 2,
+        "createdAt": "2026-11-03T18:38:34.000Z",
+        "updatedAt": "2026-11-07T18:33:31.000Z"
+      },
+      {
+        "assetId": "ki-baf9a161-b04e-44bb-b3e5-5153fabbdad8",
+        "assetType": "memory",
+        "metadata": {
+          "name": "categories/privatelink-facts-and-limits",
+          "memory_store_id": "ki-63edd778-1a7a-483f-8b18-479742a15a04",
+          "status": "ACTIVE",
+          "description": "Looking up specific AWS PrivateLink factual data such as cross-region interface endpoint quotas, per-endpoint bandwidth limits, latency benchmarks between regions like us-west-2 and us-east-1, or recent feature announcements, without setup instructions. Covers verify_aws_claim for documentation and current-awareness lookups and skill_read for loading the verity skill. Fixes first queries that return general endpoint limits instead of cross-region specifics and broad latency queries with limit=5 that exceed 10K chars. Records topics reference_documentation for quota lookups versus current_awareness plus reference_documentation for recent launches, narrowing claims to a region pair, and the parallel skill_read plus verify_aws_claim start. Read before looking up PrivateLink quotas, limits, latency, or feature announcements in a Chat session."
+        },
+        "version": 2,
+        "createdAt": "2026-11-03T18:38:35.000Z",
+        "updatedAt": "2026-11-07T18:33:32.000Z"
+      },
+      {
+        "assetId": "ki-c64d7ddd-871f-47c9-9daa-9cd43d070728",
+        "assetType": "memory",
+        "metadata": {
+          "status": "ACTIVE",
+          "name": "categories/testing-mcp-servers",
+          "description": "Testing or validating a custom MCP server added to the agent space, such as the searxng-mcp SearXNG search server, by confirming connectivity, tool availability and end-to-end functionality. Covers list_associations for discovering the MCP server configuration, gather_context and why delegating custom MCP tool tests to the Context Gatherer fails, and searxng-mcp_searxng_instance_info and searxng-mcp_searxng_web_search for connectivity and search tests. Fixes Unknown tool errors from unprefixed MCP tool names instead of the server-prefixed name, delegations that report success while every custom tool failed, and HTTP 429 Too Many Requests from the upstream SearXNG instance. Records the list_associations-first discovery pattern, the server-name_tool-name naming convention, and num_results=3 for light search tests. Read before testing or validating a custom MCP server in a Chat session.",
+          "memory_store_id": "ki-63edd778-1a7a-483f-8b18-479742a15a04"
+        },
+        "version": 2,
+        "createdAt": "2026-11-03T18:38:35.000Z",
+        "updatedAt": "2026-11-07T18:33:33.000Z"
+      },
+      {
+        "assetId": "ki-17abee3c-1032-43ea-a978-f812767247a0",
+        "assetType": "memory",
+        "metadata": {
+          "description": "Setting up cross-region AWS PrivateLink, such as interface endpoints between us-west-2 and us-east-1 or S3 access across regions, and editing the verity skill or AGENTS.md along the way. Covers verify_aws_claim, skill_read for verity and manage-skills, get_skill, update_skill, list_skills for knowledge_item_id, and list_agents_md, get_agents_md and update_agents_md. Fixes verify_aws_claim output over 10K chars with limit=5, loading one skill twice via skill_read and get_skill, and skipping verity; records limit=3 and topics values, the parallel verity start, and the list, get, update workflow for AGENTS.md. Read before answering PrivateLink setup questions or editing skills and AGENTS.md in a Chat session.",
+          "memory_store_id": "ki-63edd778-1a7a-483f-8b18-479742a15a04",
+          "name": "categories/privatelink-cross-region-setup",
+          "status": "ACTIVE"
+        },
+        "version": 2,
+        "createdAt": "2026-11-03T18:38:35.000Z",
+        "updatedAt": "2026-11-07T18:33:33.000Z"
+      },
+      {
+        "assetId": "ki-b77513b3-2248-43cc-a063-1abec03216fb",
+        "assetType": "memory",
+        "metadata": {
+          "memory_store_id": "ki-f7aad8aa-0449-4221-bd9d-bceee6f33d24",
+          "status": "ACTIVE",
+          "description": "Verity verification reports must include the SCORE dimension bars block. Read when producing or reviewing a Verity post-response verification report.",
+          "name": "verity-report-farm-bars-required"
+        },
+        "version": 1,
+        "createdAt": "2026-11-10T23:00:38.000Z",
+        "updatedAt": "2026-11-10T23:00:38.000Z"
+      },
+      {
+        "assetId": "ki-9184fa09-8e79-4a11-90fa-a6b81ab5fe6b",
+        "assetType": "memory",
+        "metadata": {
+          "memory_store_id": "ki-63edd778-1a7a-483f-8b18-479742a15a04",
+          "description": "The routing index of tool-use best practices for this agent space's Chat sessions, pointing to one item per kind of user request with the tools each item covers. Read when starting a Chat session to find the matching category for your current task.",
+          "status": "ACTIVE",
+          "name": "overview"
+        },
+        "version": 24,
+        "createdAt": "2026-08-13T18:37:05.000Z",
+        "updatedAt": "2026-11-10T23:38:13.000Z"
+      }
+    ]
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AssumeWithExternalId",
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": "<principal-arn>"
+      },
+      "Action": "sts:AssumeRole",
+      "Condition": {
+        "StringEquals": {
+          "sts:ExternalId": "<external-id>"
+        }
+      }
+    },
+    {
+      "Sid": "AllowSourceIdentity",
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": "<principal-arn>"
+      },
+      "Action": "sts:SetSourceIdentity"
+    }
+  ]
+}

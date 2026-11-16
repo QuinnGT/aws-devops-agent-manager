@@ -1,0 +1,35 @@
+# Package import and export. Upload size and file caps are in limits.yaml
+# (packageRead); the path-to-asset mappings are the layouts in
+# package-layouts.yaml.
+
+uploads:
+  # Uploaded packages are stored under DAM_DATA_DIR/package-imports/<id>.zip
+  # and deleted this many days after the upload. The import record and its
+  # mapping results are kept; only the file goes.
+  retentionDays: 30
+  # Cron (UTC) for the job that deletes expired uploads.
+  expireCron: "29 3 * * *"
+
+import:
+  # Title of the plan created from an import.
+  # Placeholders: {packageName} {fileName} {spaceAlias}
+  planTitle: "Import {fileName}"
+  # Refuse to create a plan while the package has validation errors.
+  blockPlanOnErrors: true
+  # Imports per page on the import list.
+  listPageSize: 50
+
+export:
+  # Package name, which is also the zip's top folder and file name.
+  # Placeholders: {spaceAlias} {ref} {layout}. {ref} is the release name for
+  # a release tag, otherwise the short commit hash (HEAD included).
+  packageName: "{spaceAlias}-{ref}"
+  # Recent commits offered as export points, besides HEAD and the release tags.
+  recentCommits: 20
+  # Parallel git reads when reading a space's assets at a commit.
+  gitReadConcurrency: 4
+  # Refuse the download while the package fails its checks (validation
+  # errors). A layout that requires files or a shared section the space's
+  # assets can't supply (without a base package) always fails, so set this to
+  # false to let people download those files anyway.
+  blockOnFailedChecks: true

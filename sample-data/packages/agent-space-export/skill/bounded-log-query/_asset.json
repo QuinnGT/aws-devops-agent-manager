@@ -1,0 +1,24 @@
+{
+  "assetId": "ki-00000000-0000-4000-8000-000000000118",
+  "assetType": "skill",
+  "metadata": {
+    "name": "bounded-log-query",
+    "description": "Use before every log search. Keeps queries inside the tool limits and records the window, the log group and the line limit with each result.",
+    "agent_types": [
+      "GENERIC"
+    ],
+    "status": "ACTIVE",
+    "skill_type": "USER"
+  },
+  "version": 2,
+  "createdAt": "2026-10-20 18:10:42+00:00",
+  "updatedAt": "2026-11-02 17:45:30+00:00",
+  "creator": {
+    "uid": "00000000-0000-4000-8000-0000000000bb",
+    "displayName": "AnyCompanyAgentSpaceAdmin"
+  },
+  "editor": {
+    "uid": "00000000-0000-4000-8000-0000000000bb",
+    "displayName": "AnyCompanyAgentSpaceAdmin"
+  }
+}

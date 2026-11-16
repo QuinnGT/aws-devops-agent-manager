@@ -1,0 +1,14 @@
+# Agent types, from the asset guide:
+# https://docs.aws.amazon.com/devopsagent/latest/userguide/about-aws-devops-agent-managing-assets.html
+# The app names an instruction file "<shortLabel or label> instructions", for
+# example "Global instructions" and "Incident triage instructions".
+agentTypes:
+  - { id: GENERIC, label: Global (all agents), shortLabel: Global, primary: true }
+  - { id: CHAT, label: Chat }
+  - { id: INCIDENT_TRIAGE, label: Incident triage }
+  - { id: INCIDENT_RCA, label: Incident RCA }
+  - { id: INCIDENT_MITIGATION, label: Incident mitigation }
+  - { id: INCIDENT_UI, label: Incident UI }
+  - { id: PREVENTION, label: Prevention }
+  - { id: RELEASE_READINESS_REVIEW, label: Release readiness review }
+  - { id: RELEASE_TESTING, label: Release testing }

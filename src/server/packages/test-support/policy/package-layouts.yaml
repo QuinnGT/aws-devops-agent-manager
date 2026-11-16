@@ -1,0 +1,85 @@
+# A policy overlay for the package tests. It adds layouts that carry every kind
+# of check the layout schema supports, with invented names, so the tests do not
+# depend on any organization's rules. testPolicy() in ../policy.ts merges it over
+# the app's policy/.
+layouts:
+  # The plain instruction folders plus a dotted-invocation pattern and required
+  # safety responses on global.md.
+  strict-instructions:
+    extends: instruction-folders
+    label: Strict instruction folders (test)
+    description: "Test layout: instruction folders with text checks."
+    checks:
+      textPatterns:
+        - code: package.dotted-invocation
+          dirs: [instructions, skills, memory]
+          glob: "**/*.md"
+          pattern: "\\b(?:acme_logs|acme_wiki)\\.[a-z_]+"
+          message: Unsupported dotted invocation example
+      requiredText:
+        - code: package.safety-message
+          file: instructions/global.md
+          texts:
+            - "[ADVICE ONLY]: This agent gives advice. A person makes every change."
+            - "[NO SECRETS]: The request contains credentials and was not processed."
+          message: Existing safety response changed or missing
+
+  # The shared-section layout plus: instruction files that are listed but not
+  # imported (learning.md, grader.md), a dotted-invocation pattern, required
+  # safety responses, forbidden text and optional files that only warn.
+  strict-shared:
+    extends: instruction-folders-shared
+    label: Strict shared layout (test)
+    description: "Test layout: instruction folders with a shared section and every kind of check."
+    instructions:
+      files:
+        # Listed with no agent type: not imported, and a warning says so.
+        learning.md: null
+        grader.md: null
+    checks:
+      textPatterns:
+        - code: package.dotted-invocation
+          dirs: [instructions, skills, memory]
+          glob: "**/*.md"
+          pattern: "\\b(?:acme_logs|acme_wiki)\\.[a-z_]+"
+          message: Unsupported dotted invocation example
+      requiredText:
+        - code: package.safety-message
+          file: instructions/global.md
+          texts:
+            - "[ADVICE ONLY]: This agent gives advice. A person makes every change."
+            - "[NO SECRETS]: The request contains credentials and was not processed."
+          message: Existing safety response changed or missing
+      forbiddenText:
+        - code: package.lead-duty-in-global
+          file: instructions/global.md
+          texts: ["Before your final message, list each persisted finding"]
+          message: Lead-only duty found in global.md
+      requiredFiles:
+        - code: package.optional-agent-file
+          files: [instructions/learning.md, instructions/grader.md]
+          message: "Missing optional agent file: {file}"
+          # Optional files: reported as warnings, so they don't fail the package.
+          level: warning
+
+  # The Agent Space folders plus a dotted-invocation pattern and required safety
+  # responses on the GENERIC instructions, found by descriptor.
+  strict-folders:
+    extends: agent-space-folders
+    label: Strict Agent Space folders (test)
+    description: "Test layout: Agent Space folders with text checks."
+    checks:
+      textPatterns:
+        - code: package.dotted-invocation
+          dirs: [agents_md, skill, memory]
+          glob: "**/*.md"
+          pattern: "\\b(?:acme_logs|acme_wiki)\\.[a-z_]+"
+          message: Unsupported dotted invocation example
+      requiredText:
+        - code: package.safety-message
+          asset: { assetType: agents_md, metadata: { agent_type: GENERIC } }
+          missing: skip
+          texts:
+            - "[ADVICE ONLY]: This agent gives advice. A person makes every change."
+            - "[NO SECRETS]: The request contains credentials and was not processed."
+          message: Existing safety response changed or missing

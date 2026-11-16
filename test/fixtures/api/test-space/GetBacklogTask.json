@@ -1,0 +1,22 @@
+{
+  "request": {
+    "agentSpaceId": "00000000-0000-4000-8000-0000000000bb",
+    "taskId": "fb2f686b-612c-498c-8dc9-f1b7f1b84df1"
+  },
+  "response": {
+    "task": {
+      "agentSpaceId": "00000000-0000-4000-8000-0000000000bb",
+      "taskId": "fb2f686b-612c-498c-8dc9-f1b7f1b84df1",
+      "title": "Create Chat Tool Use Best Practices Skills",
+      "taskType": "SYSTEM_LEARNING",
+      "priority": "HIGH",
+      "status": "COMPLETED",
+      "createdAt": "2026-10-23T18:28:25.982Z",
+      "updatedAt": "2026-10-23T18:39:13.500Z",
+      "version": 3,
+      "executionId": "dd57cf48-883b-4f78-bc32-5ad9de66e225",
+      "description": "chat-tool-use-best-practices: Create the 'chat-tool-use-best-practices' skill.",
+      "hasLinkedTasks": false
+    }
+  }
+}

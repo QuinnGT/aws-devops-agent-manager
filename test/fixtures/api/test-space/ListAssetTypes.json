@@ -1,0 +1,45 @@
+{
+  "request": {
+    "agentSpaceId": "00000000-0000-4000-8000-0000000000bb"
+  },
+  "response": {
+    "items": [
+      {
+        "assetType": "skill",
+        "description": "Reusable instructions that extend agent capabilities"
+      },
+      {
+        "assetType": "artifact",
+        "description": "Structured data objects in JSON format"
+      },
+      {
+        "assetType": "attachment",
+        "description": "Binary or text file attachments"
+      },
+      {
+        "assetType": "agents_md",
+        "description": "Agent configuration in AGENTS.md format"
+      },
+      {
+        "assetType": "feedback",
+        "description": "Customer-provided feedback on investigation executions"
+      },
+      {
+        "assetType": "custom_agent",
+        "description": "User-defined agents composed of tools and skills"
+      },
+      {
+        "assetType": "memory_store",
+        "description": "Organizational container grouping related memory files"
+      },
+      {
+        "assetType": "memory",
+        "description": "Individual memory file scoped to a memory store"
+      },
+      {
+        "assetType": "test_profile",
+        "description": "Reusable test configuration for agent evaluation"
+      }
+    ]
+  }
+}

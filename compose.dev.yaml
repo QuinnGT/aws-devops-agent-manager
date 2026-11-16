@@ -1,0 +1,21 @@
+# Local development database only (Podman: `pnpm db:dev:up`).
+# Postgres is published to 127.0.0.1 only, so nothing outside this machine can reach it.
+# The password comes from .env (not committed); compose fails fast if it's missing.
+name: dam-dev
+services:
+  postgres:
+    image: docker.io/library/postgres:18
+    environment:
+      POSTGRES_USER: dam
+      POSTGRES_DB: dam
+      POSTGRES_PASSWORD: ${DAM_DEV_POSTGRES_PASSWORD:?set DAM_DEV_POSTGRES_PASSWORD in .env}
+    ports:
+      - "127.0.0.1:55432:5432"
+    volumes:
+      - dam-dev-pg:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dam"]
+      interval: 5s
+      retries: 20
+volumes:
+  dam-dev-pg: {}

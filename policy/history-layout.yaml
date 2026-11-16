@@ -1,0 +1,22 @@
+# Layout of a customer history repository.
+spaceRoot: spaces/{spaceAlias}
+spaceFile: space.json
+assetJson: asset.json
+assetDirs:
+  agents_md: agents_md/{agentType}
+  skill: skill/{name}
+  memory_store: memory_store/{name}
+  memory: memory/{storeName}/{name}
+  custom_agent: custom_agent/{name}
+  default: "{assetType}/{assetId}"
+nameKeys:
+  default: name
+  agents_md: agent_type
+releaseManifest: releases/{spaceAlias}/{release}.json
+auditDir: audits/{spaceAlias}/{auditId}
+packageDir: packages/{spaceAlias}/{package}
+policyDir: policy
+notesRef: refs/notes/devops-agent
+releaseTag: "{spaceAlias}/{release}"
+revisionBranch: revision/{spaceAlias}/{name}
+maxCommittedFileBytes: 5242880

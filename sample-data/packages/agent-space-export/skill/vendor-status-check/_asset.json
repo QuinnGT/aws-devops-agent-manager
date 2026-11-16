@@ -1,0 +1,24 @@
+{
+  "assetId": "ki-00000000-0000-4000-8000-000000000114",
+  "assetType": "skill",
+  "metadata": {
+    "name": "vendor-status-check",
+    "description": "Use when card payments fail for one acquirer or when errors come from a third party. Checks the vendor status page and the gateway's own TLS and auth errors before blaming a deploy.",
+    "agent_types": [
+      "INCIDENT_RCA"
+    ],
+    "status": "ACTIVE",
+    "skill_type": "USER"
+  },
+  "version": 2,
+  "createdAt": "2026-10-20 18:10:42+00:00",
+  "updatedAt": "2026-11-02 17:45:30+00:00",
+  "creator": {
+    "uid": "00000000-0000-4000-8000-0000000000bb",
+    "displayName": "AnyCompanyAgentSpaceAdmin"
+  },
+  "editor": {
+    "uid": "00000000-0000-4000-8000-0000000000bb",
+    "displayName": "AnyCompanyAgentSpaceAdmin"
+  }
+}
