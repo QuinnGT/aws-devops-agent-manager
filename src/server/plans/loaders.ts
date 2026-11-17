@@ -206,6 +206,9 @@ export interface PlanItemView {
   changeBadge: Badge;
   /** "v5 → v6", "v1, status only", "planned v1, live v2" */
   versionLabel: string;
+  /** Lines added and removed across the item's files, 0 before the check */
+  added?: number;
+  removed?: number;
   validation: { status: PlanItemRow["validationStatus"]; errors: number; warnings: number };
   progress: ItemProgress | null;
   progressLabel: string | null;
@@ -379,6 +382,8 @@ function itemView(i: PlanItemRow, selectedId: string | null, origin: PlanOrigin)
     change: i.change,
     changeBadge: itemChangeBadge(i.change, { skipped: Boolean(conflict), status: i.desired?.metadata.status }),
     versionLabel: versionLabel({ change: i.change, liveVersion: i.liveVersion, baseVersion: i.baseVersion, conflict, writtenVersion: i.writtenVersion }) + (conflict ? "" : restoredFrom(origin, i)),
+    added: i.addedLines,
+    removed: i.removedLines,
     validation: { status: i.validationStatus, errors: errorsOf(validation).length, warnings: warningsOf(validation).length },
     progress: i.progress,
     progressLabel: i.progress ? ITEM_PROGRESS_LABELS[i.progress] : null,

@@ -216,7 +216,7 @@ A small client effect in the shell writes the browser's time zone to a `tz` cook
 **Filters.** A toolbar of `DropdownMenu` checkbox menus ("Source: All", "Type: All", "Last 30 days") plus a name `Input`. The toolbar wraps on narrow screens. Filter state lives in URL search params so links and Back keep it.
 
 **Diffs.**
-- Unified by default, with a `ToggleGroup` for Unified or Split (Split only at 1024 px and wider).
+- Unified by default, with a `ToggleGroup` for Unified or Split (Split only at 1024 px and wider). Plan review adds Words, its default there: a reworded line shows once, with the removed words struck through and the added words marked (`plan-review.md`).
 - Show old and new line numbers, hunk headers, and the +N and −M counts.
 - Long lines wrap, in Unified and Split. A wrapped line keeps one line number, aligned to its first row, and keeps the leading +, − or space marker on that row only. Words too long for the column break anywhere. Prose in memories and instructions is often one long line per paragraph, so the changed part must be visible without scrolling.
 - A Content or Metadata toggle switches to the metadata diff (the existing `ValueChanges`).

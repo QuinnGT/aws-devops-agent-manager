@@ -1,32 +1,30 @@
-import { CircleCheck, CircleX, FilePlus2, Power, SquarePen, Tag, Trash2, TriangleAlert } from "lucide-react";
+import { CircleCheck, CircleX, Tag } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 import { SpaceTopBar } from "@/components/app-shell/space-top-bar";
 import { spaceBase } from "@/components/app-shell/nav";
 import { Callout, type CalloutTone } from "@/components/common/callout";
-import { ChangeChip } from "@/components/common/change-chip";
 import { LiveJobProgress } from "@/components/common/live-job-progress";
 import { PageHeader } from "@/components/common/page-header";
 import { SectionCard } from "@/components/common/section-card";
-import { StatTile } from "@/components/common/stat-tile";
 import { StatusBadge } from "@/components/common/status-badge";
 import { Time } from "@/components/common/time";
 import { AutoRefresh } from "@/components/plans/auto-refresh";
 import { loadPlansPage } from "@/components/plans/page-guard";
-import { ApproveApplyPanel, PlanActionButton } from "@/components/plans/plan-controls";
+import { ChangeList, type ChangeGroup, type ChangeRow } from "@/components/plans/change-list";
+import { ApprovalControls, PlanActionButton } from "@/components/plans/plan-controls";
 import { SelectedItemCard } from "@/components/plans/selected-item-card";
 import { ConnectionNextStep } from "@/components/common/connection-next-step";
-import { DIFF_CHECK_FAILED, DIFF_NOT_READY, itemChangeWord, planStateBadge, reasonLockedText, skipTileDetail, SYNCED_COMPARISON_NOTE, SYNCED_VALIDATION_NOTE, validationSpec } from "@/components/plans/words";
+import { CHANGE_WORDS } from "@/components/common/status-words";
+import { DIFF_CHECK_FAILED, DIFF_NOT_READY, groupPlanItems, itemChangeWord, planStateBadge, reasonLockedText, SYNCED_COMPARISON_NOTE, SYNCED_VALIDATION_NOTE } from "@/components/plans/words";
 import { buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import { firstParam } from "@/server/assets/guard";
 import { liveErrorNeedsSettings } from "@/server/assets/live";
 import { loadPlanReview, type PlanCallout, type PlanItemView, type PlanReview } from "@/server/plans/loaders";
 import { WORKER_WAIT_TEXT } from "@/server/jobs/words";
-import { REASONS } from "@/server/plans/actions";
 import { roleReasonsFor } from "@/server/plans/service";
 import { isBusyState } from "@/server/plans/view";
 import { applyPlanAction, approvePlanAction, discardPlanAction, recheckPlanAction, rejectPlanAction, requestApprovalAction, retryFailedAction } from "./actions";
@@ -64,20 +62,17 @@ export default async function PlanReviewPage({ params, searchParams }: PageProps
     ) : perms.has("plans.create") ? (
       "Re-check the live space to try again."
     ) : null;
-  const checkFailedCause = r.callouts.find((c) => c.kind === "check-failed")?.body ?? null;
-  const primaryReason =
-    r.actions.primary?.disabledReason === REASONS.checkFailed && checkFailedCause ? (
-      // One span, so the reason wraps as one line of text inside DisabledReason's flex row.
-      <span>
-        {checkFailedCause} {nextStep}
-      </span>
-    ) : undefined;
   const synced = r.plan.comparedWith === "synced";
 
   const callouts = buildCallouts(r, { base, planHref, canRelease: perms.has("releases.create"), canCreate: perms.has("plans.create"), alias: space.alias, nextStep });
 
   const showProgress = r.jobs.showProgress;
   const notes = r.plan.notes.filter(Boolean);
+  const groups: ChangeGroup[] = groupPlanItems(r.items).map((g) => ({ key: g.key, label: g.label, rows: g.items.map((i) => changeRow(i, showProgress)) }));
+  const order = groups.flatMap((g) => g.rows.map((row) => row.id));
+  const at = r.selected ? order.indexOf(r.selected.id) : -1;
+  const hrefOf = (id: string | undefined) => (id ? `${planHref}?item=${id}` : null);
+  const nav = at >= 0 ? { position: at + 1, total: order.length, prevHref: hrefOf(order[at - 1]), nextHref: hrefOf(order[at + 1]) } : undefined;
 
   return (
     <div className="mx-auto max-w-7xl space-y-4">
@@ -102,19 +97,36 @@ export default async function PlanReviewPage({ params, searchParams }: PageProps
             "not checked yet"
           ),
         ]}
+        actionsClassName="items-start"
         actions={
-          r.actions.discard?.enabled ? (
-            <PlanActionButton
-              button={r.actions.discard}
-              variant="ghost"
-              run={discardPlanAction.bind(null, space.alias, r.plan.id)}
-              done="Plan discarded"
-              navigateTo={`${base}/plans`}
-              confirmTitle="Discard this plan?"
-              confirmBody={r.items.some((i) => i.draftId) ? "The drafts stay saved." : "Nothing changes in the space."}
-              confirmLabel="Discard plan"
+          <>
+            {r.actions.discard?.enabled ? (
+              <PlanActionButton
+                button={r.actions.discard}
+                variant="ghost"
+                run={discardPlanAction.bind(null, space.alias, r.plan.id)}
+                done="Plan discarded"
+                navigateTo={`${base}/plans`}
+                confirmTitle="Discard this plan?"
+                confirmBody={r.items.some((i) => i.draftId) ? "The drafts stay saved." : "Nothing changes in the space."}
+                confirmLabel="Discard plan"
+              />
+            ) : null}
+            <ApprovalControls
+              alias={space.alias}
+              planId={r.plan.id}
+              spaceName={r.space.name}
+              actions={r.actions}
+              reason={r.plan.reason}
+              reasonRequired={r.approval.reasonRequired}
+              reasonLocked={reasonLockedText(r.actions, r.plan.state, roleReasonsFor(r.plan.origin, role).apply)}
+              confirm={r.confirm}
+              steps={r.whatApplyDoes}
+              facts={<ApprovalFacts r={r} />}
+              closedNote={<ClosedNote r={r} />}
+              run={{ requestApproval: requestApprovalAction, approve: approvePlanAction, reject: rejectPlanAction, apply: applyPlanAction }}
             />
-          ) : null
+          </>
         }
       />
 
@@ -127,99 +139,57 @@ export default async function PlanReviewPage({ params, searchParams }: PageProps
       ) : null}
 
       {synced ? <p className="text-[13px] text-muted-foreground">{SYNCED_COMPARISON_NOTE}</p> : null}
-      <section aria-label="Plan summary" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatTile icon={<SquarePen />} label="Content updates" value={r.tiles.contentUpdates} detail={namesOf(r.items, "content") ?? "None"} />
-        <StatTile icon={<Power />} label="Status changes" value={r.tiles.statusChanges} detail={statusDetail(r.items) ?? "None"} />
-        <StatTile
-          icon={<TriangleAlert />}
-          label="Apply will skip"
-          value={!checked ? <span className="text-muted-foreground">Not checked</span> : <span className={cn(r.tiles.skipped > 0 && "text-warning-fg")}>{r.tiles.skipped}</span>}
-          detail={skipTileDetail(r.tiles.skipped, checked)}
-        />
-        {r.tiles.metadataUpdates > 0 ? <StatTile icon={<SquarePen />} label="Metadata updates" value={r.tiles.metadataUpdates} detail={namesOf(r.items, "metadata")} /> : null}
-        {r.tiles.creates ? <StatTile icon={<FilePlus2 />} label="Creates" value={r.tiles.creates} detail={namesOf(r.items, "create")} /> : null}
-        {r.tiles.deletes ? (
-          <StatTile icon={<Trash2 />} label="Deletes" value={<span className="text-destructive-fg">{r.tiles.deletes}</span>} detail="A snapshot is committed before each delete" />
-        ) : null}
-        <StatTile
-          icon={<CircleCheck />}
-          label="Validation"
-          value={
-            // Validation needs no live read, so it also runs in the comparison with the last synced version.
-            !checked && !synced ? (
-              <span className="text-muted-foreground">Not checked</span>
-            ) : r.tiles.validation.passed ? (
-              <>
-                <CircleCheck className="text-success-fg" aria-hidden />
-                Passed
-              </>
-            ) : (
-              <>
-                <CircleX className="text-destructive-fg" aria-hidden />
-                {r.tiles.validation.failed} failed
-              </>
-            )
-          }
-          detail={`${r.tiles.validation.checks} ${r.tiles.validation.checks === 1 ? "check" : "checks"}, ${r.tiles.validation.failed} failed${r.tiles.validation.warnings ? `, ${r.tiles.validation.warnings} ${r.tiles.validation.warnings === 1 ? "warning" : "warnings"}` : ""}${synced ? `, ${SYNCED_VALIDATION_NOTE}` : ""}`}
-        />
+      <section aria-label="Plan summary" className="flex flex-wrap gap-2">
+        <SummaryChip n={r.tiles.contentUpdates} one="content update" many="content updates" />
+        <SummaryChip n={r.tiles.statusChanges} one="status change" many="status changes" />
+        {r.tiles.metadataUpdates > 0 ? <SummaryChip n={r.tiles.metadataUpdates} one="metadata update" many="metadata updates" /> : null}
+        {r.tiles.creates ? <SummaryChip n={r.tiles.creates} one="create" many="creates" /> : null}
+        {r.tiles.deletes ? <SummaryChip n={r.tiles.deletes} one="delete" many="deletes" tone="destructive" title="A snapshot is committed before each delete" /> : null}
+        {checked ? (
+          <SummaryChip n={r.tiles.skipped} one="skipped" many="skipped" tone={r.tiles.skipped > 0 ? "warning" : undefined} title={r.tiles.skipped ? "Changed in the live space since this plan was made" : "No asset changed in the live space since this plan was made"} />
+        ) : (
+          <SummaryChip text="Skips not checked yet" />
+        )}
+        {
+          // Validation needs no live read, so it also runs in the comparison with the last synced version.
+          !checked && !synced ? (
+            <SummaryChip text="Validation not checked yet" />
+          ) : (
+            <SummaryChip
+              icon={r.tiles.validation.passed ? <CircleCheck className="size-3.5 text-success-fg" aria-hidden /> : <CircleX className="size-3.5 text-destructive-fg" aria-hidden />}
+              text={`${r.tiles.validation.passed ? "Validation passed" : `Validation failed for ${r.tiles.validation.failed}`}${r.tiles.validation.warnings ? `, ${r.tiles.validation.warnings} ${r.tiles.validation.warnings === 1 ? "warning" : "warnings"}` : ""}`}
+              title={`${r.tiles.validation.checks} ${r.tiles.validation.checks === 1 ? "check" : "checks"}, ${r.tiles.validation.failed} failed${synced ? `, ${SYNCED_VALIDATION_NOTE}` : ""}`}
+            />
+          )
+        }
       </section>
 
-      <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
-        <div className="min-w-0 space-y-4">
-          <Card className="gap-0 py-0" role="region" aria-labelledby="plan-items-h">
-            <div className="flex min-h-12 items-center justify-between gap-3 border-b px-4 py-2">
-              <h2 id="plan-items-h" className="text-sm font-semibold">
-                Changes in this plan
-              </h2>
-              <span className="text-xs text-muted-foreground tabular-nums">
-                {r.items.length} {r.items.length === 1 ? "asset" : "assets"}
-              </span>
-            </div>
-            {r.plan.state === "applying" && r.jobs.applyRunId ? (
-              <div className="border-b px-4 py-3">
-                <LiveJobProgress runId={r.jobs.applyRunId} />
-              </div>
-            ) : null}
-            <ItemsTable items={r.items} planHref={planHref} showProgress={showProgress} synced={synced} />
+      {/* The list and the diff scroll on their own and fill the window below the top bar (72 px above, 16 px below), so the page doesn't grow with the plan. */}
+      <div className="grid gap-4 lg:h-[calc(100dvh-88px)] lg:min-h-[32rem] lg:grid-cols-[340px_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)]">
+        <ChangeList
+          groups={groups}
+          planHref={planHref}
+          selectedId={r.selected?.id ?? null}
+          className="max-lg:max-h-[60vh] lg:min-h-0"
+          top={r.plan.state === "applying" && r.jobs.applyRunId ? <LiveJobProgress runId={r.jobs.applyRunId} /> : undefined}
+        />
+        {r.selected ? (
+          <SelectedItemCard item={r.selected} nav={nav} className="max-lg:max-h-[85vh] lg:min-h-0" notReady={r.plan.checkError || checkFailed ? DIFF_CHECK_FAILED : DIFF_NOT_READY} />
+        ) : (
+          <Card className="justify-center py-0 lg:min-h-0">
+            <p className="px-4 py-3 text-center text-[13px] text-muted-foreground">Choose a change to see its diff.</p>
           </Card>
-          {r.selected ? <SelectedItemCard key={r.selected.id} item={r.selected} notReady={r.plan.checkError || checkFailed ? DIFF_CHECK_FAILED : DIFF_NOT_READY} /> : null}
-          {notes.length ? (
-            <SectionCard id="plan-notes-h" title="Notes">
-              <ul className="list-disc space-y-1 py-3 pr-4 pl-9 text-[13px]">
-                {notes.map((n, i) => (
-                  <li key={i}>{n}</li>
-                ))}
-              </ul>
-            </SectionCard>
-          ) : null}
-        </div>
-
-        <aside className="grid gap-4 sm:grid-cols-2 xl:grid-cols-1" aria-label="Approval">
-          <SectionCard id="approve-h" title="Approve and apply">
-            <ApproveApplyPanel
-              alias={space.alias}
-              planId={r.plan.id}
-              spaceName={r.space.name}
-              actions={r.actions}
-              reason={r.plan.reason}
-              reasonRequired={r.approval.reasonRequired}
-              reasonLocked={reasonLockedText(r.actions, r.plan.state, roleReasonsFor(r.plan.origin, role).apply)}
-              primaryReason={primaryReason}
-              confirm={r.confirm}
-              facts={<ApprovalFacts r={r} />}
-              closedNote={<ClosedNote r={r} />}
-              run={{ requestApproval: requestApprovalAction, approve: approvePlanAction, reject: rejectPlanAction, apply: applyPlanAction }}
-            />
-          </SectionCard>
-          <SectionCard id="what-apply-h" title="What apply does">
-            <ol className="list-decimal space-y-1.5 py-3 pr-4 pl-9 text-[13px]">
-              {r.whatApplyDoes.map((s) => (
-                <li key={s}>{s}</li>
-              ))}
-            </ol>
-          </SectionCard>
-        </aside>
+        )}
       </div>
+      {notes.length ? (
+        <SectionCard id="plan-notes-h" title="Notes">
+          <ul className="list-disc space-y-1 py-3 pr-4 pl-9 text-[13px]">
+            {notes.map((n, i) => (
+              <li key={i}>{n}</li>
+            ))}
+          </ul>
+        </SectionCard>
+      ) : null}
     </div>
   );
 }
@@ -244,86 +214,48 @@ function OriginLink({ r, base }: { r: PlanReview; base: string }) {
   return <span>{r.plan.originLine}</span>;
 }
 
-/** Names of the items with this change, for a tile's detail line ("Instructions GENERIC, skill verity"). */
-function namesOf(items: readonly PlanItemView[], change: PlanItemView["change"]): string | null {
-  const hit = items.filter((i) => i.change === change && !i.conflict);
-  if (!hit.length) return null;
-  const shown = hit.slice(0, 3).map((i) => i.name);
-  return hit.length > 3 ? `${shown.join(", ")} and ${hit.length - 3} more` : shown.join(", ");
-}
-
-function statusDetail(items: readonly PlanItemView[]): string | null {
-  const hit = items.filter((i) => i.change === "status" && !i.conflict);
-  if (!hit.length) return null;
-  const off = hit.filter((i) => i.changeBadge.label === "Set Inactive").length;
-  const on = hit.length - off;
-  return [off ? `${off} set to Inactive` : null, on ? `${on} set to Active` : null].filter(Boolean).join(", ");
-}
-
-function ItemsTable({ items, planHref, showProgress, synced }: { items: readonly PlanItemView[]; planHref: string; showProgress: boolean; synced: boolean }) {
-  return (
-    <Table>
-      <TableHeader className="bg-muted/50">
-        <TableRow className="hover:bg-transparent">
-          <TableHead className="pl-4 text-[13px] text-muted-foreground">Asset</TableHead>
-          <TableHead className="text-[13px] text-muted-foreground">Change</TableHead>
-          <TableHead className="text-[13px] text-muted-foreground">{synced ? "Last synced → new" : "Live → new"}</TableHead>
-          <TableHead className={cn("text-[13px] text-muted-foreground", !showProgress && "pr-4")}>Validation</TableHead>
-          {showProgress ? <TableHead className="pr-4 text-[13px] text-muted-foreground">Progress</TableHead> : null}
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {items.map((i) => {
-          const word = itemChangeWord(i.change, { skipped: Boolean(i.conflict) && i.progress !== "done", status: i.changeBadge.label === "Set Inactive" ? "INACTIVE" : "ACTIVE" });
-          return (
-            <TableRow key={i.id} className={cn("align-top", i.selected && "bg-foreground/5 shadow-[inset_3px_0_0_var(--foreground)] hover:bg-foreground/5")}>
-              <TableCell className="min-w-48 py-2.5 pl-4 whitespace-normal">
-                <Link
-                  href={`${planHref}?item=${i.id}`}
-                  scroll={false}
-                  aria-current={i.selected ? "true" : undefined}
-                  className="inline-flex min-h-6 items-center rounded-sm font-semibold break-words underline-offset-4 hover:underline"
-                >
-                  {i.name}
-                </Link>
-                <p className="text-xs text-muted-foreground">{i.parentName ? `${i.typeLabel} in ${i.parentName}` : i.typeLabel}</p>
-              </TableCell>
-              <TableCell className="py-3">
-                <ChangeChip word={word.word} label={word.label} />
-              </TableCell>
-              <TableCell className="py-3 font-mono text-xs">{i.versionLabel}</TableCell>
-              <TableCell className={cn("py-2.5", !showProgress && "pr-4")}>
-                <StatusBadge {...validationSpec(i.validation)} />
-              </TableCell>
-              {showProgress ? (
-                <TableCell className="py-3 pr-4 whitespace-normal">
-                  <ProgressWord progress={i.progress} label={i.progressLabel} message={i.progressMessage} />
-                </TableCell>
-              ) : null}
-            </TableRow>
-          );
-        })}
-      </TableBody>
-    </Table>
-  );
-}
-
-const PROGRESS_STYLE: Record<NonNullable<PlanItemView["progress"]>, string> = {
-  waiting: "text-muted-foreground",
-  writing: "text-info-fg",
-  verifying: "text-info-fg",
-  done: "text-success-fg",
-  skipped: "text-warning-fg",
-  failed: "text-destructive-fg",
+const PROGRESS_TONE: Record<NonNullable<PlanItemView["progress"]>, NonNullable<ChangeRow["progress"]>["tone"]> = {
+  waiting: "muted",
+  writing: "info",
+  verifying: "info",
+  done: "success",
+  skipped: "warning",
+  failed: "destructive",
 };
 
-function ProgressWord({ progress, label, message }: { progress: PlanItemView["progress"]; label: string | null; message: string | null }) {
-  if (!progress) return <span className="text-[13px] text-muted-foreground">Waiting</span>;
+/** A changes-list row: "Instructions · v8 → v9", the status direction, a skip, and while applying the item's progress. */
+function changeRow(i: PlanItemView, showProgress: boolean): ChangeRow {
+  const skipped = Boolean(i.conflict) && i.progress !== "done";
+  const word = itemChangeWord(i.change, { skipped, status: i.changeBadge.label === "Set Inactive" ? "INACTIVE" : "ACTIVE" });
+  const type = i.parentName ? `${i.typeLabel} in ${i.parentName}` : i.typeLabel;
+  return {
+    id: i.id,
+    name: i.name,
+    detail: [type, i.versionLabel, i.change === "status" && !skipped ? CHANGE_WORDS[word.word].label : null].filter(Boolean).join(" · "),
+    note: skipped ? CHANGE_WORDS["skip-live-changed"].label : null,
+    validation: i.validation,
+    added: i.added ?? 0,
+    removed: i.removed ?? 0,
+    progress: showProgress
+      ? {
+          word: i.progressLabel ?? "Waiting",
+          tone: i.progress ? PROGRESS_TONE[i.progress] : "muted",
+          message: i.progressMessage && (i.progress === "failed" || i.progress === "skipped") ? i.progressMessage : null,
+        }
+      : null,
+  };
+}
+
+const CHIP_TONE = { warning: "text-warning-fg", destructive: "text-destructive-fg" } as const;
+
+/** One summary fact: "25 content updates", or a sentence ("Validation passed, 5 warnings"). */
+function SummaryChip({ n, one, many, text, icon, tone, title }: { n?: number; one?: string; many?: string; text?: string; icon?: ReactNode; tone?: keyof typeof CHIP_TONE; title?: string }) {
   return (
-    <div className="max-w-56 text-[13px]">
-      <span className={cn("font-medium", PROGRESS_STYLE[progress])}>{label}</span>
-      {message && (progress === "failed" || progress === "skipped") ? <p className="text-xs break-words text-muted-foreground">{message}</p> : null}
-    </div>
+    <span title={title} className="inline-flex items-center gap-1.5 rounded-lg border bg-card px-2.5 py-1 text-[13px]">
+      {icon}
+      {n !== undefined ? <span className={cn("font-semibold tabular-nums", tone && CHIP_TONE[tone])}>{n}</span> : null}
+      {n !== undefined ? (n === 1 ? one : many) : text}
+    </span>
   );
 }
 
