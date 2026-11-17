@@ -22,6 +22,10 @@ describe("tree marks", () => {
     const opts = { changelogPath: "reference/CHANGELOG.md", validationPath: "reference/VALIDATION.json" };
     expect(tree.filter((f) => isGeneratedFile(f, opts)).map((f) => f.path)).toEqual(["skills/triage.zip", "memory/runbooks/INDEX.md", "reference/CHANGELOG.md", "reference/VALIDATION.json"]);
     expect(isGeneratedFile({ path: "reference/CHANGELOG.md", role: "non-asset" }, { changelogPath: null, validationPath: null })).toBe(false);
+    // An Agent Space folder's descriptor is the asset's metadata: editable. The folder index stays built.
+    const folders = { ...opts, descriptor: "_asset.json" };
+    expect(isGeneratedFile({ path: "skill/triage/_asset.json", role: "manifest" }, folders)).toBe(false);
+    expect(isGeneratedFile({ path: "INDEX.json", role: "manifest" }, folders)).toBe(true);
   });
 
   it("finds the file a result is about: its package path, the path inside the asset, then the asset's main file", () => {

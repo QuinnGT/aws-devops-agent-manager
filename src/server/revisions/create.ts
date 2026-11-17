@@ -9,6 +9,8 @@ import type { HistoryRepo } from "@/server/git/history-repo";
 import { fillTemplate, releaseTagName } from "@/server/history/layout";
 import type { JobContext } from "@/server/jobs/registry";
 import { readSnapshotsAtCommit } from "@/server/package-io/history";
+import { readImportForRevision } from "@/server/package-io/to-revision";
+import { PackageIoError } from "@/server/package-io/types";
 import { exportPackageZip } from "@/server/packages/export";
 import { snapshotsToDesiredAssets } from "@/server/packages/live";
 import type { PackageContents } from "@/server/packages/types";
@@ -18,8 +20,10 @@ import type { Space } from "@/server/spaces/queries";
 import { buildPassedAtHead, runRevisionBuild, toRevisionBuild } from "./build";
 import { layoutOf, liveRefs, readContext, syncBeforeRevision, workerContext } from "./context";
 import { checkRevisionName, isDuplicateRevisionName, releaseNameFor, releaseNameTaken, revisionBranch, revisionNameKey, revisionPackageDir, revisionPackageName } from "./names";
+import { importOverlayEdits } from "./import-overlay";
 import { packageFileChanges, readRevisionPackage } from "./package-files";
 import { getRevisionById, updateRevision, type RevisionRow } from "./queries";
+import { saveRevisionHandler } from "./save";
 import { RevisionError, type RevisionActor, type RevisionBase } from "./types";
 
 /**
@@ -35,6 +39,12 @@ import { RevisionError, type RevisionActor, type RevisionBase } from "./types";
  * made from an earlier revision, that revision's package is the export base,
  * so its non-asset files (README, evaluation/, reference/, shared sections)
  * carry over.
+ *
+ * From a package import ("Fix in a revision", `importId`): base "live" in the
+ * import's layout, and once the branch exists the job makes the first save,
+ * the uploaded files laid over the base by asset (importOverlayEdits). The
+ * revision's diff then shows what the import would change, and its build
+ * lists every error by file.
  */
 
 const blankToNull = (v: unknown) => (typeof v === "string" && v.trim() === "" ? null : v);
@@ -45,6 +55,8 @@ export const createRevisionRequest = z.object({
   /** Layout from package-layouts.yaml; default: the policy's defaultLayout */
   layout: z.preprocess(blankToNull, z.string().trim().nullable().default(null)),
   note: z.preprocess(blankToNull, z.string().trim().nullable().default(null)),
+  /** A package import of this space to start from: base live, the import's layout */
+  importId: z.preprocess(blankToNull, z.string().uuid("Choose an import.").nullable().default(null)),
 });
 
 export type CreateRevisionRequest = z.input<typeof createRevisionRequest>;
@@ -73,7 +85,9 @@ export async function prepareCreateRevision(space: Space, request: CreateRevisio
   }
   const req = parsed.data;
   const { repo, policy } = await readContext(space);
-  const layout = layoutOf(policy, req.layout);
+  if (req.importId && req.base.kind !== "live") throw new RevisionError("bad-request", "A revision from a package import starts from the live space.", { base: "Start from the live space." });
+  const fromImport = req.importId ? await importForRevision(space, req.importId, policy) : null;
+  const layout = layoutOf(policy, fromImport?.layout ?? req.layout);
   if (req.note && req.note.length > policy.revisions.create.noteMaxChars) {
     throw new RevisionError("bad-request", `Keep the note to ${policy.revisions.create.noteMaxChars} characters or fewer.`, { note: "The note is too long." });
   }
@@ -106,7 +120,9 @@ export async function prepareCreateRevision(space: Space, request: CreateRevisio
     baseRef = rel.id;
   } else {
     if (!(await repo.head())) throw new RevisionError("no-history", "The history repository has no commits yet. Run a sync first.");
-    base = { kind: "live", label: policy.revisions.create.baseLabels.live };
+    base = fromImport
+      ? { kind: "live", label: fillTemplate(policy.revisions.create.baseLabels.import, { fileName: fromImport.fileName }), fromImport: { importId: fromImport.importId, fileName: fromImport.fileName, sha256: fromImport.sha256, changeId: randomUUID() } }
+      : { kind: "live", label: policy.revisions.create.baseLabels.live };
     baseRef = "HEAD";
   }
 
@@ -135,6 +151,60 @@ export async function prepareCreateRevision(space: Space, request: CreateRevisio
   return row;
 }
 
+/** The import a revision starts from, checked as the package-io service would (RevisionError for the form). */
+async function importForRevision(space: Space, importId: string, policy: Parameters<typeof readImportForRevision>[2]): Promise<{ importId: string; fileName: string; sha256: string; layout: string }> {
+  try {
+    const { row, layout } = await readImportForRevision(space, importId, policy);
+    return { importId: row.id, fileName: row.fileName, sha256: row.sha256, layout: layout.name };
+  } catch (err) {
+    if (err instanceof PackageIoError) throw new RevisionError(err.code === "not-found" ? "not-found" : "bad-request", err.message, { importId: err.message }, err.results);
+    throw err;
+  }
+}
+
+/**
+ * The first save of a revision started from a package import: the uploaded
+ * files laid over the branch's first commit. Runs once: the save's change ID
+ * is fixed in the base, so a rerun finds its commit (saveRevisionHandler).
+ */
+async function seedFromImport(row: RevisionRow, ctx: JobContext): Promise<void> {
+  const from = row.base.kind === "live" ? row.base.fromImport : undefined;
+  if (!from || !row.createdCommit) return;
+  const { space, repo, policy } = await workerContext(row.spaceId);
+  let upload: Awaited<ReturnType<typeof readImportForRevision>>;
+  try {
+    upload = await readImportForRevision(space, from.importId, policy, { revisionId: row.id });
+  } catch (err) {
+    if (err instanceof PackageIoError) throw new RevisionError("bad-request", `The files of ${from.fileName} could not be added: ${err.message}`);
+    throw err;
+  }
+  if (upload.row.sha256 !== from.sha256) throw new RevisionError("bad-request", `The upload ${from.fileName} changed after the revision was started. Abandon this revision and start again.`);
+  const before = await readRevisionPackage(repo, row.createdCommit, row.packageDir, row.packageName);
+  const edits = importOverlayEdits(before, upload.contents, layoutOf(policy, row.layout), policy);
+  if (!edits.length) return;
+  const t = policy.revisions.create.importSave;
+  const stage = { ...ctx, progress: (fraction: number, message?: string) => ctx.progress(0.85 + fraction * 0.14, message) };
+  try {
+    await saveRevisionHandler(
+      {
+        revisionId: row.id,
+        changeId: from.changeId,
+        message: fillTemplate(t.message, { fileName: from.fileName }),
+        edits,
+        findingIds: [],
+        unlinkedReason: fillTemplate(t.reason, { fileName: from.fileName }),
+        expectedHead: null,
+        authorName: null,
+      },
+      stage,
+    );
+  } catch (err) {
+    // Every uploaded file already matches the base: the revision is the live space.
+    if (err instanceof RevisionError && err.code === "nothing-changed") return;
+    throw err;
+  }
+}
+
 export interface CreateRevisionDeps {
   /** Defaults to the sync module's syncSpace (tests pass a mock) */
   sync?: SyncSpaceFn;
@@ -158,7 +228,12 @@ export async function createRevisionHandler(input: z.output<typeof createRevisio
   const row = await getRevisionById(input.revisionId);
   if (!row) throw new RevisionError("not-found", "The revision no longer exists.");
   if (row.state !== "creating") {
-    if (row.createdCommit) return { revisionId: row.id, branch: row.branch, createdCommit: row.createdCommit, build: buildPassedAtHead(row.latestBuild, row.headCommit) ? "passed" : "failed", resumed: true };
+    if (row.createdCommit) {
+      // A rerun after the branch was made: finish the import's first save if it didn't land.
+      if (row.state === "open") await seedFromImport(row, ctx);
+      const now = (await getRevisionById(row.id)) ?? row;
+      return { revisionId: row.id, branch: row.branch, createdCommit: row.createdCommit, build: buildPassedAtHead(now.latestBuild, now.headCommit) ? "passed" : "failed", resumed: true };
+    }
     throw new RevisionError("not-open", `The revision is ${row.state}.`);
   }
   try {
@@ -204,8 +279,10 @@ async function createRevision(row: RevisionRow, ctx: JobContext, deps: CreateRev
     const check = runRevisionBuild(contents, { policy, layout, live: refs });
     const build = toRevisionBuild(check, existingHead, { maxResults: policy.revisions.pages.maxResults, extra: row.base.exportResults ?? [] });
     await updateRevision(row.id, { state: "open", stateReason: null, baseCommit: parent, createdCommit: existingHead, headCommit: existingHead, latestBuild: build });
+    await seedFromImport({ ...row, state: "open", createdCommit: existingHead }, ctx);
     await ctx.progress(1, "Revision created");
-    return { revisionId: row.id, branch: row.branch, createdCommit: existingHead, build: build.status, resumed: true };
+    const seeded = await getRevisionById(row.id);
+    return { revisionId: row.id, branch: row.branch, createdCommit: existingHead, build: seeded && buildPassedAtHead(seeded.latestBuild, seeded.headCommit) ? "passed" : build.status, resumed: true };
   }
 
   let commit: string;
@@ -262,6 +339,9 @@ async function createRevision(row: RevisionRow, ctx: JobContext, deps: CreateRev
     headCommit: createdCommit,
     latestBuild: build,
   });
+  await seedFromImport({ ...row, state: "open", createdCommit }, ctx);
+  const seeded = await getRevisionById(row.id);
+  if (seeded?.latestBuild) build.status = seeded.latestBuild.status;
 
   if (policy.revisions.pushBranches) {
     try {

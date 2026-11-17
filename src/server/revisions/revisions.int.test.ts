@@ -483,3 +483,55 @@ describe("page loaders", () => {
     );
   });
 });
+
+describe("a revision from a package import", () => {
+  it("lays the import's files over the live space as the first save, and holds the import until abandoned", async () => {
+    const { importPackage, createPlanFromImport } = await import("@/server/package-io/service");
+    const { loadImportDetail } = await import("@/server/package-io/loaders");
+    const { zipPackage } = await import("@/server/packages/build");
+    const { syntheticPackage } = await import("./test-support");
+    const upload = syntheticPackage("fix-me", {
+      "skills/triage/SKILL.md": "---\nname: triage\ndescription: Triage steps\n---\nBetter triage body\n",
+      "skills/probe/SKILL.md": "---\nname: probe\ndescription: Probe steps\n---\nProbe body\n",
+      "instructions/incident-triage.md": null,
+    });
+    const imported = await importPackage(space, { upload: { kind: "zip", fileName: "fix-me.zip", bytes: zipPackage(upload) }, layout: "strict-instructions" }, alex);
+    expect(imported.status).toBe("analyzed");
+
+    await expect(requestCreateRevision(space, { name: "from-import", base: { kind: "release", releaseId: releaseV1 }, importId: imported.importId }, alex)).rejects.toMatchObject({ code: "bad-request" });
+    const { revisionId } = await requestCreateRevision(space, { name: "from-import", base: { kind: "live" }, layout: "instruction-folders", importId: imported.importId }, alex);
+    const result = await createRevisionHandler({ revisionId }, ctx(), { sync: syncMock });
+    const r = await row(revisionId);
+    // The import's layout wins over the request's, and the base names the file.
+    expect(r).toMatchObject({ state: "open", baseKind: "live", layout: "strict-instructions" });
+    expect(r.base).toMatchObject({ kind: "live", label: "the live space and fix-me.zip", fromImport: { importId: imported.importId, fileName: "fix-me.zip" } });
+    expect(r.headCommit).not.toBe(r.createdCommit);
+    expect(result.build).toBe(r.latestBuild!.status);
+
+    // One save on top of the live export: the changed and the new skill. The triage instructions the package leaves out stay.
+    const changes = await db().select().from(revisionChanges).where(eq(revisionChanges.revisionId, revisionId));
+    expect(changes).toHaveLength(1);
+    expect(changes[0]).toMatchObject({ message: "Add the files of fix-me.zip", findingIds: [], parentCommit: r.createdCommit, commit: r.headCommit });
+    expect(changes[0]!.unlinkedReason).toContain("fix-me.zip");
+    expect(changes[0]!.changedPaths).toEqual(expect.arrayContaining(["skills/probe/SKILL.md", "skills/triage/SKILL.md"]));
+    expect(changes[0]!.changedPaths).not.toContain("instructions/incident-triage.md");
+    const files = (await repo.listTree(r.headCommit!, r.packageDir)).map((e) => e.path.slice(r.packageDir.length + 1));
+    expect(files).toEqual(expect.arrayContaining(["instructions/incident-triage.md", "skills/probe/SKILL.md"]));
+    const [head] = await repo.log({ ref: r.headCommit!, maxCount: 1 });
+    expect(head!.trailers["Revision-Change-Id"]).toBe((r.base as { fromImport: { changeId: string } }).fromImport.changeId);
+
+    // A rerun adds nothing.
+    expect(await createRevisionHandler({ revisionId }, ctx(), { sync: syncMock })).toMatchObject({ resumed: true });
+    expect(await db().select().from(revisionChanges).where(eq(revisionChanges.revisionId, revisionId))).toHaveLength(1);
+
+    // While the revision holds the import, the import can't make its own plan or a second revision.
+    expect((await loadImportDetail(space, imported.importId))!.revision).toMatchObject({ current: { id: revisionId, name: "from-import" }, canStart: false });
+    expect((await loadImportDetail(space, imported.importId))!.plan).toMatchObject({ canCreate: false, reason: expect.stringContaining("revision from-import") });
+    await expect(createPlanFromImport(space, imported.importId, alex)).rejects.toMatchObject({ code: "in-revision" });
+    await expect(requestCreateRevision(space, { name: "from-import-2", base: { kind: "live" }, importId: imported.importId }, alex)).rejects.toThrow(/already in revision from-import/);
+
+    // Abandoning the revision gives the import back.
+    await abandonRevision(space, revisionId, alex);
+    expect((await loadImportDetail(space, imported.importId))!.revision).toEqual({ current: null, canStart: true, reason: null });
+  });
+});

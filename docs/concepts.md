@@ -125,3 +125,5 @@ A **revision** is a proposed new version of the instruction package, built from 
 5. **Apply and release.** When the plan is applied with no failed item, the app tags a release with the revision's name. Verification then shows whether the agent used the new text.
 
 "Export package zip" downloads the package from any revision, release or commit. The same zip can be imported again with Plans, then "Import package".
+
+An import with problems to fix can move to a revision: "Fix in a revision" on the import starts a revision from the live space whose first save is the uploaded files. The revision shows every pending change, each error and warning by file, and makes the plan once its checks pass.

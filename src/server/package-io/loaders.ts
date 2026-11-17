@@ -11,6 +11,7 @@ import type { ValidationResult } from "@/server/validation/types";
 import { validationFailedText } from "./format";
 import { listExportRefs, type ExportRef } from "./history";
 import { defaultPlanTitle, getImportRow, type PackageImportRow } from "./service";
+import { importRevision, type ImportRevision } from "./to-revision";
 import {
   FILE_ROLES,
   IMPORT_ACTIONS,
@@ -152,6 +153,12 @@ export interface ImportDetail {
    * the selection (planned, rejected, deleted upload), or null.
    */
   planTypes: { types: PlanTypeOption[]; unattributedErrors: number; blockOnErrors: boolean; stateReason: string | null };
+  /**
+   * "Fix in a revision": the revision the import was moved to, if any, and
+   * whether it can move now (read, not planned, the upload still stored;
+   * validation errors don't stop it). The page still checks `revisions.build`.
+   */
+  revision: { current: ImportRevision | null; canStart: boolean; reason: string | null };
 }
 
 export interface PlanTypeOption {
@@ -278,7 +285,7 @@ function byTypeOrder<T extends { assetType: string }>(policy: Pick<Policy, "asse
 }
 
 /** Shape stored results for the detail page. Pure; exported for tests. */
-export function buildImportDetail(row: PackageImportRow, policy: Pick<Policy, "assetTypes" | "packageLayouts" | "packageIo">, space: { alias: string } = { alias: "" }): ImportDetail {
+export function buildImportDetail(row: PackageImportRow, policy: Pick<Policy, "assetTypes" | "packageLayouts" | "packageIo">, space: { alias: string } = { alias: "" }, revision: ImportRevision | null = null): ImportDetail {
   const summary = row.mappingSummary as ImportSummary | null;
   const results = (row.results as ImportResults | null) ?? { items: [], files: [], untouched: [], validation: [], historyCommit: null, analyzedAt: "" };
 
@@ -310,7 +317,7 @@ export function buildImportDetail(row: PackageImportRow, policy: Pick<Policy, "a
   const failedAssets = new Set(results.validation.filter((r) => r.level === "error" && r.assetKey).map((r) => r.assetKey)).size;
   const typeDirs = layout ? layoutTypeDirs(layout) : {};
   const groups = byTypeOrder(policy, [...itemGroups.values()]);
-  const state = planState(row, summary, policy, base.uploadAvailable, failedAssets);
+  const state = planState(row, summary, policy, base.uploadAvailable, failedAssets, revision);
   const stateReason = state.canCreate || state.validation ? null : state.reason;
   const options = planTypeOptions(policy, groups, results, typeDirs);
   return {
@@ -336,10 +343,21 @@ export function buildImportDetail(row: PackageImportRow, policy: Pick<Policy, "a
     layouts: {
       candidates: results.layouts ?? [],
       choice: results.layoutChoice ?? null,
-      canChange: (row.status === "analyzed" || row.status === "failed") && base.uploadAvailable,
+      canChange: (row.status === "analyzed" || row.status === "failed") && base.uploadAvailable && !revision,
     },
     planTypes: { ...options, blockOnErrors: policy.packageIo.import.blockPlanOnErrors, stateReason },
+    revision: { current: revision, ...revisionStart(row, base.uploadAvailable, revision) },
   };
+}
+
+/** Whether the import can move to a revision; validation errors don't stop it, since fixing them is what the revision is for. */
+function revisionStart(row: PackageImportRow, uploadAvailable: boolean, revision: ImportRevision | null): { canStart: boolean; reason: string | null } {
+  const no = (reason: string) => ({ canStart: false, reason });
+  if (revision) return no(`This import is in revision ${revision.name}.`);
+  if (row.status === "planned" || row.status === "planning") return no("A plan was already created from this import.");
+  if (row.status !== "analyzed") return no("The package could not be read. Fix it and upload it again.");
+  if (!uploadAvailable) return no("The uploaded package was deleted after its retention period. Upload it again.");
+  return { canStart: true, reason: null };
 }
 
 /**
@@ -352,8 +370,10 @@ function planState(
   policy: Pick<Policy, "packageIo">,
   uploadAvailable: boolean,
   failedAssets: number,
+  revision: ImportRevision | null = null,
 ): { canCreate: boolean; reason: string | null; validation?: boolean } {
   const no = (reason: string) => ({ canCreate: false, reason });
+  if (revision) return no(`This import was moved to revision ${revision.name}. Create the plan from the revision.`);
   if (row.status === "planned") return no("A plan was already created from this import.");
   if (row.status === "planning") return no("A plan is being created from this import.");
   if (row.status === "rejected") return no("The upload was rejected. Fix the package and upload it again.");
@@ -369,8 +389,8 @@ function planState(
 export async function loadImportDetail(space: Space, importId: string): Promise<ImportDetail | null> {
   const row = await getImportRow(space.id, importId);
   if (!row) return null;
-  const { policy } = await policyForSpace(space);
-  return buildImportDetail(row, policy, space);
+  const [{ policy }, revision] = await Promise.all([policyForSpace(space), importRevision(space.id, row.id)]);
+  return buildImportDetail(row, policy, space, revision);
 }
 
 export interface ExportOptions {

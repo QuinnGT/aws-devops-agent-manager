@@ -124,6 +124,28 @@ export function nameProblem(name: string, rule: { pattern: string; hint: string;
   return re.test(name) ? null : rule.hint;
 }
 
+/** A revision name from an uploaded file's name ("revised-instructions-v2.4.2.zip" -> "revised-instructions-v2.4.2"), for "Fix in a revision". The person can change it. */
+export function revisionNameFromFile(fileName: string, maxLength: number): string {
+  const stem = fileName.replace(/\.zip$/i, "");
+  const name = stem
+    .replace(/[^A-Za-z0-9._-]+/g, "-")
+    .slice(0, maxLength)
+    .replace(/^[^A-Za-z0-9]+|[^A-Za-z0-9]+$/g, "");
+  return name || "import";
+}
+
+/** `name`, or the first of name-2, name-3, ... that no revision has (compared ignoring case), within `maxLength`. */
+export function freeRevisionName(name: string, taken: readonly string[], maxLength: number): string {
+  const used = new Set(taken.map((t) => t.toLowerCase()));
+  if (!used.has(name.toLowerCase())) return name;
+  for (let n = 2; n < 1000; n++) {
+    const suffix = `-${n}`;
+    const candidate = `${name.slice(0, maxLength - suffix.length)}${suffix}`;
+    if (!used.has(candidate.toLowerCase())) return candidate;
+  }
+  return name;
+}
+
 export interface PlanButtonInput {
   /** The server's answer (loadRevisionDetail actions.createPlan) */
   server: { available: boolean; reason: string | null };

@@ -8,7 +8,12 @@ import type { ValidationResult } from "@/server/validation/types";
 
 /** What a revision's package was derived from. */
 export type RevisionBase = (
-  | { kind: "live"; label: string }
+  | {
+      kind: "live";
+      label: string;
+      /** Started from a package import: its uploaded files are the revision's first save (changeId) */
+      fromImport?: { importId: string; fileName: string; sha256: string; changeId: string };
+    }
   | {
       kind: "release";
       releaseId: string;

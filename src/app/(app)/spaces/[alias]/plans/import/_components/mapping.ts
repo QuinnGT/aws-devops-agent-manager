@@ -190,7 +190,8 @@ export function plainResult(policy: MessagePolicy, r: ValidationResult): PlainRe
     const rule = policy.assetTypes.assetTypes[assetType]?.references.find((x) => x.key === refKey);
     const target = rule ? (policy.assetTypes.assetTypes[rule.assetType]?.noun?.one ?? policy.assetTypes.assetTypes[rule.assetType]?.label.toLowerCase() ?? rule.assetType) : "an asset";
     const article = rule ? (/^[aeiou]/i.test(target) ? "an " : "a ") : "";
-    return { level: r.level, text: `${name} uses ${article}${target} that isn't in this package or this space.`, details };
+    const after = r.level === "error" ? "" : " The plan leaves this reference out.";
+    return { level: r.level, text: `${name} uses ${article}${target} that isn't in this package or this space.${after}`, details };
   }
   // The key in front of the message, as a label; the package's own key prefix ("CHAT: ") and asset IDs left out.
   const key = r.assetKey ? r.assetKey.slice(r.assetKey.indexOf(":") + 1) : null;
@@ -221,4 +222,93 @@ export function selectionBlocker(args: { types: readonly PlanTypeOption[]; selec
   }
   if (chosen.every((t) => t.changes === 0)) return "Nothing to import: every selected asset matches live.";
   return null;
+}
+
+/** One problem shown under an asset's row: the plain sentence once, how many results say it, and each engine message for Details. */
+export interface RowNote {
+  level: ValidationResult["level"];
+  text: string;
+  count: number;
+  details: string[];
+  /** The file line, when the check knows it and the sentence doesn't say it */
+  line?: number;
+  /** A one-click fix waits in a revision (the result carries a fix) */
+  fixable?: boolean;
+}
+
+/** Results a left-out row already explains in its Change cell. */
+const LEFT_OUT_CODES = new Set(["import.duplicate-left-out", "import.cannot-create-left-out"]);
+
+/**
+ * The problems of a row of the type table, errors first, identical sentences
+ * once with a count. `underRow` leaves out what a left-out row's Change cell
+ * already says, and the asset's name the row already shows. Pure.
+ */
+export function rowNotes(policy: MessagePolicy, row: Pick<TypeRow, "results" | "change">, opts: { underRow?: boolean } = {}): RowNote[] {
+  const notes = new Map<string, RowNote>();
+  for (const r of row.results) {
+    if (opts.underRow && row.change.word === "left-out" && LEFT_OUT_CODES.has(r.code)) continue;
+    const p = plainResult(policy, r);
+    if (opts.underRow && r.assetKey) p.text = withoutName(p.text, resultAssetName(policy, r.assetKey));
+    const k = `${p.level}\0${p.text}`;
+    const n = notes.get(k);
+    const line = r.line && !p.text.includes(`line ${r.line}`) ? r.line : undefined;
+    if (n) {
+      n.count++;
+      n.details.push(p.details);
+      if (r.fix) n.fixable = true;
+    } else notes.set(k, { level: p.level, text: p.text, count: 1, details: [p.details], ...(line ? { line } : {}), ...(r.fix ? { fixable: true } : {}) });
+  }
+  const all = [...notes.values()];
+  return [...all.filter((n) => n.level === "error"), ...all.filter((n) => n.level !== "error")];
+}
+
+/** "Chat instructions: AGENTS.md has 325 lines" -> "AGENTS.md has 325 lines"; "x uses a store" -> "Uses a store". */
+function withoutName(text: string, name: string): string {
+  if (text.startsWith(`${name}: `)) return text.slice(name.length + 2);
+  if (!text.startsWith(`${name} `)) return text;
+  const rest = text.slice(name.length + 1);
+  return rest.charAt(0).toUpperCase() + rest.slice(1);
+}
+
+/** The page's anchor for a row of the type table. */
+export function rowAnchor(key: string): string {
+  return `row-${key.replace(/[^A-Za-z0-9_-]+/g, "-")}`;
+}
+
+/** An asset (a row of the type table) with problems, for the side list: where its row is and how many errors and warnings it has. */
+export interface AssetProblems {
+  assetType: string;
+  rowKey: string;
+  /** The row's place in its type's table, to show enough rows */
+  index: number;
+  name: string;
+  errors: number;
+  warnings: number;
+}
+
+/**
+ * The import's problems by asset, for the side list: every row of every type
+ * table with results (assets with errors first, then by type order as the
+ * groups come), and the results no row holds (about the whole package). Pure.
+ */
+export function problemsByAsset(
+  policy: MessagePolicy,
+  d: Pick<ImportDetail, "validation" | "layout" | "files" | "groups"> & Partial<Pick<ImportDetail, "leftOut">>,
+): { assets: AssetProblems[]; other: ValidationResult[] } {
+  const placed = new Set<ValidationResult>();
+  const assets: AssetProblems[] = [];
+  for (const g of d.groups) {
+    typeRows(d, g).forEach((row, index) => {
+      const notes = rowNotes(policy, row);
+      for (const r of row.results) placed.add(r);
+      if (!notes.length) return;
+      const count = (level: ValidationResult["level"]) => notes.filter((n) => n.level === level).reduce((s, n) => s + n.count, 0);
+      // A left-out row is named by its package folder, which tells it apart from the asset that shares its name.
+      const name = row.change.word === "left-out" || row.asset === null ? row.file.replace(/\/$/, "") : assetLabel(policy, { assetType: g.assetType, name: row.asset });
+      assets.push({ assetType: g.assetType, rowKey: row.key, index, name, errors: count("error"), warnings: count("warning") });
+    });
+  }
+  const other = allResults(d).filter((r) => !placed.has(r));
+  return { assets: [...assets.filter((a) => a.errors > 0), ...assets.filter((a) => a.errors === 0)], other };
 }

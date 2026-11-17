@@ -18,7 +18,7 @@ export interface RevisionPlanArgs {
   spaceId: string;
   spaceAlias: string;
   revision: { id: string; name: string };
-  analysis: Pick<Analysis, "desired" | "results" | "summary">;
+  analysis: Pick<Analysis, "desired" | "results" | "summary"> & { check?: Pick<Analysis["check"], "results"> };
   /** Changes, oldest first */
   changes: readonly Pick<ChangelogChange, "message" | "findingIds">[];
   findings: ReadonlyMap<string, Pick<ChangelogFinding, "id" | "title" | "auditName" | "incidentId">>;
@@ -93,7 +93,7 @@ export function revisionPlanInput(args: RevisionPlanArgs): CreatePlanInput {
 
 /** The plan item of a planned asset: the analysis's item, with the base version and the conflict in its note. */
 function scopedItem(analysis: RevisionPlanArgs["analysis"], p: PlannedAsset, base: { kind: "live" | "release"; name?: string | null }): PlanItemInput {
-  const [item] = planItemsFromAnalysis({ desired: [analysis.desired[p.index]!], results: { ...analysis.results, items: [analysis.results.items[p.index]!] } });
+  const [item] = planItemsFromAnalysis({ desired: [analysis.desired[p.index]!], results: { ...analysis.results, items: [analysis.results.items[p.index]!] }, check: analysis.check });
   const conflict = conflictSentence(p, base, "this plan");
   return {
     ...item!,

@@ -81,7 +81,7 @@ export function SaveDialog({
   const [sentPaths, setSentPaths] = useState<string[]>([]);
   const [pending, start] = useTransition();
 
-  const counts = useMemo(() => files.map((f) => ({ path: f.path, isNew: f.base === null, ...lineCounts(f.base, f.text) })), [files]);
+  const counts = useMemo(() => files.map((f) => ({ path: f.path, isNew: f.base === null, deleted: f.deleted === true, ...lineCounts(f.base, f.deleted ? "" : f.text) })), [files]);
   const matches = useMemo(() => searchFindings(findings, q), [findings, q]);
   // Findings that name an edited file or asset come first, then the rest.
   const ranked = useMemo(() => rankFindings(matches, files.map((f) => f.path)), [matches, files]);
@@ -112,7 +112,7 @@ export function SaveDialog({
       const r = await saveAction({
         revisionId,
         message,
-        edits: files.map((f) => ({ path: f.path, content: f.text })),
+        edits: files.map((f) => ({ path: f.path, content: f.deleted ? null : f.text })),
         findingIds: chosen,
         unlinkedReason: chosen.length ? null : reason.trim() || null,
         expectedHead,
@@ -181,6 +181,7 @@ export function SaveDialog({
                     <dt className="font-mono text-xs leading-5 break-all text-muted-foreground">{c.path}</dt>
                     <dd>
                       {c.isNew ? <span className="mr-2 text-xs text-success-fg">New file</span> : null}
+                      {c.deleted ? <span className="mr-2 text-xs text-destructive-fg">Deleted</span> : null}
                       <DiffCounts added={c.added} removed={c.removed} />
                     </dd>
                   </div>

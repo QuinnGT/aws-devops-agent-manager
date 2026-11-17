@@ -10,6 +10,8 @@ import { assetKeyOf, type DesiredAsset, type DesiredFile, type LiveAssetRef, typ
 import type { Policy } from "@/server/policy";
 import { canonicalize, isUtf8Text, sha256Hex } from "@/server/sync/content";
 import { computeIdentity, type IdentityLookup } from "@/server/validation/identity";
+import type { ValidationResult } from "@/server/validation/types";
+import { joinAnd } from "./format";
 import { FILE_ROLES, type ImportFileEntry, type ImportItem, type ImportItemFile, type ImportResults, type ImportSummary, type LeftOutItem, type UntouchedAsset } from "./types";
 
 /**
@@ -116,19 +118,29 @@ export function analyzeImport(input: AnalyzeInput): Analysis {
 }
 
 /** Plan items for the create and update items of an analysis. Unchanged items are left out. */
-export function planItemsFromAnalysis(a: Pick<Analysis, "desired" | "results">): PlanItemInput[] {
+export function planItemsFromAnalysis(a: Pick<Analysis, "desired" | "results"> & { check?: Pick<PackageCheck, "results"> }): PlanItemInput[] {
   const out: PlanItemInput[] = [];
   a.results.items.forEach((item, i) => {
     if (item.action === "unchanged") return;
     const d = a.desired[i]!;
-    out.push({
-      desired: d,
-      baseVersion: null,
-      baseUpdatedAt: null,
-      note: item.matchedBy === "asset-id" && item.source ? `From the package folder ${item.source}, matched by its asset ID.` : item.source ? `From the package file ${item.source}.` : undefined,
-    });
+    const from = item.matchedBy === "asset-id" && item.source ? `From the package folder ${item.source}, matched by its asset ID.` : item.source ? `From the package file ${item.source}.` : undefined;
+    const note = [from, droppedReferencesNote(a.check?.results ?? [], item.assetKey)].filter(Boolean).join(" ");
+    out.push({ desired: d, baseVersion: null, baseUpdatedAt: null, note: note || undefined });
   });
   return out;
+}
+
+/** "Leaves out 3 references in memory_stores that aren't in this package or this space.": the optional references targetPackageAssets dropped from this asset. */
+export function droppedReferencesNote(results: readonly ValidationResult[], assetKey: string): string | null {
+  const byKey = new Map<string, number>();
+  for (const r of results) {
+    if (r.code !== "reference.not-in-package" || r.level !== "warning" || r.assetKey !== assetKey) continue;
+    const key = r.path?.replace(/^metadata\./, "") ?? "references";
+    byKey.set(key, (byKey.get(key) ?? 0) + 1);
+  }
+  if (!byKey.size) return null;
+  const parts = [...byKey].map(([key, n]) => `${n} ${n === 1 ? "reference" : "references"} in ${key}`);
+  return `Leaves out ${joinAnd(parts)} that ${byKey.size === 1 && [...byKey.values()][0] === 1 ? "isn't" : "aren't"} in this package or this space.`;
 }
 
 export function summarize(check: Pick<PackageCheck, "ok" | "results">, results: Pick<ImportResults, "items" | "files" | "untouched" | "leftOut">, packageName: string | null): ImportSummary {

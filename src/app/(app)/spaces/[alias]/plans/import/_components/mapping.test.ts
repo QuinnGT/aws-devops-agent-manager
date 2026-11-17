@@ -3,7 +3,7 @@ import type { ImportDetail, ImportItem, ImportItemGroup } from "@/server/package
 import type { PlanTypeOption } from "@/server/package-io/loaders";
 import { getAppPolicy } from "@/server/policy";
 import { typeErrorsText, typePlanCountsText, validationFailedText } from "@/server/package-io/format";
-import { breakdown, nonAssetSummary, plainResult, relativeTo, resultAssetName, selectionBlocker, typeFileCount, typeForPath, typeResults, typeRows, withAssetKey } from "./mapping";
+import { breakdown, nonAssetSummary, plainResult, problemsByAsset, relativeTo, resultAssetName, rowAnchor, rowNotes, selectionBlocker, typeFileCount, typeForPath, typeResults, typeRows, withAssetKey } from "./mapping";
 
 const typeDirs = { agents_md: "instructions", skill: "skills", memory_store: "memory", memory: "memory" };
 
@@ -177,6 +177,10 @@ describe("import messages in plain words", () => {
     expect(r.text).not.toMatch(/ki-|reference\.|metadata\./);
     expect(r.details).toContain(id);
     expect(r.details).toContain("reference.not-in-package · metadata.memory_stores");
+    // An optional reference is a warning: the sentence says the plan drops it.
+    expect(plainResult(policy, { level: "warning", code: "reference.not-in-package", message: "x", assetKey: "custom_agent:pr-change-analyzer", path: "metadata.memory_stores" }).text).toBe(
+      "pr-change-analyzer uses a memory store that isn't in this package or this space. The plan leaves this reference out.",
+    );
   });
 
   it("names instruction files by their agent type's label and keeps asset IDs out of the sentence", () => {
@@ -203,5 +207,49 @@ describe("import counts, one definition per number", () => {
     expect(typePlanCountsText({ changes: 48, unchanged: 0, leftOut: 5 })).toBe("48 changes, 5 left out");
     expect(typePlanCountsText({ changes: 2, unchanged: 20, leftOut: 0 })).toBe("2 changes, 20 unchanged");
     expect(typePlanCountsText({ changes: 1, unchanged: 0, leftOut: 0 })).toBe("1 change");
+  });
+});
+
+describe("problems by asset", () => {
+  const policy = getAppPolicy().policy;
+  const ref = (id: string) => ({ level: "warning" as const, code: "reference.not-in-package", message: `memory_stores names memory store ${id}, which is not in this package or in this space, so the plan leaves this reference out.`, assetKey: "agents_md:CHAT", path: "metadata.memory_stores" });
+  const d = {
+    ...detail,
+    groups: [group("agents_md", [generic, chat])],
+    validation: {
+      errors: [{ level: "error" as const, code: "metadata.schema", message: "metadata.name: bad", assetKey: "agents_md:CHAT" }],
+      warnings: [...detail.validation.warnings, ref("ki-1"), ref("ki-2")],
+    },
+  };
+
+  it("lists each row's problems once with a count, errors first", () => {
+    const rows = typeRows(d, d.groups[0]!);
+    const notes = rowNotes(policy, rows.find((r) => r.key === "agents_md:CHAT")!);
+    expect(notes.map((n) => [n.level, n.count])).toEqual([
+      ["error", 1],
+      ["warning", 1],
+      ["warning", 2],
+    ]);
+    expect(notes[2]!.details.join(" ")).toContain("ki-2");
+    // Under its row, the sentence drops the asset name the row already shows.
+    expect(rowNotes(policy, rows.find((r) => r.key === "agents_md:CHAT")!, { underRow: true }).map((n) => n.text)).toEqual([
+      "metadata.name: bad",
+      "AGENTS.md has 193 lines; about 120 lines is recommended.",
+      // agents_md has no store references, so the fixture's reference names "an asset".
+      "Uses an asset that isn't in this package or this space. The plan leaves this reference out.",
+    ]);
+    expect(rowNotes(policy, rows.find((r) => r.key === "agents_md:GENERIC")!)).toEqual([]);
+  });
+
+  it("puts assets with errors first, links each to its row, and keeps results no row holds apart", () => {
+    const p = problemsByAsset(policy, d);
+    expect(p.assets.map((a) => [a.rowKey, a.errors, a.warnings])).toEqual([
+      ["agents_md:CHAT", 1, 3],
+      ["file:instructions/learning.md", 0, 1],
+    ]);
+    expect(p.assets[0]).toMatchObject({ assetType: "agents_md", index: 1, name: "Chat instructions" });
+    // A memory with no row in these tables is about nothing on the page, so it stays in the plain list.
+    expect(p.other.map((r) => r.assetKey)).toEqual(["memory:verity/x"]);
+    expect(rowAnchor("file:instructions/learning.md")).toBe("row-file-instructions-learning-md");
   });
 });

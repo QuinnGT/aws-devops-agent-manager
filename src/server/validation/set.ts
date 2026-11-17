@@ -40,13 +40,6 @@ export function validateAssetSet(desired: readonly DesiredAsset[], ctx: AssetSet
   const out: ValidationResult[] = [];
   const liveById = new Map(live.map((a) => [a.assetId, a]));
 
-  if (ctx.perAsset !== false) {
-    for (const d of desired) {
-      const prev = d.assetId ? liveById.get(d.assetId) : undefined;
-      out.push(...validateDraftAsset(d, { policy, previous: prev ? { metadata: prev.metadata } : undefined }));
-    }
-  }
-
   // Identities of referenced assets by ID: desired assets win over live ones.
   const byId = new Map<string, { assetType: string; metadata: Record<string, unknown>; refs?: DesiredAsset["refs"] }>();
   for (const a of live) byId.set(a.assetId, a);
@@ -63,6 +56,17 @@ export function validateAssetSet(desired: readonly DesiredAsset[], ctx: AssetSet
     members.set(`live:${a.assetId}`, { assetType: a.assetType, assetId: a.assetId, metadata: a.metadata, identity });
     if (identity !== null) liveByIdentity.set(`${a.assetType}\0${identity}`, a.assetId);
   }
+
+  if (ctx.perAsset !== false) {
+    for (const d of desired) {
+      const prev = d.assetId ? liveById.get(d.assetId) : undefined;
+      // An asset without an ID whose identity is live is an update (as below), so the create-only rules don't apply to it.
+      const identity = d.assetId ? null : computeIdentity(policy, d, lookup);
+      const replaces = identity === null ? undefined : liveByIdentity.get(`${d.assetType}\0${identity}`);
+      out.push(...validateDraftAsset(replaces ? { ...d, assetId: replaces } : d, { policy, previous: prev ? { metadata: prev.metadata } : undefined }));
+    }
+  }
+
   desired.forEach((d, i) => {
     const identity = computeIdentity(policy, d, lookup);
     let replaces = d.assetId;

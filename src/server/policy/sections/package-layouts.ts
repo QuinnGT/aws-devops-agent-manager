@@ -130,6 +130,8 @@ export const packageLayout = z.object({
       storeFile: z.string(),
       indexFile: z.string().nullable().default(null),
       storeFrontmatter: fmMap,
+      /** STORE.md frontmatter key holding the store's asset ID (written on export, read as the source asset ID); null: none */
+      storeAssetIdKey: z.string().nullable().default(null),
       memoryFrontmatter: fmMap,
       storeContentFile: z.string(),
       memoryFile: z.string().default("{basename}.md"),

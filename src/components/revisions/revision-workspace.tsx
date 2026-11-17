@@ -1,12 +1,13 @@
 "use client";
 
-import { CircleCheck, CirclePlus, Download, File, FileText, Folder, FolderOpen, GitBranch, GitPullRequest, Lock, Microscope, Save } from "lucide-react";
+import { CircleCheck, CirclePlus, CircleX, Download, File, FileText, Folder, FolderOpen, GitBranch, GitPullRequest, Lock, Microscope, PenLine, RotateCcw, Save, Trash2, TriangleAlert, Wrench } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useId, useMemo, useRef, useState, useTransition, type ReactNode } from "react";
 import { DisabledReason } from "@/components/common/disabled-reason";
 import { PageHeader } from "@/components/common/page-header";
 import { StatusBadge } from "@/components/common/status-badge";
 import { formatTime, type ViewerZone } from "@/components/common/time-format";
+import { sortValidation } from "@/components/common/status-words";
 import { ValidationList } from "@/components/common/validation-list";
 import { EditorArea } from "@/components/drafts/draft-editor";
 import { measureText } from "@/components/drafts/editor-state";
@@ -26,7 +27,7 @@ import type { FileDiff } from "@/server/assets/diff";
 import type { PackageFolder, PageFileMark, SaveFinding } from "@/server/revisions/views";
 import type { ValidationResult } from "@/server/validation/types";
 import { AbandonButton, type AbandonRevisionAction } from "./abandon-button";
-import { editedFiles, isEdited, markSaved, newFileProblem, splitIncident, type OpenFile } from "./editor-state";
+import { applyQuickFix, deleteOpenFile, editedFiles, isEdited, markSaved, newFileProblem, renameOpenFile, restoreOpenFile, splitIncident, type OpenFile } from "./editor-state";
 import { SaveDialog, type SaveOutcome, type SaveRevisionAction, type SaveRules } from "./save-dialog";
 import { SavesList, type SaveRow } from "./saves-list";
 import { FileDiffPanel } from "./file-diff-panel";
@@ -98,8 +99,9 @@ const TAB = "h-9 flex-none rounded-t-md rounded-b-none px-2.5 text-[13px] group-
 const PILL = "rounded-full bg-muted px-1.5 font-mono text-xs font-medium text-muted-foreground tabular-nums";
 const EMPTY_FINDINGS_SHOWN = 2;
 
-/** "Error", "Built" or "Edited" for a tree row (text, never color alone); errors win. */
-function markOf(mark: PageFileMark | undefined, unsaved: boolean): { label: string; className: string } | null {
+/** "Deleted", "Error", "Built" or "Edited" for a tree row (text, never color alone); a pending delete, then errors, win. */
+function markOf(mark: PageFileMark | undefined, unsaved: boolean, deleted = false): { label: string; className: string } | null {
+  if (deleted) return { label: "Deleted", className: "text-destructive-fg" };
   if (mark?.errors) return { label: "Error", className: "text-destructive-fg" };
   if (mark?.generated) return { label: "Built", className: "text-muted-foreground" };
   if (unsaved || mark?.edited) return { label: "Edited", className: "text-info-fg" };
@@ -133,6 +135,11 @@ export function RevisionWorkspace(p: RevisionWorkspaceProps) {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saveOpen, setSaveOpen] = useState(false);
   const [newOpen, setNewOpen] = useState(false);
+  const [renaming, setRenaming] = useState<string | null>(null);
+  // One-click fixes applied since the last build, a line to jump to, and why a fix couldn't apply.
+  const [fixed, setFixed] = useState<ReadonlySet<ValidationResult>>(new Set());
+  const [focusAt, setFocusAt] = useState<{ path: string; line: number; key: number } | null>(null);
+  const [fixError, setFixError] = useState<string | null>(null);
   const [localRun, setLocalRun] = useState<string | null>(null);
   const [planError, setPlanError] = useState<string | null>(null);
   const [planning, startPlan] = useTransition();
@@ -155,9 +162,12 @@ export function RevisionWorkspace(p: RevisionWorkspaceProps) {
         const res = await fetch(`/api/spaces/${encodeURIComponent(p.alias)}/revisions/${encodeURIComponent(p.revision.id)}/file?path=${encodeURIComponent(path)}`, { cache: "no-store" });
         if (!res.ok) throw new Error(res.status === 404 ? "The file isn't on the revision branch any more. Reload the page." : "The file couldn't be read. Try again.");
         const body = (await res.json()) as { path: string; head: string; view: FileView };
-        setFiles((fs) => (fs[path] && isEdited(fs[path]!) ? fs : { ...fs, [path]: { path, base: body.view.text ?? null, text: body.view.text ?? "", kind: body.view.kind, size: body.view.size, head: body.head } }));
+        const file = { path, base: body.view.text ?? null, text: body.view.text ?? "", kind: body.view.kind, size: body.view.size, head: body.head };
+        setFiles((fs) => (fs[path] && isEdited(fs[path]!) ? fs : { ...fs, [path]: file }));
+        return file;
       } catch (err) {
         setLoadError(err instanceof Error ? err.message : "The file couldn't be read.");
+        return null;
       } finally {
         setLoading((l) => (l === path ? null : l));
       }
@@ -169,6 +179,7 @@ export function RevisionWorkspace(p: RevisionWorkspaceProps) {
   // rewritten them (change record, indexes, shared sections); the open one is read now.
   const afterBuild = useCallback(() => {
     setFiles((fs) => Object.fromEntries(Object.entries(fs).filter(([, f]) => isEdited(f))));
+    setFixed(new Set());
     if (current && p.tree.some((t) => t.path === current)) void fetchFile(current);
     router.refresh();
   }, [current, fetchFile, p.tree, router]);
@@ -205,14 +216,15 @@ export function RevisionWorkspace(p: RevisionWorkspaceProps) {
   }, [dirty]);
 
   const open = useCallback(
-    (path: string, opts: { focus?: boolean } = {}) => {
+    // `inEditor`: the file is already in the editor's state (a fix just made it), so it isn't read from the branch.
+    (path: string, opts: { focus?: boolean; inEditor?: boolean } = {}) => {
       setCurrent(path);
       setLoadError(null);
       const url = new URL(window.location.href);
       url.searchParams.set("file", path);
       window.history.replaceState(window.history.state, "", url);
       if (opts.focus) setTab("edit");
-      if (!files[path]) void fetchFile(path);
+      if (!files[path] && !opts.inEditor) void fetchFile(path);
     },
     [fetchFile, files, setTab],
   );
@@ -222,7 +234,7 @@ export function RevisionWorkspace(p: RevisionWorkspaceProps) {
   const onSaved = (outcome: SaveOutcome, paths: string[]) => {
     if (outcome.kind === "error") return;
     setFiles((fs) => markSaved(fs, paths) as typeof fs);
-    setAnnounce(outcome.kind === "passed" ? "Saved. The build passed." : `Saved. The build has ${outcome.errors} errors.`);
+    setAnnounce(outcome.kind === "passed" ? "Saved. The build passed." : `Saved. The build has ${outcome.errors} ${outcome.errors === 1 ? "error" : "errors"}.`);
   };
 
   const allPaths = useMemo(() => [...new Set([...p.tree.map((t) => t.path), ...Object.keys(files)])], [p.tree, files]);
@@ -268,6 +280,44 @@ export function RevisionWorkspace(p: RevisionWorkspaceProps) {
 
   const buildBadge = building ? REVISION_STATUS.building : p.build ? (p.build.status === "passed" ? { tone: "success" as const, icon: CircleCheck, label: "Passed" } : { tone: "destructive" as const, icon: REVISION_STATUS.buildFailed.icon, label: "Failed" }) : null;
   const resultFile = useMemo(() => new Map((p.build?.results ?? []).map((r, i) => [r, p.resultFiles[i] ?? null] as const)), [p.build, p.resultFiles]);
+
+  const focusSeq = useRef(0);
+  const goToLine = (path: string, line: number, inEditor = false) => {
+    open(path, { focus: true, inEditor });
+    focusSeq.current += 1;
+    setFocusAt({ path, line, key: focusSeq.current });
+  };
+
+  // Apply a result's fix to its file in the editor (loading it first); it is saved with the next save.
+  const applyFix = async (r: ValidationResult) => {
+    const fix = r.fix;
+    const target = fix?.from ?? resultFile.get(r) ?? null;
+    if (!fix || !target) return;
+    setFixError(null);
+    const loaded = files[target] ?? (await fetchFile(target));
+    if (!loaded) return;
+    const out = applyQuickFix({ ...files, [target]: loaded }, target, fix);
+    if ("error" in out) {
+      setFixError(out.error);
+      return;
+    }
+    setFiles(out.files as typeof files);
+    setFixed((s) => new Set(s).add(r));
+    if (out.line) goToLine(out.path, out.line, true);
+    else open(out.path, { focus: true, inEditor: true });
+    setAnnounce(`${fix.label}: done in the editor. Save to check it.`);
+  };
+
+  const fixControl = (r: ValidationResult) => {
+    if (!r.fix || !editable) return null;
+    if (fixed.has(r)) return <span className="text-xs text-success-fg">Fixed in the editor. Save to check it.</span>;
+    return (
+      <Button variant="outline" size="sm" onClick={() => void applyFix(r)}>
+        <Wrench aria-hidden />
+        {r.fix.label}
+      </Button>
+    );
+  };
   const shownFindings = showAllFindings ? p.findings : p.findings.slice(0, EMPTY_FINDINGS_SHOWN);
 
   const header = (
@@ -332,6 +382,8 @@ export function RevisionWorkspace(p: RevisionWorkspaceProps) {
 
   const file = current ? files[current] : undefined;
   const mark = current ? p.marks[current] : undefined;
+  // The last build's results about the open file, errors first.
+  const fileProblems = current ? sortValidation((p.build?.results ?? []).filter((r) => resultFile.get(r) === current)) : [];
   const readOnlyFile = !editable || mark?.generated === true;
   const meter = file && file.kind === "text" && mark?.instructions ? measureText(file.text, p.limits) : null;
 
@@ -373,6 +425,18 @@ export function RevisionWorkspace(p: RevisionWorkspaceProps) {
         <span className="font-mono text-[13px] break-all text-muted-foreground">{current ?? "No file"}</span>
         {editable ? (
           <div className="flex flex-wrap items-center gap-2">
+            {file && file.kind === "text" && !mark?.generated && !file.deleted ? (
+              <>
+                <Button variant="ghost" size="sm" onClick={() => setRenaming(file.path)}>
+                  <PenLine aria-hidden />
+                  Rename
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => setFiles((fs) => deleteOpenFile(fs, file.path) as typeof fs)}>
+                  <Trash2 aria-hidden />
+                  Delete
+                </Button>
+              </>
+            ) : null}
             {dirty ? <span className="text-[12.5px] text-warning-fg">{edited.length === 1 && edited[0]!.path === current ? "Unsaved changes" : `Unsaved changes in ${edited.length} ${edited.length === 1 ? "file" : "files"}`}</span> : null}
             {dirty ? (
               <Button size="sm" onClick={() => setSaveOpen(true)} disabled={building}>
@@ -399,6 +463,35 @@ export function RevisionWorkspace(p: RevisionWorkspaceProps) {
         </>
       ) : null}
       {mark?.generated ? <p className="border-b bg-muted/40 px-4 py-2 text-xs text-muted-foreground">This file is built from the package. Edit its sources instead.</p> : null}
+      {fixError ? (
+        <p role="alert" className="border-b px-4 py-2 text-xs text-destructive-fg">
+          {fixError}
+        </p>
+      ) : null}
+      {fileProblems.length ? (
+        <ul aria-label="Problems in this file" className="grid gap-2 border-b bg-muted/30 px-4 py-2.5 text-[13px]">
+          {fileProblems.map((r, i) => {
+            const Icon = r.level === "error" ? CircleX : TriangleAlert;
+            return (
+              <li key={i} className="grid grid-cols-[16px_minmax(0,1fr)] gap-2">
+                <Icon className={cn("mt-0.5 size-4", r.level === "error" ? "text-destructive-fg" : "text-warning-fg")} aria-hidden />
+                <div className="grid min-w-0 gap-1">
+                  <p className="break-words">
+                    <span className="sr-only">{r.level === "error" ? "Error: " : "Warning: "}</span>
+                    {r.line && current ? (
+                      <button type="button" onClick={() => goToLine(current, r.line!)} className="mr-1.5 font-mono text-xs underline underline-offset-4">
+                        Line {r.line}
+                      </button>
+                    ) : null}
+                    {r.message}
+                  </p>
+                  {fixControl(r) ? <div>{fixControl(r)}</div> : null}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
       {loadError ? (
         <p role="alert" className="px-4 py-3 text-[13px] text-destructive-fg">
           {loadError}
@@ -409,12 +502,29 @@ export function RevisionWorkspace(p: RevisionWorkspaceProps) {
         <p className="px-4 py-3 text-[13px] text-muted-foreground" aria-live="polite">
           {loading === current ? `Opening ${current}…` : `${current} isn't open yet.`}
         </p>
+      ) : file.deleted ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-[13px]">
+          <p>This file is deleted from the package when you save.</p>
+          <Button variant="outline" size="sm" onClick={() => setFiles((fs) => restoreOpenFile(fs, file.path) as typeof fs)}>
+            <RotateCcw aria-hidden />
+            Restore
+          </Button>
+        </div>
       ) : file.kind === "binary" ? (
         <p className="px-4 py-3 text-[13px] text-muted-foreground">This file is binary ({file.size.toLocaleString("en-US")} bytes) and can&apos;t be edited here.</p>
       ) : file.kind === "too-large" ? (
         <p className="px-4 py-3 text-[13px] text-muted-foreground">This file is too large to open here ({file.size.toLocaleString("en-US")} bytes). Download the package zip to read it.</p>
       ) : (
-        <EditorArea key={file.path} path={file.path} value={file.text} onChange={(v) => setText(file.path, v)} readOnly={readOnlyFile} />
+        <EditorArea
+          key={file.path}
+          path={file.path}
+          value={file.text}
+          onChange={(v) => setText(file.path, v)}
+          readOnly={readOnlyFile}
+          lineNumbers
+          marks={fileProblems.flatMap((r) => (r.line ? [{ line: r.line, level: r.level, text: r.message }] : []))}
+          focus={focusAt?.path === file.path ? focusAt : null}
+        />
       )}
       <p className="border-t px-4 py-2.5 text-xs text-muted-foreground">
         {editable ? "Plain markdown. Saving commits to the revision branch and runs the build." : p.can.save && p.saveBlocked ? `Read only. ${p.saveBlocked}` : "Read only."}
@@ -440,11 +550,13 @@ export function RevisionWorkspace(p: RevisionWorkspaceProps) {
                 fileLink={(r) => {
                   const f = resultFile.get(r);
                   return f ? (
-                    <button type="button" onClick={() => open(f, { focus: true })} className="inline-flex min-h-6 items-center text-left font-mono text-xs break-all underline underline-offset-4">
+                    <button type="button" onClick={() => (r.line ? goToLine(f, r.line) : open(f, { focus: true }))} className="inline-flex min-h-6 items-center text-left font-mono text-xs break-all underline underline-offset-4">
                       {f}
+                      {r.line ? `, line ${r.line}` : ""}
                     </button>
                   ) : null;
                 }}
+                action={fixControl}
               />
             ) : null}
             {p.build.omitted ? <p className="border-t px-4 py-2 text-xs text-muted-foreground">{p.build.omitted} more results are not shown.</p> : null}
@@ -611,6 +723,20 @@ export function RevisionWorkspace(p: RevisionWorkspaceProps) {
           }}
         />
       ) : null}
+      {editable && renaming ? (
+        <NewFileDialog
+          open
+          onOpenChange={(o) => (o ? null : setRenaming(null))}
+          existing={allPaths}
+          folder={renaming}
+          rename
+          onCreate={(path) => {
+            setFiles((fs) => renameOpenFile(fs, renaming, path) as typeof fs);
+            setCurrent(path);
+            setTab("edit");
+          }}
+        />
+      ) : null}
     </div>
   );
 }
@@ -634,7 +760,7 @@ function FileTree({
       {folders.map((folder) => {
         const rows = folder.files.map((path) => {
           const f = files[path];
-          const m = markOf(marks[path], Boolean(f && (isEdited(f) || f.base === null)));
+          const m = markOf(marks[path], Boolean(f && (isEdited(f) || f.base === null)), f?.deleted === true);
           const name = folder.name ? path.slice(folder.name.length + 1) : path;
           const Icon = marks[path]?.generated ? Lock : name.endsWith(".md") ? FileText : File;
           return (
@@ -678,7 +804,8 @@ function FileTree({
   );
 }
 
-function NewFileDialog({ open, onOpenChange, existing, folder, onCreate }: { open: boolean; onOpenChange: (o: boolean) => void; existing: string[]; folder: string; onCreate: (path: string) => void }) {
+/** "New file", or with `rename` "Rename file" (the path starts as the file's own; the move happens on save). */
+function NewFileDialog({ open, onOpenChange, existing, folder, onCreate, rename = false }: { open: boolean; onOpenChange: (o: boolean) => void; existing: string[]; folder: string; onCreate: (path: string) => void; rename?: boolean }) {
   const id = useId();
   const [path, setPath] = useState(folder);
   const [touched, setTouched] = useState(false);
@@ -693,8 +820,8 @@ function NewFileDialog({ open, onOpenChange, existing, folder, onCreate }: { ope
         onOpenChange(false);
       }}
     >
-      <CirclePlus aria-hidden />
-      Add file
+      {rename ? <PenLine aria-hidden /> : <CirclePlus aria-hidden />}
+      {rename ? "Rename" : "Add file"}
     </Button>
   );
   return (
@@ -711,8 +838,10 @@ function NewFileDialog({ open, onOpenChange, existing, folder, onCreate }: { ope
       <DialogContent className="sm:max-w-[480px]">
         <form className="grid gap-4" onSubmit={(e) => e.preventDefault()}>
           <DialogHeader>
-            <DialogTitle>New file</DialogTitle>
-            <DialogDescription>The file is added to the package when you save. The layout decides which folders become assets.</DialogDescription>
+            <DialogTitle>{rename ? "Rename file" : "New file"}</DialogTitle>
+            <DialogDescription>
+              {rename ? "The file moves to the new path when you save. A memory takes its name from its path, so renaming its file renames the memory." : "The file is added to the package when you save. The layout decides which folders become assets."}
+            </DialogDescription>
           </DialogHeader>
           <div className="grid gap-1.5">
             <Label htmlFor={id}>Path in the package</Label>

@@ -54,6 +54,8 @@ A `Dialog` (nothing is written to the space).
 - **Facts:** Folder (mono), Repository (mono).
 - **Buttons:** "Cancel" and "Create revision" (primary, GitBranch). Creating runs a worker job (export the base as a package, commit, create the branch) and shows `JobProgress` in the dialog, then opens the revision page.
 - **Disabled reasons:** "Enter a name." / "The history repository isn't set up for this space." (with a link to Space settings for Admins) / "There are no releases yet." (only disables the release option).
+- **Width:** the form is one `minmax(0,1fr)` column, so a long release or layout label truncates in its `Select` instead of widening the dialog past 540 px.
+- **Import mode** ("Fix in a revision" on an import, `package-import.md`): title "Fix in a revision"; description "Starts a revision from the live space with the files of <file name>. There you can edit the files, see each error and warning by file, and create the plan when the checks pass. Nothing changes in the space until a plan is applied."; the name prefilled from the file name (without `.zip`, other characters as hyphens); Start from is one fixed card "The live space, with the files of the import" with the last sync line and "Creating it syncs the space first, then adds the files of <file name> as the first save."; Layout is the import's, as text, with "The import was read with this layout, so the revision keeps it."
 
 ## States
 

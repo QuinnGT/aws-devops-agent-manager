@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { changelogPreview, diffGroups, editedFiles, fileTerms, lineCounts, markSaved, namesText, newFileProblem, rankFindings, saveButtonReason, searchFindings, splitIncident, type OpenFile } from "./editor-state";
-import { branchPreview, folderPreview, matchesName, matchesState, nameProblem, parseRevisionListParams, planButtonReason, planHint, revisionListQuery, revisionWord, usualLayoutText } from "./words";
+import { applyQuickFix, changelogPreview, deleteOpenFile, diffGroups, editedFiles, fileTerms, lineCounts, markSaved, namesText, newFileProblem, rankFindings, renameOpenFile, restoreOpenFile, saveButtonReason, searchFindings, splitIncident, type OpenFile } from "./editor-state";
+import { branchPreview, folderPreview, matchesName, matchesState, nameProblem, parseRevisionListParams, planButtonReason, planHint, freeRevisionName, revisionListQuery, revisionNameFromFile, revisionWord, usualLayoutText } from "./words";
 
 const file = (path: string, base: string | null, text: string): OpenFile => ({ path, base, text, kind: "text", size: text.length });
 
@@ -48,6 +48,17 @@ describe("New revision dialog", () => {
     expect(branchPreview("revision/{spaceAlias}/{name}", "demo", "")).toBe("revision/demo/<name>");
     expect(folderPreview("packages/{spaceAlias}/{package}", "demo", "v2.4")).toBe("packages/demo/v2.4/");
   });
+
+  it("names a revision from an import's file name, within the rule", () => {
+    expect(revisionNameFromFile("revised-instructions-v2.4.2.zip", 64)).toBe("revised-instructions-v2.4.2");
+    expect(nameProblem(revisionNameFromFile("My Package (final).ZIP", 64), rule)).toBeNull();
+    expect(revisionNameFromFile("My Package (final).ZIP", 64)).toBe("My-Package-final");
+    expect(revisionNameFromFile("--.zip", 64)).toBe("import");
+    expect(revisionNameFromFile(`${"a".repeat(70)}.zip`, 64)).toHaveLength(64);
+    expect(freeRevisionName("v2.4.2", ["V2.4.2", "v2.4.2-2"], 64)).toBe("v2.4.2-3");
+    expect(freeRevisionName("v2.4.2", [], 64)).toBe("v2.4.2");
+    expect(freeRevisionName("a".repeat(64), ["a".repeat(64)], 64)).toBe(`${"a".repeat(62)}-2`);
+  });
 });
 
 describe("Create plan button", () => {
@@ -70,6 +81,22 @@ describe("editor state", () => {
     expect(editedFiles(files).map((f) => f.path)).toEqual(["b.md", "new.md"]);
     expect(editedFiles(markSaved(files, ["b.md", "new.md"]))).toEqual([]);
     expect(editedFiles({ "z.bin": { ...file("z.bin", null, ""), kind: "binary" } })).toEqual([]);
+  });
+
+  it("deletes, restores and renames files, and a save of a delete drops it", () => {
+    const files = { "roles/payment_gw.md": file("roles/payment_gw.md", "x\n", "x\n"), "new.md": file("new.md", null, "n\n") };
+    const deleted = deleteOpenFile(files, "roles/payment_gw.md");
+    expect(editedFiles(deleted).map((f) => [f.path, f.deleted ?? false])).toEqual([
+      ["new.md", false],
+      ["roles/payment_gw.md", true],
+    ]);
+    // A file added in this tab just goes.
+    expect(deleteOpenFile(files, "new.md")).not.toHaveProperty("new.md");
+    expect(editedFiles(restoreOpenFile(deleted, "roles/payment_gw.md")).map((f) => f.path)).toEqual(["new.md"]);
+    const renamed = renameOpenFile(files, "roles/payment_gw.md", "roles/payment-gw.md");
+    expect(renamed["roles/payment-gw.md"]).toMatchObject({ base: null, text: "x\n", kind: "text" });
+    expect(renamed["roles/payment_gw.md"]).toMatchObject({ deleted: true });
+    expect(markSaved(renamed, ["roles/payment_gw.md", "roles/payment-gw.md"])).not.toHaveProperty("roles/payment_gw.md");
   });
 
   it("counts the lines of an edit", () => {
@@ -170,5 +197,22 @@ describe("header and New revision words", () => {
     expect(usualLayoutText({ source: "import" }, "Nov 13")).toBe("Usual for this space: its last package import (Nov 13) used it.");
     expect(usualLayoutText({ source: "release", release: "v1.3" }, null)).toBe("Usual for this space: release v1.3 used it.");
     expect(usualLayoutText({ source: "default" }, null)).toBe("The app's default layout. This space has no package import or revision release yet.");
+  });
+});
+
+describe("one-click fixes", () => {
+  const file = (path: string, text: string): OpenFile => ({ path, base: text, text, kind: "text", size: text.length });
+  it("replaces the lines the build saw, renames, and refuses a file that changed", () => {
+    const text = "---\nname: roles/payment_gw\ndescription: Gateway.\n---\n# x\n";
+    const files = { "memory/p/roles/payment_gw.md": file("memory/p/roles/payment_gw.md", text) };
+    const fix = { label: "Rename to roles/payment-gw", edits: [{ kind: "replace-lines" as const, line: 2, count: 1, expect: "name: roles/payment_gw", text: "name: roles/payment-gw" }, { kind: "rename" as const, to: "memory/p/roles/payment-gw.md" }] };
+    const r = applyQuickFix(files, "memory/p/roles/payment_gw.md", fix);
+    if ("error" in r) throw new Error(r.error);
+    expect(r.path).toBe("memory/p/roles/payment-gw.md");
+    expect(r.line).toBe(2);
+    expect(r.files["memory/p/roles/payment-gw.md"]!.text).toContain("name: roles/payment-gw\n");
+    expect(r.files["memory/p/roles/payment_gw.md"]!.deleted).toBe(true);
+    const edited = { "memory/p/roles/payment_gw.md": { ...files["memory/p/roles/payment_gw.md"]!, text: text.replace("payment_gw\n", "payment-x\n") } };
+    expect(applyQuickFix(edited, "memory/p/roles/payment_gw.md", fix)).toEqual({ error: "The file changed since the last build. Save it to check it again." });
   });
 });

@@ -167,6 +167,7 @@ export function packageIoStatus(code: PackageIoError["code"]): number {
     case "no-history":
     case "upload-expired":
     case "already-planned":
+    case "in-revision":
       return 409;
     case "checks-failed":
     case "not-plannable":

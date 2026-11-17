@@ -48,6 +48,10 @@ export interface NewRevisionDialogProps {
   triggerLabel?: string;
   /** Names of the space's revisions, compared ignoring case (revisions.yaml name.uniqueIgnoringCase) */
   takenNames?: string[];
+  /** "Fix in a revision" on an import: starts from the live space in the import's layout (`defaultLayout`), with its files as the first save */
+  fromImport?: { fileName: string; defaultName: string; nameNote?: string };
+  /** The trigger button's look; default the primary button */
+  triggerVariant?: "default" | "outline";
 }
 
 /** "v1.2 (latest) · Nov 13, 1:36 PM · 49 assets": a release as the closed Select shows it. */
@@ -64,8 +68,8 @@ export function NewRevisionDialog(p: NewRevisionDialogProps) {
   const router = useRouter();
   const ids = { name: useId(), nameHelp: useId(), nameError: useId(), from: useId(), release: useId(), releaseNote: useId(), layout: useId(), layoutHelp: useId() };
   const [open, setOpen] = useState(false);
-  const [name, setName] = useState("");
-  const [base, setBase] = useState<"release" | "live">(p.releases.length ? "release" : "live");
+  const [name, setName] = useState(p.fromImport?.defaultName ?? "");
+  const [base, setBase] = useState<"release" | "live">(p.releases.length && !p.fromImport ? "release" : "live");
   const [releaseId, setReleaseId] = useState(p.releases[0]?.id ?? "");
   const [layout, setLayout] = useState(p.defaultLayout);
   const [result, setResult] = useState<ActionResult<{ runId: string; revisionId: string; name: string }> | null>(null);
@@ -123,22 +127,27 @@ export function NewRevisionDialog(p: NewRevisionDialogProps) {
       }}
     >
       <DialogTrigger asChild>
-        <Button>
+        <Button variant={p.triggerVariant ?? "default"}>
           <GitBranch aria-hidden />
           {p.triggerLabel ?? "New revision"}
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-[540px]">
+        {/* minmax(0,1fr) and min-w-0 keep a long layout or release label inside the dialog instead of widening it */}
         <form
-          className="grid gap-4"
+          className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4"
           onSubmit={(e) => {
             e.preventDefault();
             if (!reason && !running) submit();
           }}
         >
           <DialogHeader>
-            <DialogTitle>New revision</DialogTitle>
-            <DialogDescription>Starts a package on its own branch of the history repository. Nothing changes in the space until a plan is applied.</DialogDescription>
+            <DialogTitle>{p.fromImport ? "Fix in a revision" : "New revision"}</DialogTitle>
+            <DialogDescription>
+              {p.fromImport
+                ? `Starts a revision from the live space with the files of ${p.fromImport.fileName}. There you can edit the files, see each error and warning by file, and create the plan when the checks pass. Nothing changes in the space until a plan is applied.`
+                : "Starts a package on its own branch of the history repository. Nothing changes in the space until a plan is applied."}
+            </DialogDescription>
           </DialogHeader>
 
           <div className="grid gap-1.5">
@@ -162,6 +171,7 @@ export function NewRevisionDialog(p: NewRevisionDialogProps) {
             <p id={ids.nameHelp} className="text-xs text-muted-foreground">
               Letters, numbers, dots, hyphens and underscores, for example v2.4-onset. The branch is <span className="font-mono break-all">{branch}</span>, and applying its plan tags a release with this name.
             </p>
+            {p.fromImport?.nameNote && trimmed === p.fromImport.defaultName ? <p className="text-xs text-muted-foreground">{p.fromImport.nameNote}</p> : null}
             {shownNameError ? (
               <p id={ids.nameError} role="alert" className="text-xs text-destructive-fg">
                 {shownNameError}
@@ -169,49 +179,14 @@ export function NewRevisionDialog(p: NewRevisionDialogProps) {
             ) : null}
           </div>
 
-          <fieldset className="grid gap-2">
+          <fieldset className="grid min-w-0 gap-2">
             <legend id={ids.from} className="mb-2 text-sm font-medium">
               Start from
             </legend>
-            <label className={cn("flex items-start gap-3 rounded-lg border px-3.5 py-3", base === "release" && "border-2 border-foreground px-[13px] py-[11px]", !p.releases.length && "opacity-80")}>
-              <input type="radio" name="base" value="release" checked={base === "release"} onChange={() => setBase("release")} disabled={!p.releases.length || running} className="mt-1 size-4 accent-foreground" />
-              <span className="grid min-w-0 flex-1 gap-1.5">
-                <span className="text-sm font-semibold">A release</span>
-                {p.releases.length ? (
-                  <>
-                    <Select value={releaseId} onValueChange={setReleaseId} disabled={base !== "release" || running}>
-                      <SelectTrigger id={ids.release} aria-label="Release" className="w-full" aria-describedby={ids.releaseNote}>
-                        <SelectValue>{chosenRelease ? releaseLine(chosenRelease) : null}</SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        {p.releases.map((r) => (
-                          <SelectItem key={r.id} value={r.id} className="items-start py-1.5">
-                            <span className="grid min-w-0 gap-0.5">
-                              <span>
-                                {r.name}
-                                {r.latest ? <span className="ml-1.5 rounded-sm bg-muted px-1 text-xs font-medium text-muted-foreground">Latest</span> : null}
-                                <span className="text-muted-foreground"> · {r.detail}</span>
-                              </span>
-                              {r.note ? <span className="line-clamp-2 max-w-[420px] text-xs whitespace-normal text-muted-foreground">{r.note}</span> : null}
-                            </span>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <span id={ids.releaseNote} className="text-xs text-muted-foreground">
-                      {chosenRelease?.note ? chosenRelease.note : "This release has no note."}
-                    </span>
-                  </>
-                ) : (
-                  <span className="text-xs text-muted-foreground">There are no releases yet.</span>
-                )}
-              </span>
-            </label>
-            <label className={cn("flex items-start gap-3 rounded-lg border px-3.5 py-3", base === "live" && "border-2 border-foreground px-[13px] py-[11px]")}>
-              <input type="radio" name="base" value="live" checked={base === "live"} onChange={() => setBase("live")} disabled={running} className="mt-1 size-4 accent-foreground" />
-              <span className="grid min-w-0 flex-1 gap-0.5">
-                <span className="text-sm font-semibold">The live space</span>
-                <span className="text-xs text-muted-foreground">
+            {p.fromImport ? (
+              <div className="grid gap-0.5 rounded-lg border px-3.5 py-3">
+                <span className="text-sm font-semibold">The live space, with the files of the import</span>
+                <span className="text-xs break-words text-muted-foreground">
                   {p.live.lastSyncAt ? (
                     <>
                       As of the last sync, <RelativeTime value={p.live.lastSyncAt} />. {p.live.assets} {p.live.assets === 1 ? "asset" : "assets"}.
@@ -219,40 +194,101 @@ export function NewRevisionDialog(p: NewRevisionDialogProps) {
                   ) : (
                     "The space hasn't been synced yet."
                   )}{" "}
-                  Creating it syncs the space first.
+                  Creating it syncs the space first, then adds the files of <span className="font-mono break-all">{p.fromImport.fileName}</span> as the first save.
                 </span>
-              </span>
-            </label>
+              </div>
+            ) : (
+              <>
+                <label className={cn("flex items-start gap-3 rounded-lg border px-3.5 py-3", base === "release" && "border-2 border-foreground px-[13px] py-[11px]", !p.releases.length && "opacity-80")}>
+                  <input type="radio" name="base" value="release" checked={base === "release"} onChange={() => setBase("release")} disabled={!p.releases.length || running} className="mt-1 size-4 accent-foreground" />
+                  <span className="grid min-w-0 flex-1 gap-1.5">
+                    <span className="text-sm font-semibold">A release</span>
+                    {p.releases.length ? (
+                      <>
+                        <Select value={releaseId} onValueChange={setReleaseId} disabled={base !== "release" || running}>
+                          <SelectTrigger id={ids.release} aria-label="Release" className="w-full" aria-describedby={ids.releaseNote}>
+                            <SelectValue className="min-w-0">{chosenRelease ? <span className="truncate">{releaseLine(chosenRelease)}</span> : null}</SelectValue>
+                          </SelectTrigger>
+                          <SelectContent>
+                            {p.releases.map((r) => (
+                              <SelectItem key={r.id} value={r.id} className="items-start py-1.5">
+                                <span className="grid min-w-0 gap-0.5">
+                                  <span>
+                                    {r.name}
+                                    {r.latest ? <span className="ml-1.5 rounded-sm bg-muted px-1 text-xs font-medium text-muted-foreground">Latest</span> : null}
+                                    <span className="text-muted-foreground"> · {r.detail}</span>
+                                  </span>
+                                  {r.note ? <span className="line-clamp-2 max-w-[420px] text-xs whitespace-normal text-muted-foreground">{r.note}</span> : null}
+                                </span>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <span id={ids.releaseNote} className="text-xs text-muted-foreground">
+                          {chosenRelease?.note ? chosenRelease.note : "This release has no note."}
+                        </span>
+                      </>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">There are no releases yet.</span>
+                    )}
+                  </span>
+                </label>
+                <label className={cn("flex items-start gap-3 rounded-lg border px-3.5 py-3", base === "live" && "border-2 border-foreground px-[13px] py-[11px]")}>
+                  <input type="radio" name="base" value="live" checked={base === "live"} onChange={() => setBase("live")} disabled={running} className="mt-1 size-4 accent-foreground" />
+                  <span className="grid min-w-0 flex-1 gap-0.5">
+                    <span className="text-sm font-semibold">The live space</span>
+                    <span className="text-xs text-muted-foreground">
+                      {p.live.lastSyncAt ? (
+                        <>
+                          As of the last sync, <RelativeTime value={p.live.lastSyncAt} />. {p.live.assets} {p.live.assets === 1 ? "asset" : "assets"}.
+                        </>
+                      ) : (
+                        "The space hasn't been synced yet."
+                      )}{" "}
+                      Creating it syncs the space first.
+                    </span>
+                  </span>
+                </label>
+              </>
+            )}
             {base === "live" && p.live.stale ? (
               <Callout tone="warning" title={<span className="font-normal">The last sync was {p.live.lastSyncText ?? "never"}. Sync first so the revision starts from what is live.</span>} action={p.canSync ? <SyncNowButton alias={p.alias} /> : undefined} />
             ) : null}
           </fieldset>
 
-          <div className="grid gap-1.5">
-            <Label htmlFor={ids.layout}>Layout</Label>
-            <Select value={layout} onValueChange={setLayout} disabled={running}>
-              <SelectTrigger id={ids.layout} className="w-full" aria-describedby={ids.layoutHelp}>
-                <SelectValue>{chosenLayout ? `${chosenLayout.label}${chosenLayout.name === p.defaultLayout ? ` (${usualMark})` : ""}` : null}</SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {p.layouts.map((l) => (
-                  <SelectItem key={l.name} value={l.name} className="items-start py-1.5">
-                    <span className="grid min-w-0 gap-0.5">
-                      <span>
-                        {l.label}
-                        {l.name === p.defaultLayout ? <span className="text-muted-foreground"> ({usualMark})</span> : null}
+          {p.fromImport ? (
+            <div className="grid gap-1.5">
+              <span className="text-sm font-medium">Layout</span>
+              <p className="text-sm break-words">{chosenLayout?.label ?? layout}</p>
+              <p className="text-xs text-muted-foreground">The import was read with this layout, so the revision keeps it.</p>
+            </div>
+          ) : (
+            <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-1.5">
+              <Label htmlFor={ids.layout}>Layout</Label>
+              <Select value={layout} onValueChange={setLayout} disabled={running}>
+                <SelectTrigger id={ids.layout} className="w-full min-w-0" aria-describedby={ids.layoutHelp}>
+                  <SelectValue className="min-w-0">{chosenLayout ? <span className="truncate">{`${chosenLayout.label}${chosenLayout.name === p.defaultLayout ? ` (${usualMark})` : ""}`}</span> : null}</SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {p.layouts.map((l) => (
+                    <SelectItem key={l.name} value={l.name} className="items-start py-1.5">
+                      <span className="grid min-w-0 gap-0.5">
+                        <span>
+                          {l.label}
+                          {l.name === p.defaultLayout ? <span className="text-muted-foreground"> ({usualMark})</span> : null}
+                        </span>
+                        {l.description ? <span className="max-w-[440px] text-xs whitespace-normal text-muted-foreground">{l.description}</span> : null}
                       </span>
-                      {l.description ? <span className="max-w-[440px] text-xs whitespace-normal text-muted-foreground">{l.description}</span> : null}
-                    </span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p id={ids.layoutHelp} className="text-xs text-muted-foreground">
-              {chosenLayout?.description ?? "The base is written as a package in this layout."}
-              {layout === p.defaultLayout && p.usualLayoutText ? ` ${p.usualLayoutText}` : ""}
-            </p>
-          </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p id={ids.layoutHelp} className="text-xs text-muted-foreground">
+                {chosenLayout?.description ?? "The base is written as a package in this layout."}
+                {layout === p.defaultLayout && p.usualLayoutText ? ` ${p.usualLayoutText}` : ""}
+              </p>
+            </div>
+          )}
 
           <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-6 gap-y-1.5 text-[13px]">
             <dt className="text-muted-foreground">Folder</dt>

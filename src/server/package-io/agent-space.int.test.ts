@@ -8,7 +8,7 @@ import { zipPackage } from "@/server/packages/build";
 import { packageToDesiredAssets } from "@/server/packages/desired";
 import { getLayout } from "@/server/packages/layout";
 import { readPackageFolder } from "@/server/packages/read";
-import { agentSpacePackage, SPACE_IDS as I } from "@/server/packages/test-support/agent-space";
+import { agentSpacePackage, descriptor, SPACE_IDS as I } from "@/server/packages/test-support/agent-space";
 import { addOverlays } from "@/server/packages/test-support/policy";
 import type { CreatePlanInput } from "@/server/plans/contract";
 import { getAppPolicy } from "@/server/policy";
@@ -166,18 +166,19 @@ describe("import of an Agent Space folder package", () => {
 
   it("keeps the type choice from hiding errors in the chosen types", async () => {
     const other = await newSpace("folders-elsewhere", []);
-    const r = await importPackage(other, { upload: { kind: "zip", fileName: "elsewhere.zip", bytes: zip } }, actor);
-    // Nowhere in that space: the custom agent's store ID is an error, so the whole package is blocked...
+    const bad = descriptor(I.probe, "skill", { name: "Probe_Bad", description: "Use when probing.", agent_types: ["INCIDENT_RCA"], status: "ACTIVE", skill_type: "USER" });
+    const r = await importPackage(other, { upload: { kind: "zip", fileName: "elsewhere.zip", bytes: zipPackage(agentSpacePackage({ "skill/probe/_asset.json": bad })) } }, actor);
+    // A skill name the space refuses is an error, so the whole package is blocked...
     expect(r.summary.ok).toBe(false);
     await expect(createPlanFromImport(other, r.importId, actor)).rejects.toMatchObject({ code: "not-plannable" });
     await expect(createPlanFromImport(other, r.importId, actor, { includeTypes: ["custom_agent", "skill"] })).rejects.toMatchObject({
       code: "not-plannable",
-      results: [expect.objectContaining({ code: "reference.not-in-package", assetKey: "custom_agent:reviewer" })],
+      results: expect.arrayContaining([expect.objectContaining({ code: "metadata.schema", assetKey: "skill:Probe_Bad" })]),
     });
-    // ...and leaving custom agents out makes the rest plannable.
-    await createPlanFromImport(other, r.importId, actor, { includeTypes: ["agents_md", "skill", "memory_store", "memory"] });
+    // ...and leaving skills out, with the custom agent that names them, makes the rest plannable.
+    await createPlanFromImport(other, r.importId, actor, { includeTypes: ["agents_md", "memory_store", "memory"] });
     expect(plans.calls[0]!.items.every((i) => !i.desired.assetId)).toBe(true);
-    expect(plans.calls[0]!.notes![0]).toBe("Left out of this import by choice: custom agents (1 change) from the package.");
+    expect(plans.calls[0]!.notes![0]).toMatch(/^Left out of this import by choice: skills .* and custom agents /);
   });
 });
 

@@ -12,7 +12,8 @@ const ROW = "grid grid-cols-[16px_minmax(0,1fr)] gap-2 border-b px-4 py-2 text-[
  * "No errors or warnings" and the optional `emptyHelp` line. With
  * `fileLink`, a result about a file shows that link on its own line above
  * the message (and the path leaves the code line). With `codeAsDetails`,
- * the code line reads "Details: <code>".
+ * the code line reads "Details: <code>". With `action`, a result can show a
+ * control under its message (a one-click fix).
  */
 export function ValidationList({
   results,
@@ -20,11 +21,13 @@ export function ValidationList({
   className,
   fileLink,
   codeAsDetails = true,
+  action,
 }: {
   results: readonly ValidationResult[];
   emptyHelp?: ReactNode;
   className?: string;
   fileLink?: (r: ValidationResult) => ReactNode | null;
+  action?: (r: ValidationResult) => ReactNode | null;
   /** Show the rule code (and path) as a muted "Details: <code>" line, for readers who don't know the codes */
   codeAsDetails?: boolean;
 }) {
@@ -45,6 +48,7 @@ export function ValidationList({
         const error = r.level === "error";
         const Icon = error ? CircleX : TriangleAlert;
         const link = fileLink?.(r) ?? null;
+        const control = action?.(r) ?? null;
         return (
           <li key={`${i}:${r.code}`} className={ROW}>
             <Icon className={cn("mt-0.5 size-4", error ? "text-destructive-fg" : "text-warning-fg")} aria-hidden />
@@ -52,6 +56,7 @@ export function ValidationList({
               <span className="sr-only">{error ? "Error: " : "Warning: "}</span>
               {link ? <div className="break-all">{link}</div> : null}
               <p className="break-words">{r.message}</p>
+              {control ? <div className="mt-1">{control}</div> : null}
               {codeAsDetails ? (
                 <p className="text-xs break-all text-muted-foreground">
                   Details: <span className="font-mono">{r.code}</span>

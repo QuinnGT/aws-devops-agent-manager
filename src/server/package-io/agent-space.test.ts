@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { getLayout } from "@/server/packages/layout";
-import { agentSpacePackage, SPACE_IDS as I } from "@/server/packages/test-support/agent-space";
+import { agentSpacePackage, descriptor, SPACE_IDS as I } from "@/server/packages/test-support/agent-space";
 import { getAppPolicy } from "@/server/policy";
 import { analyzeImport, planItemsFromAnalysis, type LiveIndexEntry } from "./analyze";
 import { createPlanRequestFromForm, layoutRequestFromForm } from "./forms";
@@ -143,23 +143,26 @@ describe("import detail for Agent Space folders", () => {
   }
 
   it("offers each mapped type with its changes and errors, and keeps the layout fit", () => {
-    // Without the store in the space, the custom agent's reference is an error; only custom agents carry it.
-    const a = analyzeImport({ contents: agentSpacePackage(), layout, policy, live: space.filter((e) => e.assetId !== I.liveStore), historyCommit: null, now });
+    // Without the store in the space, the custom agent's reference is dropped with a warning; a bad skill name is an error.
+    const bad = descriptor(I.probe, "skill", { name: "Probe_Bad", description: "Use when probing.", agent_types: ["INCIDENT_RCA"], status: "ACTIVE", skill_type: "USER" });
+    const a = analyzeImport({ contents: agentSpacePackage({ "skill/probe/_asset.json": bad }), layout, policy, live: space.filter((e) => e.assetId !== I.liveStore), historyCommit: null, now });
     const results = { ...a.results, layouts: [{ layout: "agent-space-folders", label: layout.label, assets: 8, assetFiles: 12, unmappedFiles: 0 }], layoutChoice: "detected" as const };
     const d = buildImportDetail(row(results, a.summary), policy);
     expect(d.planTypes.types.map((t) => [t.assetType, t.assets, t.changes, t.failedAssets])).toEqual([
       ["agents_md", 2, 2, 0],
-      ["skill", 2, 2, 0],
+      ["skill", 2, 2, 1],
       ["memory_store", 1, 1, 0],
       ["memory", 1, 1, 0],
-      ["custom_agent", 1, 1, 1],
+      ["custom_agent", 1, 1, 0],
     ]);
     expect(d.planTypes).toMatchObject({ unattributedErrors: 0, blockOnErrors: true, stateReason: null });
     // The type checkbox counts what the plan notes count: changes, unchanged, and duplicates left out anyway.
-    expect(d.planTypes.types.find((t) => t.assetType === "skill")).toMatchObject({ unchanged: 0, leftOut: 1 });
-    expect(d.planTypes.types.find((t) => t.assetType === "custom_agent")).toMatchObject({ errors: 1, failedAssets: 1, leftOut: 0 });
-    // The whole package is blocked, a selection without custom agents is not (the client decides with selectionBlocker).
+    expect(d.planTypes.types.find((t) => t.assetType === "skill")).toMatchObject({ unchanged: 0, leftOut: 1, failedAssets: 1 });
+    expect(d.planTypes.types.find((t) => t.assetType === "custom_agent")).toMatchObject({ errors: 0, failedAssets: 0, warnings: 1, leftOut: 0 });
+    // The whole package is blocked, a selection without skills is not (the client decides with selectionBlocker).
     expect(d.plan.canCreate).toBe(false);
+    // The plan item says which reference it leaves out.
+    expect(planItemsFromAnalysis(a).find((p) => p.desired.assetType === "custom_agent")!.note).toBe("From the package file custom_agent/reviewer. Leaves out 1 reference in memory_stores that isn't in this package or this space.");
     expect(d.layouts).toEqual({ candidates: results.layouts, choice: "detected", canChange: true });
     expect(d.layout!.typeDirs).toMatchObject({ agents_md: "agents_md", skill: "skill", custom_agent: "custom_agent", memory: "memory" });
     expect(d.leftOut).toHaveLength(1);

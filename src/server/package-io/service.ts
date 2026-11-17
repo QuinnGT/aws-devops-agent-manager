@@ -24,6 +24,7 @@ import { addDiffStats, analyzeImport, planItemsFromAnalysis, summarize, type Ana
 import { loadLiveIndex, readSnapshotsAtCommit, resolveExportRef, type ExportRef } from "./history";
 import { deleteStoredUpload, readStoredUploadFile, storedPathFor, writeStoredUpload } from "./storage";
 import { PackageIoError, type ImportResults, type ImportStatus, type ImportSummary, type LayoutCandidate } from "./types";
+import { refuseIfInRevision } from "./to-revision";
 import { readStoredUpload, readUpload, type PackageUpload } from "./upload";
 
 /**
@@ -198,6 +199,7 @@ export async function remapImport(space: Space, importId: string, layoutName: st
   if (row.status === "planned" || row.status === "planning") throw new PackageIoError("already-planned", "A plan was already created from this import, so its layout can't change. Upload the package again.");
   if (row.status === "rejected") throw new PackageIoError("not-plannable", "The upload was rejected, so it can't be read again. Fix the package and upload it again.");
   if (!row.storedPath || row.fileDeletedAt) throw new PackageIoError("upload-expired", "The uploaded package was deleted after its retention period. Upload it again.");
+  await refuseIfInRevision(space.id, row.id);
   const { policy } = await policyForSpace(space);
   const layout = resolveLayout(policy, layoutName);
   const bytes = await readStoredUploadFile(row.storedPath);
@@ -290,6 +292,7 @@ export async function createPlanFromImport(space: Space, importId: string, actor
   if (row.status === "planned") throw new PackageIoError("already-planned", `A plan was already created from this import (plan ${row.planId}).`);
   if (row.status === "rejected") throw new PackageIoError("not-plannable", "The upload was rejected, so it can't become a plan. Fix the package and upload it again.");
   if (!row.storedPath || row.fileDeletedAt) throw new PackageIoError("upload-expired", "The uploaded package was deleted after its retention period. Upload it again.");
+  await refuseIfInRevision(space.id, row.id);
 
   const { policy } = await policyForSpace(space);
   const layout = resolveLayout(policy, row.layout);
