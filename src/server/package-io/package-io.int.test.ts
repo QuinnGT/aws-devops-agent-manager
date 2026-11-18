@@ -381,6 +381,21 @@ describe("package export", () => {
     expect(audit.some((e) => e.result === "error" && (e.details as { code?: string } | null)?.code === "checks-failed")).toBe(true);
   });
 
+  it("downloads every asset with a notes file when the checks fail and the policy doesn't block", async () => {
+    const r = await exportPackage(space, {}, actor);
+    expect(r.ok).toBe(false);
+    const pkg = readPackageZip(r.zip, r.fileName);
+    const notes = pkg.files.get("reference/EXPORT-NOTES.md")!.toString("utf8");
+    expect(notes).toContain("# Export notes");
+    expect(notes).toContain("## Package check errors\n\n- ");
+    expect(pkg.files.has("skills/chat-tool-use-best-practices/SKILL.md")).toBe(true);
+    expect(pkg.files.has("memory/chat-tool-use-best-practices/categories/testing-mcp-servers.md")).toBe(true);
+    expect(r.sha256).toBe(sha256Hex(r.zip));
+    const p = await previewExport(space, {});
+    expect(p).toMatchObject({ ok: false, blockedReason: null, notesFile: "reference/EXPORT-NOTES.md" });
+    expect(p.errors.length).toBeGreaterThan(0);
+  });
+
   it("previews an export: counts by type, the manifest, the errors, and a custom name", async () => {
     exportPolicy.block = true;
     const before = (await auditActions("package.export")).length;

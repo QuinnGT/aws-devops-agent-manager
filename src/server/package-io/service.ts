@@ -8,6 +8,8 @@ import { db } from "@/server/db/client";
 import { packageImports } from "@/server/db/schema";
 import { safeSegment } from "@/server/history/layout";
 import { policyForSpace } from "@/server/journals/policy";
+import { zipPackage } from "@/server/packages/build";
+import { renderLeftOutNote } from "@/server/packages/check";
 import { exportPackageZip } from "@/server/packages/export";
 import { rankLayouts } from "@/server/packages/detect";
 import { getLayout, type PackageLayout } from "@/server/packages/layout";
@@ -503,12 +505,17 @@ export interface ExportPreview {
   manifest: string | null;
   /** For Agent Space folder layouts: the descriptor in each asset folder and the folder index; null otherwise */
   assetFolders?: { descriptor: string; index: string | null } | null;
+  /** Package path of the note a download with errors carries, or null */
+  notesFile: string | null;
+  /** Errors in what is downloaded (when blocked: every error) */
   errors: ValidationResult[];
   warnings: ValidationResult[];
 }
 
 interface BuiltExport {
   exported: ReturnType<typeof exportPackageZip>;
+  /** What is downloaded: the exported zip, plus a note listing the errors when the checks fail and policy doesn't block */
+  download: { zip: Buffer; errors: ValidationResult[] };
   desired: ReturnType<typeof snapshotsToDesiredAssets>;
   ref: ExportRef;
   layout: PackageLayout;
@@ -542,7 +549,16 @@ async function buildExport(space: Space, request: ExportPackageRequest, onRefuse
   const requestedName = request.name?.trim() ? safeSegment(request.name.trim().replace(/\.zip$/i, "")) : "";
   const packageName = requestedName || safeSegment(fill(policy.packageIo.export.packageName, { spaceAlias: space.alias, ref: ref.label, layout: layout.name }));
   const exported = exportPackageZip(desired.assets, layout, { policy, packageName });
-  return { exported, desired, ref, layout, packageName, policy };
+  const errors = [...desired.results, ...exported.results].filter((r) => r.level === "error");
+  let download: BuiltExport["download"] = { zip: exported.zip, errors };
+  // The assets come from the space, so the service already holds each one: the errors are package
+  // checks (layout conventions), and every asset stays in the zip with the errors in a note.
+  const note = policy.packageIo.export.notes;
+  if (!exported.ok && !policy.packageIo.export.blockOnFailedChecks && note.path) {
+    const text = renderLeftOutNote(fill(note.intro, { ref: ref.label, layout: layout.name }), [], errors, note);
+    download = { zip: zipPackage({ ...exported.contents, files: new Map(exported.contents.files).set(note.path, Buffer.from(text, "utf8")) }), errors };
+  }
+  return { exported, download, desired, ref, layout, packageName, policy };
 }
 
 /**
@@ -550,7 +566,7 @@ async function buildExport(space: Space, request: ExportPackageRequest, onRefuse
  * history repository. Needs `history.read` on the space.
  */
 export async function exportPackage(space: Space, request: ExportPackageRequest, actor: ServiceActor): Promise<ExportPackageResult> {
-  const { exported, desired, ref, layout, policy } = await buildExport(space, request, (err, requestedRef) =>
+  const { exported, download, desired, ref, layout, policy } = await buildExport(space, request, (err, requestedRef) =>
     recordAuditEvent({
       actor,
       action: "package.export",
@@ -561,7 +577,7 @@ export async function exportPackage(space: Space, request: ExportPackageRequest,
     }),
   );
   const warnings = exported.results.filter((r) => r.code === "export.not-placed");
-  const sha256 = sha256Hex(exported.zip);
+  const sha256 = sha256Hex(download.zip);
   const blocked = !exported.ok && policy.packageIo.export.blockOnFailedChecks;
   await recordAuditEvent({
     actor,
@@ -577,19 +593,16 @@ export async function exportPackage(space: Space, request: ExportPackageRequest,
       layout: layout.name,
       fileName: exported.fileName,
       sha256,
-      sizeBytes: exported.zip.length,
+      sizeBytes: download.zip.length,
       assets: desired.assets.length,
       notPlaced: warnings.length,
       ok: exported.ok,
       ...(blocked ? { code: "checks-failed" } : {}),
     },
   });
-  if (blocked) {
-    const errors = [...desired.results, ...exported.results].filter((r) => r.level === "error");
-    throw new PackageIoError("checks-failed", checksFailedMessage(errors.length), errors);
-  }
+  if (blocked) throw new PackageIoError("checks-failed", checksFailedMessage(download.errors.length), download.errors);
   return {
-    zip: exported.zip,
+    zip: download.zip,
     fileName: exported.fileName,
     warnings,
     results: [...desired.results, ...exported.results],
@@ -634,11 +647,11 @@ function countByType(policy: Pick<Policy, "assetTypes">, types: readonly string[
 
 /** The facts of an export for the dialog: what goes in, what is left out, and whether the checks pass. */
 export async function previewExport(space: Space, request: ExportPackageRequest): Promise<ExportPreview> {
-  const { exported, desired, ref, layout, packageName, policy } = await buildExport(space, request);
+  const { exported, download, desired, ref, layout, packageName, policy } = await buildExport(space, request);
   const results = [...desired.results, ...exported.results];
   const notPlaced = new Set(exported.results.filter((r) => r.code === "export.not-placed").map((r) => r.assetKey));
   const placed = desired.assets.filter((d) => !notPlaced.has(assetKeyOf(d)));
-  const errors = results.filter((r) => r.level === "error");
+  const errors = download.errors;
   return {
     ok: exported.ok,
     blockedReason: !exported.ok && policy.packageIo.export.blockOnFailedChecks ? checksFailedMessage(errors.length) : null,
@@ -651,6 +664,7 @@ export async function previewExport(space: Space, request: ExportPackageRequest)
     leftOut: countByType(policy, [...notPlaced].map(typeOfKey).filter(Boolean)),
     manifest: layout.manifest,
     assetFolders: layout.assetFolders ? { descriptor: layout.assetFolders.descriptor, index: layout.assetFolders.index } : null,
+    notesFile: exported.ok ? null : policy.packageIo.export.notes.path,
     errors,
     warnings: results.filter((r) => r.level === "warning"),
   };

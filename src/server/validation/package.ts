@@ -122,8 +122,9 @@ export function validatePackage(contents: PackageContents, layout: PackageLayout
       }
       if (names.has(fm.name)) fail("package.memory-duplicate", `Memory name ${fm.name} is used more than once in ${store}.`, `Duplicate memory name: ${p}`, p);
       names.add(fm.name);
+      // Design targets are advice, not service limits (asset-types.yaml has those), so they warn and never block a build or export.
       if (checks.memoryMaxBytes !== null && size(p) > checks.memoryMaxBytes) {
-        fail("package.memory-size", `${p} is ${size(p)} bytes; the package design target is ${checks.memoryMaxBytes}.`, `Memory exceeds ${Math.round(checks.memoryMaxBytes / 1024)}KB design target: ${p}`, p);
+        results.push(warning("package.memory-size", `${p} is ${size(p)} bytes; the package design target is ${checks.memoryMaxBytes}.`, { path: p }));
       }
       memories.push(p);
     }
@@ -135,7 +136,7 @@ export function validatePackage(contents: PackageContents, layout: PackageLayout
     }
     indexSizes.push(size(index));
     if (checks.indexMaxBytes !== null && size(index) > checks.indexMaxBytes) {
-      fail("package.index-size", `${index} is ${size(index)} bytes; the package design target is ${checks.indexMaxBytes}.`, `Index exceeds ${Math.round(checks.indexMaxBytes / 1024)}KB design target: ${index}`, index);
+      results.push(warning("package.index-size", `${index} is ${size(index)} bytes; the package design target is ${checks.indexMaxBytes}.`, { path: index }));
     }
     for (const m of text(index).matchAll(LINK)) {
       const target = m[1]!;

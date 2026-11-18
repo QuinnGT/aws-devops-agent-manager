@@ -28,8 +28,16 @@ export:
   recentCommits: 20
   # Parallel git reads when reading a space's assets at a commit.
   gitReadConcurrency: 4
-  # Refuse the download while the package fails its checks (validation
-  # errors). A layout that requires files or a shared section the space's
-  # assets can't supply (without a base package) always fails, so set this to
-  # false to let people download those files anyway.
-  blockOnFailedChecks: true
+  # true: refuse the download while the package fails its checks. false:
+  # download every asset anyway (the space already holds each one, so the
+  # errors are layout conventions, for example a shared section a live space
+  # can't supply) and list the errors in the notes file below.
+  blockOnFailedChecks: false
+  notes:
+    # The notes file's package path; keep it a non-asset path of the layouts. null: no file.
+    path: reference/EXPORT-NOTES.md
+    title: "# Export notes"
+    # Placeholders: {ref} {layout}
+    intro: "The space's assets at {ref} don't pass every package check in the {layout} layout. The space already holds each asset, so every one is in this zip as it is."
+    none: "No asset was left out."
+    remaining: "## Package check errors"

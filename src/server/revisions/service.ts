@@ -5,12 +5,14 @@ import { revisions } from "@/server/db/schema";
 import { enqueue } from "@/server/jobs/enqueue";
 import { analyzeImport } from "@/server/package-io/analyze";
 import { zipPackage } from "@/server/packages/build";
+import { checkPackage, withoutFailingAssets, type FailingAsset } from "@/server/packages/check";
 import { fill } from "@/server/packages/paths";
 import { createPlan as defaultCreatePlan, type CreatePlan } from "@/server/plans";
 import type { Permission } from "@/server/policy";
 import type { Space } from "@/server/spaces/queries";
 import { sha256Hex } from "@/server/sync/content";
 import { errorsOf, type ValidationResult } from "@/server/validation/types";
+import { buildPassedAtHead, renderLeftOutNote } from "./build";
 import { layoutOf, liveRefs, readContext } from "./context";
 import { prepareCreateRevision, type CreateRevisionRequest } from "./create";
 import { createRevisionJob, saveRevisionJob } from "./jobs";
@@ -166,12 +168,15 @@ export interface ExportRevisionResult {
   sha256: string;
   commit: string;
   files: number;
+  /** Assets the download left out because of build errors */
+  leftOut: FailingAsset[];
 }
 
 /**
  * The revision's package at its branch head as a zip in its layout (one top
  * folder, deterministic entries), for a space the app can't write to.
- * Refused while the build fails (revisions.yaml export.requirePassingBuild).
+ * While the build fails it leaves out the assets with errors and adds a note
+ * (revisions.yaml export.leftOut), or is refused when export.requirePassingBuild is true.
  * Needs `audits.read` (REVISION_PERMISSIONS.export): a download is a read.
  */
 export async function exportRevision(space: Space, revisionId: string, actor: RevisionActor): Promise<ExportRevisionResult> {
@@ -185,7 +190,21 @@ export async function exportRevision(space: Space, revisionId: string, actor: Re
   }
   const layout = layoutOf(policy, row.layout);
   const commit = row.headCommit!;
-  const contents = await readRevisionPackage(repo, commit, row.packageDir, row.packageName);
+  let contents = await readRevisionPackage(repo, commit, row.packageDir, row.packageName);
+  let leftOut: FailingAsset[] = [];
+  if (!buildPassedAtHead(row.latestBuild, commit)) {
+    // The committed package has errors: download it without the assets that have them, with a note saying which and why.
+    const { refs } = await liveRefs(space, policy);
+    const o = { policy, layout, live: refs };
+    const out = withoutFailingAssets(checkPackage(contents, o), o);
+    leftOut = out.leftOut;
+    contents = out.check.build.contents;
+    const note = policy.revisions.export.leftOut;
+    if (note.path) {
+      const files = new Map(contents.files).set(note.path, Buffer.from(renderLeftOutNote(row.name, leftOut, errorsOf(out.check.results), note), "utf8"));
+      contents = { ...contents, files };
+    }
+  }
   const zip = zipPackage(contents, row.packageName);
   const fileName = layout.build.packageZip ? fill(layout.build.packageZip, { package: row.packageName }) : `${row.packageName}.zip`;
   const sha256 = sha256Hex(zip);
@@ -195,9 +214,9 @@ export async function exportRevision(space: Space, revisionId: string, actor: Re
     spaceId: space.id,
     targetType: "revision",
     targetId: row.id,
-    details: { name: row.name, commit, fileName, sha256, sizeBytes: zip.length, files: contents.files.size, build: row.latestBuild?.status ?? null },
+    details: { name: row.name, commit, fileName, sha256, sizeBytes: zip.length, files: contents.files.size, build: row.latestBuild?.status ?? null, leftOut: leftOut.map((a) => a.assetKey) },
   });
-  return { zip, fileName, sha256, commit, files: contents.files.size };
+  return { zip, fileName, sha256, commit, files: contents.files.size, leftOut };
 }
 
 /** Response headers for the download Route Handler. */

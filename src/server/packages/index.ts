@@ -11,7 +11,7 @@ export { getLayout, listLayouts, agentTypeResolver, type PackageLayout } from ".
 export { packageToDesiredAssets, packageToPackageFiles, type MappedPackage, type FileRole, type MapOptions } from "./desired";
 export { desiredAssetsToPackage, exportPackageZip, type ExportOptions, type ExportResult } from "./export";
 export { buildRelease, zipPackage, type BuildOptions, type BuildResult } from "./build";
-export { checkPackage, isAbout, type CheckPackageOptions, type PackageCheck } from "./check";
+export { checkPackage, isAbout, withoutFailingAssets, type CheckPackageOptions, type FailingAsset, type PackageCheck } from "./check";
 export { targetPackageAssets, type LeftOutAsset, type LeftOutReason, type TargetedPackage, type TargetOptions } from "./target";
 export { rankLayouts, type LayoutFit } from "./detect";
 export { listAssetFolders, parseDescriptor, type AssetFolder, type AssetDescriptor } from "./asset-folders";

@@ -96,7 +96,8 @@ layouts:
     checks:
       requireArchives: true
       skillNamePattern: "^[a-z0-9-]{1,64}$"
-      # Design targets, not service limits.
+      # Design targets, not service limits: a file over them is a warning and
+      # doesn't fail the package. The service limits are in limits.yaml. null: no check.
       memoryMaxBytes: 16384
       indexMaxBytes: 4096
       # A package without memories fails the checks.

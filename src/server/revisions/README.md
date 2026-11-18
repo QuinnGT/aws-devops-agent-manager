@@ -77,7 +77,7 @@ Refused (`build-failed`, `plan-open`, `not-open`) unless the latest build passed
 
 ### Export
 
-The package at the branch head, zipped under one top folder (`zipPackage`, deterministic) and named with the layout's `build.packageZip` (`<package>.zip`). Refused while the build fails (`export.requirePassingBuild`). The committed package is already built, so the build does not run again.
+The package at the branch head, zipped under one top folder (`zipPackage`, deterministic) and named with the layout's `build.packageZip` (`<package>.zip`). When the build at the head passed, the committed package is zipped as it is. When it failed, the download runs the checks again (against the live space) and uses `withoutFailingAssets`: every asset the service would refuse (a mapping, targeting or asset-rule error, such as a memory over the service's size limit), and every asset with a required reference to one (a memory whose store is left out), is left out with its files. Package-check errors (layout conventions and text rules, such as missing shared-section markers) leave nothing out. Kept files keep their bytes and the build redoes the indexes. `export.leftOut.path` (default `reference/EXPORT-NOTES.md`) is added with each left-out asset and why, then the errors still in the zip. Each save stores the same list in `latestBuild.leftOut`, so the build card can show it before the download. `export.requirePassingBuild: true` refuses the download instead. A revision that was never created (no commits) can't be exported.
 
 ## Loaders
 

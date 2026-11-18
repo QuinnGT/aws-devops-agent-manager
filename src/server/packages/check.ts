@@ -5,7 +5,7 @@ import { buildRelease, type BuildResult } from "./build";
 import { packageToDesiredAssets, type MappedPackage } from "./desired";
 import { getLayout, type PackageLayout } from "./layout";
 import { targetPackageAssets, type TargetedPackage } from "./target";
-import type { LiveAssetRef, PackageContents } from "./types";
+import { assetKeyOf, type DesiredAsset, type LiveAssetRef, type PackageContents } from "./types";
 
 export interface CheckPackageOptions {
   policy?: Policy;
@@ -48,6 +48,95 @@ export function checkPackage(contents: PackageContents, opts: CheckPackageOption
   const relevant = kept ? (r: ValidationResult) => isAbout(r, mapped, layout, kept) : () => true;
   const results = [...build.results.filter(relevant), ...mapped.results.filter(relevant), ...target.results, ...validateAssetSet(target.assets, { policy, live: opts.live })];
   return { ok: !hasErrors(results), build, mapped, target, results };
+}
+
+/** An asset a download leaves out because it, or an asset it needs, has errors. */
+export interface FailingAsset {
+  assetKey: string;
+  /** Package path of the asset's main source file or folder */
+  source: string | null;
+  /** Its error messages, or which asset it needs that is left out */
+  reasons: string[];
+  /** Package files removed with it */
+  paths: string[];
+}
+
+/**
+ * The checked package without the assets the service would refuse, so a
+ * download never fails. Each round leaves out every asset that a mapping,
+ * targeting or asset-rule error names (by assetKey, by the file it is about,
+ * or by the asset's source folder) and every asset with a required reference
+ * to one of them (a memory and its store), then checks again. Errors from the
+ * build and the package checks (layout conventions and the layout's text
+ * rules, such as shared-section markers) leave nothing out: those files
+ * upload as they are. Kept files keep their bytes; the build redoes the
+ * indexes. Every error still in the package stays in `check.results`.
+ */
+export function withoutFailingAssets(first: PackageCheck, opts: CheckPackageOptions = {}): { check: PackageCheck; leftOut: FailingAsset[] } {
+  const policy = opts.policy ?? getAppPolicy().policy;
+  const { name } = first.build.contents;
+  const files = new Map(first.build.contents.files);
+  const leftOut: FailingAsset[] = [];
+  const done = new Set<string>();
+  let check = first;
+  while (!check.ok) {
+    const { assets, roles } = check.mapped;
+    const bySource = new Map(assets.filter((a) => a.source).map((a) => [a.source!, assetKeyOf(a)]));
+    const sourceOf = new Map(assets.map((a) => [assetKeyOf(a), a.source ?? null]));
+    const packageChecks = new Set(check.build.results);
+    const reasons = new Map<string, string[]>();
+    for (const r of check.results) {
+      if (r.level !== "error" || packageChecks.has(r)) continue;
+      const key = r.assetKey ?? (r.path ? (roles.get(r.path)?.assetKey ?? bySource.get(r.path)) : undefined);
+      if (key && !done.has(key)) reasons.set(key, [...(reasons.get(key) ?? []), r.message]);
+    }
+    // Only errors no asset owns are left (or owners already removed): nothing more to leave out.
+    if (!reasons.size) break;
+    for (let grew = true; grew; ) {
+      grew = false;
+      for (const a of assets) {
+        const key = assetKeyOf(a);
+        if (reasons.has(key) || done.has(key)) continue;
+        const needs = requiredRefs(a, policy).find((k) => reasons.has(k));
+        if (needs) {
+          reasons.set(key, [`It needs ${sourceOf.get(needs) ?? needs}, which is left out.`]);
+          grew = true;
+        }
+      }
+    }
+    for (const [key, why] of reasons) {
+      const paths = [...roles].filter(([, role]) => role.assetKey === key).map(([p]) => p);
+      for (const p of paths) files.delete(p);
+      leftOut.push({ assetKey: key, source: sourceOf.get(key) ?? null, reasons: why, paths });
+      done.add(key);
+    }
+    check = checkPackage({ name, files: new Map(files) }, { ...opts, policy });
+  }
+  return { check, leftOut };
+}
+
+/**
+ * The note a download with errors carries: each asset left out and why, then
+ * the errors still in the package. Messages hold package text, so each item
+ * is one line.
+ */
+export function renderLeftOutNote(intro: string, leftOut: readonly FailingAsset[], remaining: readonly ValidationResult[], text: { title: string; none: string; remaining: string }): string {
+  const line = (t: string) => t.replace(/\s+/g, " ").trim();
+  const out = [text.title, "", intro, ""];
+  if (leftOut.length) for (const a of leftOut) out.push(`- ${a.source ?? a.assetKey}: ${line(a.reasons.join(" "))}`);
+  else out.push(text.none);
+  if (remaining.length) out.push("", text.remaining, "", ...remaining.map((r) => `- ${r.path ? `${r.path}: ` : ""}${line(r.message)}`));
+  return `${out.join("\n")}\n`;
+}
+
+/** Asset keys of the asset's required references (asset-types.yaml `references[].required`). */
+function requiredRefs(a: DesiredAsset, policy: Policy): string[] {
+  return (policy.assetTypes.assetTypes[a.assetType]?.references ?? [])
+    .filter((r) => r.required)
+    .flatMap((r) => {
+      const v = a.refs?.[r.ref];
+      return (v === undefined ? [] : Array.isArray(v) ? v : [v]).map((key) => assetKeyOf({ assetType: r.assetType, key }));
+    });
 }
 
 /**

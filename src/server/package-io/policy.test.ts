@@ -10,7 +10,8 @@ describe("package-io.yaml", () => {
     expect(p.uploads.retentionDays).toBe(30);
     expect(p.import.blockPlanOnErrors).toBe(true);
     expect(p.export.packageName).toBe("{spaceAlias}-{ref}");
-    expect(p.export.blockOnFailedChecks).toBe(true);
+    expect(p.export.blockOnFailedChecks).toBe(false);
+    expect(p.export.notes.path).toBe("reference/EXPORT-NOTES.md");
   });
 
   it("names a known permission for each entry point; export needs history.read", () => {

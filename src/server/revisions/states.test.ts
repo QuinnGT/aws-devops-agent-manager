@@ -20,10 +20,10 @@ describe("why an action is unavailable", () => {
     expect(planBlocker(open(null, { state: "failed", stateReason: "the sync failed" }), null)).toBe("The revision could not be created: the sync failed");
   });
 
-  it("blocks the download until the build passes, unless policy allows it", () => {
+  it("allows the download while the build fails (it leaves out the assets with errors), unless policy requires a passing build", () => {
     expect(exportBlocker(open(build("passed")), policy)).toBeNull();
-    expect(exportBlocker(open(build("failed", "c2", 2)), policy)).toBe("The package can't be downloaded yet. The build and validation failed with 2 errors. Fix them and save again.");
-    expect(exportBlocker(open(build("failed")), { export: { requirePassingBuild: false } })).toBeNull();
+    expect(exportBlocker(open(build("failed", "c2", 2)), policy)).toBeNull();
+    expect(exportBlocker(open(build("failed", "c2", 2)), { export: { requirePassingBuild: true } })).toBe("The package can't be downloaded yet. The build and validation failed with 2 errors. Fix them and save again.");
     expect(exportBlocker(open(null, { state: "creating", headCommit: null }), policy)).toBe("The revision is still being created.");
   });
 

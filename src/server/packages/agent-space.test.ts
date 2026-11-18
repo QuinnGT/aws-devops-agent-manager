@@ -63,7 +63,8 @@ describe("agent-space-folders mapping", () => {
     expect(reviewer.metadata.skills).toEqual([I.verity, I.probe]);
     // memory/ has no descriptors and maps with the instruction folders STORE.md rules.
     expect(m.assets.find((a) => a.assetType === "memory")).toMatchObject({ key: "notes/first", refs: { memoryStore: "notes" } });
-    expect(m.roles.get("agents_md/global/_asset.json")).toEqual({ role: "manifest" });
+    // The descriptor belongs to its asset, so leaving the asset out of a download takes it too.
+    expect(m.roles.get("agents_md/global/_asset.json")).toEqual({ role: "manifest", assetKey: "agents_md:GENERIC" });
     expect(m.roles.get("INDEX.json")).toEqual({ role: "manifest" });
     expect(m.roles.get("reference/DEPLOY.md")).toEqual({ role: "non-asset" });
     expect(m.roles.get(".gitignore")).toEqual({ role: "non-asset" });

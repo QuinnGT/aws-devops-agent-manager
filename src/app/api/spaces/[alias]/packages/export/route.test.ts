@@ -133,6 +133,7 @@ describe("GET /api/spaces/[alias]/packages/export/preview", () => {
     included: [{ assetType: "skill", count: 2, noun: "skills" }],
     leftOut: [{ assetType: "custom_agent", count: 1, noun: "custom agent" }],
     manifest: "reference/ASSET-METADATA.json",
+    notesFile: "reference/EXPORT-NOTES.md",
     errors: [{ level: "error", code: "package.missing-file", message: "README.md is missing." }],
     warnings: [],
   };

@@ -47,6 +47,8 @@ export interface RevisionBuild {
   buildPaths: string[];
   /** Assets the package maps to */
   assets: number;
+  /** While the build fails: what "Export package zip" leaves out and why (builds from before this field have none) */
+  leftOut?: { assetKey: string; source: string | null; reasons: string[] }[];
 }
 
 export type RevisionErrorCode =

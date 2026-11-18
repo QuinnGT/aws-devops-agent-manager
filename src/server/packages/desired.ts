@@ -182,7 +182,7 @@ class Mapper {
       this.addSkill(name, dir, paths.map((p) => ({ source: p, path: p.slice(dir.length + 1), bytes: this.contents.files.get(p)! })));
       if (rule.archive) {
         const zip = `${prefix}${fill(rule.archive, { name })}`;
-        if (this.contents.files.has(zip)) this.claim(zip, "build-artifact");
+        if (this.contents.files.has(zip)) this.claim(zip, "build-artifact", this.roles.get(main)?.assetKey);
       }
     }
     // A skill shipped only as a zip: read it with the same safety rules as uploads.
@@ -312,7 +312,11 @@ class Mapper {
       const ordered = [...group].sort((a, b) => Number(matchesKeep(b.asset.metadata, this.layout.duplicates)) - Number(matchesKeep(a.asset.metadata, this.layout.duplicates)));
       ordered.forEach((p, i) => keys.set(p, i === 0 ? p.identity : `${p.identity}@${p.asset.sourceAssetId ?? p.folder.folder}`));
     }
-    for (const p of pending) this.add(p.asset, p.paths, keys.get(p));
+    for (const p of pending) {
+      const added = this.add(p.asset, p.paths, keys.get(p));
+      // The descriptor belongs to its asset, so leaving the asset out takes the descriptor too.
+      this.claim(p.folder.descriptorPath, "manifest", assetKeyOf(added));
+    }
     this.checkAssetIndex(rule, described);
   }
 
@@ -392,7 +396,7 @@ class Mapper {
           );
         }
       }
-      if (rule.indexFile && this.contents.files.has(`${dir}/${rule.indexFile}`)) this.claim(`${dir}/${rule.indexFile}`, "build-artifact");
+      if (rule.indexFile && this.contents.files.has(`${dir}/${rule.indexFile}`)) this.claim(`${dir}/${rule.indexFile}`, "build-artifact", this.roles.get(storePath)?.assetKey);
       for (const p of sortPaths([...this.contents.files.keys()].filter((x) => x.startsWith(`${dir}/`)))) {
         if (this.roles.has(p) || !p.endsWith(".md") || basename(p) === rule.storeFile || basename(p) === rule.indexFile) continue;
         const t = this.text(p);

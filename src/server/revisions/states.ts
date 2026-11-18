@@ -53,7 +53,7 @@ export function planBlocker(r: RevisionStateView, plan: { state: string; title: 
 }
 
 /** Why the package download is refused (revisions.yaml export.requirePassingBuild), or null. */
-export function exportBlocker(r: RevisionStateView, policy: Pick<RevisionsPolicy, "export">): string | null {
+export function exportBlocker(r: RevisionStateView, policy: { export: Pick<RevisionsPolicy["export"], "requirePassingBuild"> }): string | null {
   if (r.state === "creating" || r.state === "failed" || !r.headCommit) return stateBlocker(r) ?? "The revision has no commits yet.";
   if (!policy.export.requirePassingBuild) return null;
   const b = buildBlocker(r);
