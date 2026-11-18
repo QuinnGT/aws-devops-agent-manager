@@ -2,13 +2,13 @@
 # Build with Podman: podman build -t localhost/devops-agent-manager:dev -f Containerfile .
 # `./scripts/stack.sh up` and `./scripts/stack.sh demo` build it for you.
 
-FROM docker.io/library/node:24-bookworm-slim AS base
+FROM docker.io/library/node:24-trixie-slim AS base
 ENV PNPM_HOME=/pnpm PATH=/pnpm:$PATH NEXT_TELEMETRY_DISABLED=1
 RUN corepack enable
 
 FROM base AS deps
 WORKDIR /app
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .pnpmfile.cjs ./
 RUN pnpm install --frozen-lockfile
 
 FROM deps AS build
@@ -18,11 +18,19 @@ RUN pnpm build \
   && pnpm licenses list --prod --json > THIRD_PARTY_LICENSES.json \
   && pnpm prune --prod
 
-FROM docker.io/library/node:24-bookworm-slim AS runtime
-RUN apt-get update && apt-get install -y --no-install-recommends git openssh-client ca-certificates tini \
-  && rm -rf /var/lib/apt/lists/* \
-  && useradd --create-home --uid 10001 app \
+# AL2023 has no tini package, so Debian's static build is copied into the runtime.
+FROM docker.io/library/node:24-trixie-slim AS tini
+RUN apt-get update && apt-get install -y --no-install-recommends tini
+
+# The runtime is Amazon Linux 2023 minimal (glibc, so the native addons built above load), not Debian 13, which still
+# had 438 open CVEs with no fix. Only node, git, ssh and the user tools are installed; no npm, corepack or yarn.
+# Pinned by digest; `microdnf upgrade` picks up fixes published after it.
+FROM public.ecr.aws/amazonlinux/amazonlinux:2023-minimal@sha256:c64f3b683d01c1c874831adc6a7b5a2fd6f0f9affd58bc638939a9f46cc03543 AS runtime
+RUN microdnf -y upgrade --refresh && microdnf -y install --setopt=install_weak_deps=0 nodejs24 git-core openssh-clients shadow-utils \
+  && microdnf clean all \
+  && groupadd -g 10001 app && useradd --create-home --uid 10001 --gid 10001 app \
   && mkdir -p /data && chown app:app /data
+COPY --from=tini /usr/bin/tini-static /usr/bin/tini
 WORKDIR /app
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 DAM_HOST=127.0.0.1 PORT=3000 DAM_DATA_DIR=/data DAM_POLICY_DIR=/app/policy
 COPY --from=build --chown=app:app /app/.next/standalone ./
