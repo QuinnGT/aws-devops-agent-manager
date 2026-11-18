@@ -8,6 +8,11 @@ updates:
     groups:
       minor-and-patch:
         update-types: [minor, patch]
+    ignore:
+      # @types/node tracks the Node.js major the app runs on (24, in CI and the Containerfile).
+      # Move it with the image and CI by hand, like library/node below.
+      - dependency-name: "@types/node"
+        update-types: [version-update:semver-major]
 
   # Keeps the commit SHAs in .github/workflows up to date, and the version comment next to each one.
   - package-ecosystem: github-actions
