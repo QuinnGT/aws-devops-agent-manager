@@ -75,7 +75,7 @@ function display(value: unknown, agentTypes: FormInput["agentTypes"], refs: read
 
 /** Editable fields in schema order, and read-only facts for the rest. */
 export function formFromSchema(input: FormInput): { fields: FieldSpec[]; facts: ReadOnlyFact[] } {
-  const props = ((input.schema?.properties ?? {}) as Record<string, Schema>) ?? {};
+  const props = (input.schema?.properties ?? {}) as Record<string, Schema>;
   const fields: FieldSpec[] = [];
   const facts: ReadOnlyFact[] = [];
   for (const [key, prop] of Object.entries(props)) {
