@@ -1,5 +1,5 @@
 import { isDeepStrictEqual } from "node:util";
-import { parseFrontmatter } from "@/server/packages/frontmatter";
+import { frontmatterKeyFix, frontmatterKeyLine, parseFrontmatter, yamlSentence } from "@/server/packages/frontmatter";
 import { describePathProblem, pathProblem } from "@/server/packages/paths";
 import { decodeText, lineCount } from "@/server/packages/text";
 import { assetKeyOf, type DesiredAsset, type DesiredFile } from "@/server/packages/types";
@@ -7,7 +7,7 @@ import { writeZip } from "@/server/packages/zip";
 import type { Policy } from "@/server/policy";
 import type { AssetTypePolicy } from "@/server/policy/sections/asset-types";
 import { describeSchemaErrors, metadataValidator, resolvedSchema, type SchemaKind } from "./schemas";
-import { error, warning, type ValidationResult } from "./types";
+import { error, warning, type QuickFix, type ValidationResult } from "./types";
 
 /**
  * Validate one draft asset (type, metadata, files) against asset-types.yaml
@@ -45,7 +45,7 @@ export function validateDraftAsset(asset: DesiredAsset, ctx: DraftContext): Vali
   }
   if (!entry.editable) out.push(error("type.not-editable", `${entry.label} assets can't be edited in this app.`, { assetKey }));
 
-  out.push(...schemaResults(policy, asset, "metadataSchema", "error", "metadata.schema", assetKey));
+  out.push(...schemaResults(policy, asset, "metadataSchema", "error", "metadata.schema", assetKey).map((r) => (r.path === "metadata.name" ? nameResultExtras(policy, asset, r) : r)));
   out.push(...schemaResults(policy, asset, "metadataWarningSchema", "warning", "metadata.recommendation", assetKey));
   if (!asset.assetId) out.push(...schemaResults(policy, asset, "createSchema", "error", "metadata.create", assetKey));
   out.push(...unknownKeyResults(entry, asset, assetKey));
@@ -193,6 +193,42 @@ function fileResults(policy: ValidationPolicy, entry: AssetTypePolicy, asset: De
   return out;
 }
 
+/** "roles/payment_gw" -> "roles/payment-gw": each segment in lowercase kebab case. */
+export function kebabName(name: string): string {
+  return name
+    .split("/")
+    .map((seg) =>
+      seg
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, ""),
+    )
+    .filter(Boolean)
+    .join("/");
+}
+
+/**
+ * The line of a metadata.name result in the main file's frontmatter, and for
+ * a memory (named by its path) the fix: the kebab-case name in the
+ * frontmatter and the file renamed to match. Memory only, since only its
+ * name and file path move together.
+ */
+function nameResultExtras(policy: ValidationPolicy, asset: DesiredAsset, r: ValidationResult): ValidationResult {
+  const main = asset.files.length === 1 ? asset.files[0] : undefined;
+  if (!main || main.encoding !== "utf8") return r;
+  const line = frontmatterKeyLine(main.content, "name");
+  const name = asset.metadata.name;
+  if (asset.assetType !== "memory" || typeof name !== "string") return line ? { ...r, line } : r;
+  const suggested = kebabName(name);
+  const pattern = (policy.assetTypes.assetTypes.memory?.metadataSchema as { properties?: { name?: { pattern?: string } } } | undefined)?.properties?.name?.pattern;
+  if (!suggested || suggested === name || (pattern && !new RegExp(pattern, "u").test(suggested))) return line ? { ...r, line } : r;
+  const edits: QuickFix["edits"] = [...(frontmatterKeyFix(main.content, "name", suggested, "")?.edits ?? [])];
+  const source = main.sourcePath;
+  if (source?.endsWith(`${name}.md`)) edits.push({ kind: "rename", to: `${source.slice(0, -(name.length + 3))}${suggested}.md` });
+  if (!edits.length) return line ? { ...r, line } : r;
+  return { ...r, ...(line ? { line } : {}), fix: { label: `Rename to ${suggested}`, ...(source ? { from: source } : {}), edits } };
+}
+
 function frontmatterResults(entry: AssetTypePolicy, asset: DesiredAsset, path: string, text: string, assetKey: string): ValidationResult[] {
   const rule = entry.frontmatter!;
   const out: ValidationResult[] = [];
@@ -207,7 +243,13 @@ function frontmatterResults(entry: AssetTypePolicy, asset: DesiredAsset, path: s
     return out;
   }
   if (fm.error) {
-    push("error", "frontmatter.invalid", `${path} has frontmatter that is not valid YAML: ${fm.error}`);
+    // The service parses the frontmatter only where it reads metadata from it (a zip skill); elsewhere it is text the agent reads.
+    const at = { assetKey, path, ...(fm.errorAt ? { line: fm.errorAt.line, column: fm.errorAt.column } : {}), ...(fm.fix ? { fix: fm.fix } : {}) };
+    out.push(
+      required
+        ? error("frontmatter.invalid", `${yamlSentence(path, fm)} The service reads it for this upload.`, at)
+        : warning("frontmatter.invalid", `${yamlSentence(path, fm)} The service doesn't read it for a single file, but a zip upload and other tools do.`, at),
+    );
     return out;
   }
   if (!fm.data) {
@@ -223,7 +265,13 @@ function frontmatterResults(entry: AssetTypePolicy, asset: DesiredAsset, path: s
     }
     if (metaValue === undefined) continue;
     const same = typeof fmValue === "string" && typeof metaValue === "string" ? fmValue.trim() === metaValue.trim() : isDeepStrictEqual(fmValue, metaValue);
-    if (!same) push(rule.mirrorLevel, "frontmatter.mismatch", `${path} frontmatter ${fmKey} differs from metadata.${metaKey}.`);
+    if (!same) {
+      const line = frontmatterKeyLine(text, fmKey);
+      // Only where the metadata is what the service uses (not a zip skill, whose frontmatter it reads).
+      const fix = required ? null : frontmatterKeyFix(text, fmKey, metaValue, `Use metadata.${metaKey} in the frontmatter`);
+      const at = { assetKey, path, ...(line ? { line } : {}), ...(fix ? { fix } : {}) };
+      out.push(rule.mirrorLevel === "error" ? error("frontmatter.mismatch", `${path} frontmatter ${fmKey} differs from metadata.${metaKey}.`, at) : warning("frontmatter.mismatch", `${path} frontmatter ${fmKey} differs from metadata.${metaKey}.`, at));
+    }
   }
   return out;
 }

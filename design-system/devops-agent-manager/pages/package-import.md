@@ -4,7 +4,7 @@ Overrides `MASTER.md` for `/spaces/[alias]/plans/import` (upload), `/spaces/[ali
 
 The mapping result is sample package v2 (`sample-data/packages/v2`) read by `checkPackage` against a live asset list. Counts, sizes and line counts come from that package or are invented; times and the user are example data.
 
-The flow: upload, then the layout mapping result, then a normal plan review (`plan-review.md`).
+The flow: upload, then the layout mapping result, then a normal plan review (`plan-review.md`). When the package needs fixing, "Fix in a revision" moves it to a revision (`revision-detail.md`): its files on their own branch, every error by file, and the plan made there.
 
 ## Upload
 
@@ -49,7 +49,9 @@ The flow: upload, then the layout mapping result, then a normal plan review (`pl
    - Icon box with Package, and the file name as `h1`.
    - Meta: "<N> files · <size> · Layout <label> · Read <Time> by <name> · SHA-256 <first 12 hex in mono>". The full hash is in a tooltip.
    - Action: "Upload a different file" (ghost, Upload).
-3. **Callouts:** only when validation has errors. Destructive, "Validation failed for <N> asset(s)", body "Fix the package and upload it again.", no action.
+3. **Callouts:**
+   - When a revision holds the import: info, "This import is in revision <name>", body "Edit the files and fix the errors there, then create the plan from the revision.", action "Open the revision" (outline). It replaces the errors callout.
+   - Otherwise only when validation has errors: destructive, "<N> assets have validation errors (<e> errors in all).", body naming the types with errors, then "Fix them in a revision, fix the package and upload it again, or leave the asset types with errors out of the plan." ("Fix them in a revision" only with `revisions.build`; "leave ... out" only when another type can be planned). Action: the outline "Fix in a revision" button (the same dialog as in the plan card) when the import can move and the role has `revisions.build` and `plans.create`.
 4. **Stat tiles:**
 
    | Tile | Value | Detail |
@@ -78,6 +80,8 @@ The flow: upload, then the layout mapping result, then a normal plan review (`pl
   | Size | Right-aligned. Instructions add "<lines> lines" under the size |
   | Validation | Badge |
 
+- A row with errors or warnings has a line under it (same row, no border between) listing each problem in plain words, errors first, with a CircleX or TriangleAlert icon. The same sentence for several results shows once with "· <N> times", and its Details disclosure lists each engine message (with the asset IDs). A left-out row doesn't repeat the reason its Change cell gives. A problem with a known line shows "Line <n>" before it (unless the sentence names the line), and one with a fix ends with "· One-click fix in a revision" (success-fg).
+- Each row has an anchor (`row-<asset key>`); the anchored row uses the muted selected background.
 - Unchanged means the content hash and the metadata hash match live (`assetContentHash`, `metadataHash`).
 - Over 50 rows, "Show more".
 
@@ -89,10 +93,12 @@ The flow: upload, then the layout mapping result, then a normal plan review (`pl
 - Disabled reasons:
   - "Validation failed for <N> asset(s). Fix the package and upload it again."
   - "Nothing to import: every asset in the package matches live."
+  - "This import was moved to revision <name>. Create the plan from the revision."
+- **Fix in a revision** (under the form, with a top border; `revisions.build`, only while the import can move: read, not planned, the upload stored, no revision holds it): the line "Or open the package in a revision first: edit its files, see each error and warning by file, and create the plan there when the checks pass." and an outline "Fix in a revision" button (GitBranch). It opens the New revision dialog in its import mode (`revisions.md`): name prefilled from the file name (with "-2", "-3" when a revision has it, and the line "A revision named <name> already exists, so this name has a number at the end."), start from the live space with the import's files, the import's layout. Creating runs `revisions.create` with `importId` and opens the revision.
 
 **Warnings card** ("Errors and warnings" when there are errors).
-- One row per `ValidationResult`, errors first: icon, message, and the code in mono 12 px.
-- For asset results, start the message with the asset key ("INCIDENT_RCA: AGENTS.md has 151 lines; about 120 lines is recommended.").
+- By asset: the line "By asset. Each one opens its row, where its problems are listed." then one row per asset (a row of a type table) with problems, assets with errors first: icon, the asset's display name linking to its row (`?type=<type>#row-<key>`, with enough rows shown), and "<e> errors, <w> warnings" in muted 12 px.
+- Results no row holds (about the whole package): under "About the whole package", one row per result, errors first, in plain words with a Details disclosure.
 
 **File roles card.** A definition list of the role counts from `packageToDesiredAssets`:
 
@@ -108,6 +114,12 @@ The flow: upload, then the layout mapping result, then a normal plan review (`pl
 - An import never deletes or deactivates live assets that aren't in the package. They stay as they are, and the Unchanged tile says how many.
 - The plan uses the built content (rebuilt zips and indexes), not the uploaded build files.
 
+## Fix in a revision
+
+- The revision's first commit is the live space in the import's layout; its first save, "Add the files of <file name>", lays the uploaded files over it by asset (see `src/server/revisions/README.md`). Its diff against the base is what the import would change.
+- While the revision is creating, open or applied, the import can't make its own plan or be read with another layout. Abandoning the revision (or a failed create) gives the import back.
+- Plan items from an import (or a revision) note the optional references they leave out: "Leaves out 3 references in memory_stores that aren't in this package or this space."
+
 ## Agent Space folder packages
 
 Packages laid out like the Agent Space (one folder per asset with `_asset.json`, as in an Agent Space export) use the `agent-space-folders` layout. From `src/server/packages/` and `src/server/package-io/`:
@@ -118,6 +130,7 @@ Packages laid out like the Agent Space (one folder per asset with `_asset.json`,
 - **Assets by type** gains a "Left out" column. The selected type's table lists left-out rows with their reason: a package asset that shares a name with another and can't be told apart in this space (`duplicate`), or one the space would have to create but whose type's `createSchema` refuses it, such as a LEARNED skill (`cannot-create`).
 - **Create plan card:** a checkbox per asset type, each with its changes and failing assets. The button counts the changes in the selected types ("Create plan with 7 changes") and is disabled with the reason while a selected type has errors. The plan notes list what was left out by choice and why.
 - **Matching:** an asset whose `_asset.json` ID is live in this space updates that asset ("matched by its asset ID"); otherwise it matches by name; otherwise it is created.
+- **References:** a custom agent's skills and memory stores are named by asset ID. An ID that is neither live here nor a package asset's is a warning, and the plan leaves that reference out (a memory's store is required, so there it stays an error). A memory store's ID is its STORE.md `asset_id`, so a package exported from one space resolves its stores by name in another.
 
 ## Export dialog
 

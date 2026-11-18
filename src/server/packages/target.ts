@@ -164,13 +164,11 @@ function remapReferences(a: DesiredAsset, ctx: RemapContext): DesiredAsset {
       return "unknown" as const;
     });
     const unknown = ids.filter((_, i) => kinds[i] === "unknown");
+    // A required reference can't be left out (a memory needs its store); an optional one is dropped from the plan, with a warning.
     for (const id of unknown) {
-      ctx.results.push(
-        error("reference.not-in-package", `${rule.key} names ${targetLabel} ${id}, which is not in this package or in this space, so the reference can't be kept here.`, {
-          assetKey,
-          path: `metadata.${rule.key}`,
-        }),
-      );
+      const at = { assetKey, path: `metadata.${rule.key}` };
+      const what = `${rule.key} names ${targetLabel} ${id}, which is not in this package or in this space`;
+      ctx.results.push(rule.required ? error("reference.not-in-package", `${what}, so the reference can't be kept here.`, at) : warning("reference.not-in-package", `${what}, so the plan leaves this reference out.`, at));
     }
     if (!kinds.includes("package")) {
       if (unknown.length) metadata = { ...metadata, [rule.key]: rule.many ? ids.filter((_, i) => kinds[i] === "live") : undefined };

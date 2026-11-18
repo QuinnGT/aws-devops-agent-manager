@@ -42,6 +42,12 @@ export async function getRevisionByNameKey(spaceId: string, nameKey: string): Pr
   return row ?? null;
 }
 
+/** Names of the space's revisions that still hold their name (a failed one gives it back), for the New revision dialog. */
+export async function revisionNames(spaceId: string): Promise<string[]> {
+  const rows = await db().select({ name: revisions.name, state: revisions.state }).from(revisions).where(eq(revisions.spaceId, spaceId));
+  return rows.filter((r) => r.state !== "failed").map((r) => r.name);
+}
+
 export async function listRevisionRows(spaceId: string, opts: { limit: number; offset: number }): Promise<RevisionRow[]> {
   return db().select().from(revisions).where(eq(revisions.spaceId, spaceId)).orderBy(desc(revisions.updatedAt), revisions.name).limit(opts.limit).offset(opts.offset);
 }

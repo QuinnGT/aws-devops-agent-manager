@@ -143,12 +143,17 @@ layouts:
   # or skill name, older duplicates as <name>.v<N>). One folder per asset under
   # a folder per asset type, each with a descriptor (_asset.json: assetId,
   # assetType, metadata). memory/ has no descriptors and keeps the STORE.md
-  # rules from instruction-folders.
+  # rules from instruction-folders, plus the store's asset ID in STORE.md.
   agent-space-folders:
     extends: instruction-folders
     label: Agent Space folders (one folder per asset with _asset.json)
     description: "For an Agent Space export, or a package laid out the same way: one folder per asset, each with an _asset.json descriptor."
     nonAssets: [README.md, .gitignore, "optional/**", "evaluation/**", "reference/**", "enrichment/**", "tools/**"]
+    memory:
+      # The store's asset ID in STORE.md frontmatter, like _asset.json's assetId:
+      # custom agents name stores by ID, so a package imported into another
+      # space can still tell which of its stores each ID means.
+      storeAssetIdKey: asset_id
     manifest: null
     instructions: null
     skills: null

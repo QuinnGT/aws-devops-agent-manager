@@ -16,12 +16,36 @@ export interface OpenFile {
   /** "text" files can be edited; binary and too-large files are shown as a note */
   kind: "text" | "binary" | "too-large";
   size: number;
+  /** Deleted in this tab: the save removes it from the package */
+  deleted?: boolean;
 }
 
 export type OpenFiles = Readonly<Record<string, OpenFile>>;
 
 export function isEdited(f: OpenFile): boolean {
+  if (f.deleted) return f.base !== null;
   return f.kind === "text" && f.base !== f.text;
+}
+
+/** Delete a file in the editor: a file added in this tab just goes, a file of the branch is deleted by the next save. */
+export function deleteOpenFile(files: OpenFiles, path: string): Record<string, OpenFile> {
+  const f = files[path];
+  const { [path]: _gone, ...rest } = files;
+  if (!f || f.base === null) return rest;
+  return { ...files, [path]: { ...f, deleted: true } };
+}
+
+/** Undo a delete: the file comes back with the text it had in the editor. */
+export function restoreOpenFile(files: OpenFiles, path: string): Record<string, OpenFile> {
+  const f = files[path];
+  return f ? { ...files, [path]: { ...f, deleted: false } } : { ...files };
+}
+
+/** Rename a text file: a new file at `to` with its text, and `from` deleted (or dropped when it was new in this tab). */
+export function renameOpenFile(files: OpenFiles, from: string, to: string): Record<string, OpenFile> {
+  const f = files[from];
+  if (!f || f.kind !== "text") return { ...files };
+  return { ...deleteOpenFile(files, from), [to]: { path: to, base: null, text: f.text, kind: "text", size: f.size } };
 }
 
 /** Edited files in path order: what a save sends. */
@@ -69,7 +93,8 @@ export function markSaved(files: OpenFiles, saved: readonly string[]): Record<st
   const out: Record<string, OpenFile> = { ...files };
   for (const p of saved) {
     const f = out[p];
-    if (f) out[p] = { ...f, base: f.text };
+    if (f?.deleted) delete out[p];
+    else if (f) out[p] = { ...f, base: f.text };
   }
   return out;
 }
@@ -181,4 +206,42 @@ export function saveButtonReason(s: { message: string; findings: number; reason:
 export function splitIncident(title: string, incidentId: string | null): { incident: string | null; rest: string } {
   if (incidentId && title.startsWith(`${incidentId}: `)) return { incident: incidentId, rest: title.slice(incidentId.length) };
   return { incident: null, rest: title };
+}
+
+/** The fix shape of a validation result (src/server/validation/types.ts QuickFix), kept structural so this module stays client-safe. */
+export interface EditorFix {
+  label: string;
+  from?: string;
+  edits: ({ kind: "replace-lines"; line: number; count: number; expect: string; text: string } | { kind: "rename"; to: string })[];
+}
+
+/**
+ * Apply a one-click fix to an open text file: each replace-lines edit only
+ * while its lines still read what the build saw, then a rename. Returns the
+ * new files, the path the file ends at and the first line changed, or the
+ * reason it can't apply. Pure.
+ */
+export function applyQuickFix(files: OpenFiles, path: string, fix: EditorFix): { files: Record<string, OpenFile>; path: string; line: number | null } | { error: string } {
+  const f = files[path];
+  if (!f || f.kind !== "text" || f.deleted) return { error: "Open the file first." };
+  const eol = f.text.includes("\r\n") ? "\r\n" : "\n";
+  let lines = f.text.split(/\r?\n/);
+  let first: number | null = null;
+  let to: string | null = null;
+  for (const e of fix.edits) {
+    if (e.kind === "rename") {
+      to = e.to;
+      continue;
+    }
+    const now = lines.slice(e.line - 1, e.line - 1 + e.count).join("\n");
+    if (now !== e.expect.replace(/\r\n/g, "\n")) return { error: "The file changed since the last build. Save it to check it again." };
+    lines = [...lines.slice(0, e.line - 1), ...e.text.split("\n"), ...lines.slice(e.line - 1 + e.count)];
+    first = first === null ? e.line : Math.min(first, e.line);
+  }
+  let out: Record<string, OpenFile> = { ...files, [path]: { ...f, text: lines.join(eol) } };
+  if (to && to !== path) {
+    if (out[to] && !out[to]!.deleted) return { error: `${to} already exists.` };
+    out = renameOpenFile(out, path, to);
+  }
+  return { files: out, path: to ?? path, line: first };
 }

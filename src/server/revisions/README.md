@@ -26,13 +26,13 @@ The existing `diff(from, to, path)`, `log({ ref })` and `resolveCommit` are used
 
 ## Configuration
 
-`policy/revisions.yaml`: name rule (pattern, length, case rule), package name template, committer, create (sync first, commit message, base labels), save (unlinked rule, message and reason lengths, caps on findings, files and bytes), trailer names, the change record (path, title, heading, intro, markers, column names, caps), plan title and reason templates, release name and note templates, `export.requirePassingBuild`, `pushBranches`, page caps.
+`policy/revisions.yaml`: name rule (pattern, length, case rule), package name template, committer, create (sync first, commit message, base labels, the first save of a revision from an import), save (unlinked rule, message and reason lengths, caps on findings, files and bytes), trailer names, the change record (path, title, heading, intro, markers, column names, caps), plan title and reason templates, release name and note templates, `export.requirePassingBuild`, `pushBranches`, page caps.
 
 ## Lifecycle
 
 | Step | Entry point | Where | Permission |
 |---|---|---|---|
-| Create | `requestCreateRevision(space, { name, base, layout?, note? }, actor)` then job `revisions.create` | web, then worker | `revisions.build` |
+| Create | `requestCreateRevision(space, { name, base, layout?, note?, importId? }, actor)` then job `revisions.create` | web, then worker | `revisions.build` |
 | Save | `requestSaveRevision(space, revisionId, { message, edits, findingIds, unlinkedReason?, expectedHead? }, actor)` then job `revisions.save` | web, then worker | `revisions.build` |
 | Plan | `createPlanFromRevision(space, revisionId, actor, { reason?, title? })` | web | `plans.create` |
 | Export | `exportRevision(space, revisionId, actor)`, `revisionDownloadHeaders(result)` | web (Route Handler) | `audits.read` (a read, like exporting a release) |
@@ -50,6 +50,8 @@ The existing `diff(from, to, path)`, `log({ ref })` and `resolveCommit` are used
 2. turns them into package files with the layout (`snapshotsToDesiredAssets`, `exportPackageZip`). When the release was tagged after a plan made from an earlier revision (`releases.plan_id` to `revisions.plan_id`), that revision's package at the planned commit is the export `base`, so README, `evaluation/`, `reference/` (the change record included) and shared section sources carry over while asset files come from the release;
 3. runs the build and validation (`checkPackage` against the live index);
 4. creates the branch at the base commit and commits the package (trailers `Revision-Id`, `Space`), state `open`.
+
+With `importId` ("Fix in a revision" on an import): the base is live, the layout is the import's, and the import must be read, not planned, still stored and not held by another revision (`readImportForRevision` in package-io; validation errors don't stop it). `base` records `fromImport` (import ID, file name, SHA-256 and the change ID of the first save) and the label `revisions.create.baseLabels.import`. After step 4 the job reads the stored upload again (SHA-256 checked) and makes the first save with `saveRevisionHandler`: `importOverlayEdits` lays the uploaded files over the first commit by asset (each package asset replaces the files of the base asset with the same source ID, else the same type and key, wherever the base keeps them; assets the package doesn't mention stay; the folder index lists both), with the message and unlinked reason from `revisions.create.importSave`. The diff against the base then shows what the import would change, and the build lists every error by file. A rerun finishes that save (its change ID is fixed in the base). While the revision is creating, open or applied, the import can't make its own plan or be read with another layout (`in-revision`); a failed or abandoned revision gives it back.
 
 Problems turning assets into a package (`export.not-placed`, files git doesn't hold) are kept in `base.exportResults` and listed first in the first build. A failed create sets state `failed` with the reason; a failed revision without a branch gives its name back to the next create. A rerun finds its branch by `Revision-Id` and finishes.
 

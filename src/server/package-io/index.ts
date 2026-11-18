@@ -46,6 +46,7 @@ export {
   type UntouchedGroup,
   type ExportOptions,
 } from "./loaders";
+export { importRevision, readImportForRevision, type ImportRevision } from "./to-revision";
 export { importRequestFromForm, createPlanRequestFromForm, createPlanFormSchema, layoutRequestFromForm, exportRequestFromSearchParams, exportQuerySchema } from "./forms";
 export {
   formatBytes,

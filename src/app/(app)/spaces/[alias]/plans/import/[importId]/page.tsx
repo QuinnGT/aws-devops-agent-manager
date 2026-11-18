@@ -8,6 +8,8 @@ import { ChangeChip } from "@/components/common/change-chip";
 import { EmptyState } from "@/components/common/empty-state";
 import { PageHeader } from "@/components/common/page-header";
 import { RoleNote } from "@/components/common/role-note";
+import { NewRevisionButton } from "@/components/revisions/new-revision-button";
+import { revisionNameFromFile } from "@/components/revisions/words";
 import { SectionCard } from "@/components/common/section-card";
 import { StatTile } from "@/components/common/stat-tile";
 import { StatusBadge } from "@/components/common/status-badge";
@@ -26,11 +28,13 @@ import type { PlanTypeOption } from "@/server/package-io/loaders";
 import { formatBytes, joinAnd } from "@/server/package-io/format";
 import { assetLabel } from "@/server/history/display-name";
 import type { Policy } from "@/server/policy";
+import { REVISION_PERMISSIONS } from "@/server/revisions";
 import { getSpaceByAlias } from "@/server/spaces/queries";
 import { CreatePlanForm } from "../_components/create-plan-form";
 import { ImportResults } from "../_components/import-results";
 import { LayoutChoice } from "../_components/layout-choice";
-import { breakdown, nonAssetSummary, plainResult, typeFileCount, typeResults, typeRows, type TypeRow } from "../_components/mapping";
+import { breakdown, nonAssetSummary, plainResult, problemsByAsset, rowAnchor, rowNotes, typeFileCount, typeResults, typeRows, type TypeRow } from "../_components/mapping";
+import { ProblemsByAsset, RowNotesList } from "../_components/row-notes";
 
 const PAGE_ROWS = 50;
 const UNTOUCHED_NAMES = 6;
@@ -167,36 +171,48 @@ function TypeTable({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {shown.map((r) => (
-            <TableRow key={r.key} className="align-top">
-              <TableCell className="max-w-[280px] px-4 py-2 font-mono text-xs break-words whitespace-normal">
-                <PathText value={r.file} />
-              </TableCell>
-              <TableCell className="max-w-[320px] py-2 break-words whitespace-normal">
-                {r.asset === null ? (
-                  <span className="text-muted-foreground">None</span>
-                ) : r.assetId ? (
-                  <Link href={`/spaces/${encodeURIComponent(alias)}/assets/${encodeURIComponent(r.assetId)}`} className="inline-block min-h-6 py-0.5 font-semibold underline-offset-4 hover:underline">
-                    <PathText value={assetLabel(policy, { assetType: group.assetType, name: r.asset })} />
-                  </Link>
-                ) : (
-                  <span className="font-semibold">
-                    <PathText value={assetLabel(policy, { assetType: group.assetType, name: r.asset })} />
-                  </span>
-                )}
-              </TableCell>
-              <TableCell className="py-2">
-                <ChangeCell row={r} plain={plain} />
-              </TableCell>
-              <TableCell className="py-2 text-right tabular-nums">
-                {r.size !== null ? formatBytes(r.size) : null}
-                {r.lines !== null ? <p className="text-xs text-muted-foreground">{r.lines} lines</p> : null}
-              </TableCell>
-              <TableCell className="py-2 pr-4">
-                <StatusBadge {...validationStatus(r.results)} />
-              </TableCell>
-            </TableRow>
-          ))}
+          {shown.map((r) => {
+            const notes = rowNotes(policy, r, { underRow: true });
+            return (
+              <Fragment key={r.key}>
+                <TableRow id={rowAnchor(r.key)} className={cn("scroll-mt-16 align-top target:bg-muted/60", notes.length && "border-b-0")}>
+                  <TableCell className="max-w-[280px] px-4 py-2 font-mono text-xs break-words whitespace-normal">
+                    <PathText value={r.file} />
+                  </TableCell>
+                  <TableCell className="max-w-[320px] py-2 break-words whitespace-normal">
+                    {r.asset === null ? (
+                      <span className="text-muted-foreground">None</span>
+                    ) : r.assetId ? (
+                      <Link href={`/spaces/${encodeURIComponent(alias)}/assets/${encodeURIComponent(r.assetId)}`} className="inline-block min-h-6 py-0.5 font-semibold underline-offset-4 hover:underline">
+                        <PathText value={assetLabel(policy, { assetType: group.assetType, name: r.asset })} />
+                      </Link>
+                    ) : (
+                      <span className="font-semibold">
+                        <PathText value={assetLabel(policy, { assetType: group.assetType, name: r.asset })} />
+                      </span>
+                    )}
+                  </TableCell>
+                  <TableCell className="py-2">
+                    <ChangeCell row={r} plain={plain} />
+                  </TableCell>
+                  <TableCell className="py-2 text-right tabular-nums">
+                    {r.size !== null ? formatBytes(r.size) : null}
+                    {r.lines !== null ? <p className="text-xs text-muted-foreground">{r.lines} lines</p> : null}
+                  </TableCell>
+                  <TableCell className="py-2 pr-4">
+                    <StatusBadge {...validationStatus(r.results)} />
+                  </TableCell>
+                </TableRow>
+                {notes.length ? (
+                  <TableRow className="hover:bg-transparent">
+                    <TableCell colSpan={5} className="px-4 pt-0 pb-2.5 whitespace-normal">
+                      <RowNotesList notes={notes} />
+                    </TableCell>
+                  </TableRow>
+                ) : null}
+              </Fragment>
+            );
+          })}
         </TableBody>
       </Table>
       {rows.length > shown.length ? (
@@ -238,22 +254,59 @@ export default async function ImportResultPage({ params, searchParams }: PagePro
   const im = detail.import;
   const counts = detail.summary?.counts ?? { create: 0, update: 0, unchanged: 0, untouched: 0, errors: 0, warnings: 0 };
   const results = [...detail.validation.errors, ...detail.validation.warnings].map((r) => plainResult(policy, r));
+  const problems = problemsByAsset(policy, detail);
+  const problemHref = (a: { assetType: string; rowKey: string; index: number }) => `${typeHref(a.assetType, a.index >= PAGE_ROWS ? a.index + 1 : undefined)}#${rowAnchor(a.rowKey)}`;
   const totalFiles = detail.files.reduce((n, g) => n + g.files.length, 0);
   const updates = detail.groups.flatMap((g) => g.items.filter((i) => i.action === "update").map((i) => `${t.one(g.assetType)} ${i.key}`));
   const dirs = detail.layout?.typeDirs ?? {};
   const roleFiles = (role: string) => detail.files.find((g) => g.role === role)?.files ?? [];
-  const [canPlan, role] = await Promise.all([can(user, PACKAGE_IO_PERMISSIONS.plan, space.id), roleFor(user, space.id)]);
+  const [canPlan, canBuild, canSync, canManage, role] = await Promise.all([
+    can(user, PACKAGE_IO_PERMISSIONS.plan, space.id),
+    can(user, REVISION_PERMISSIONS.build, space.id),
+    can(user, "sync.run", space.id),
+    can(user, "spaces.manage", space.id),
+    roleFor(user, space.id),
+  ]);
+  const inRevision = detail.revision.current;
+  const canFixInRevision = canBuild && detail.revision.canStart;
   const planType = new Map(detail.planTypes.types.map((o) => [o.assetType, o]));
   const leftOutByType = new Map<string, number>();
   for (const l of detail.leftOut) leftOutByType.set(l.assetType, (leftOutByType.get(l.assetType) ?? 0) + 1);
   const layoutReason = !detail.layouts.canChange
-    ? detail.plan.planId || im.status === "planning"
+    ? inRevision
+      ? `This import is in revision ${inRevision.name}. Upload the package again to read it another way.`
+      : detail.plan.planId || im.status === "planning"
       ? "A plan exists from this import. Upload the package again to read it another way."
       : "The upload is no longer stored. Upload the package again."
     : null;
 
+  const fixInRevision = canFixInRevision ? (
+    <NewRevisionButton
+      space={space}
+      canSync={canSync}
+      canManage={canManage}
+      triggerLabel="Fix in a revision"
+      triggerVariant="outline"
+      fromImport={{ importId: im.id, fileName: im.fileName, layout: im.layout, defaultName: revisionNameFromFile(im.fileName, policy.revisions.name.maxLength) }}
+    />
+  ) : null;
   const callouts: ReactNode[] = [];
-  if (im.status === "rejected") {
+  if (inRevision) {
+    callouts.push(
+      <Callout
+        key="revision"
+        tone="info"
+        title={`This import is in revision ${inRevision.name}`}
+        action={
+          <Link href={`${base}/revisions/${encodeURIComponent(inRevision.name)}`} className={buttonVariants({ variant: "outline", size: "sm" })}>
+            Open the revision
+          </Link>
+        }
+      >
+        Edit the files and fix the errors there, then create the plan from the revision.
+      </Callout>,
+    );
+  } else if (im.status === "rejected") {
     callouts.push(
       <Callout key="rejected" tone="destructive" title="The package was rejected">
         Fix the package and upload it again.
@@ -269,9 +322,15 @@ export default async function ImportResultPage({ params, searchParams }: PagePro
     const selectable = detail.planTypes.unattributedErrors === 0 && detail.planTypes.types.some((ty) => ty.errors === 0 && ty.changes > 0);
     const failingTypes = detail.planTypes.types.filter((ty) => ty.errors > 0).map((ty) => ty.nounOther);
     callouts.push(
-      <Callout key="errors" tone="destructive" title={`${validationFailedText(detail.failedAssets, counts.errors)}.`}>
+      <Callout key="errors" tone="destructive" title={`${validationFailedText(detail.failedAssets, counts.errors)}.`} action={canFixInRevision && canPlan ? fixInRevision : undefined}>
         {failingTypes.length ? `The errors are in ${joinAnd(failingTypes)}. ` : null}
-        {selectable ? "Fix the package and upload it again, or leave the asset types with errors out of the plan." : "Fix the package and upload it again."}
+        {canFixInRevision
+          ? selectable
+            ? "Fix them in a revision, fix the package and upload it again, or leave the asset types with errors out of the plan."
+            : "Fix them in a revision, or fix the package and upload it again."
+          : selectable
+            ? "Fix the package and upload it again, or leave the asset types with errors out of the plan."
+            : "Fix the package and upload it again."}
       </Callout>,
     );
   }
@@ -472,6 +531,14 @@ export default async function ImportResultPage({ params, searchParams }: PagePro
                     reasonRequired={space.parsedSettings.changeReasonRequired}
                     stateReason={detail.planTypes.stateReason ?? (detail.groups.length === 0 ? (detail.plan.reason ?? "Nothing in this package maps to an asset.") : null)}
                   />
+                  {canFixInRevision ? (
+                    <div className="grid gap-2 border-t px-4 py-3">
+                      <p className="text-[13px] text-muted-foreground">
+                        Or open the package in a revision first: edit its files, see each error and warning by file, and create the plan there when the checks pass.
+                      </p>
+                      <div>{fixInRevision}</div>
+                    </div>
+                  ) : null}
                 </SectionCard>
               ) : null}
               {detail.layouts.candidates.length > 1 || detail.layouts.choice ? (
@@ -496,8 +563,19 @@ export default async function ImportResultPage({ params, searchParams }: PagePro
                   </span>
                 }
               >
-                <ImportResults results={results.slice(0, RESULT_ROWS)} />
-                {results.length > RESULT_ROWS ? <p className="border-t px-4 py-2 text-xs text-muted-foreground">and {results.length - RESULT_ROWS} more</p> : null}
+                {problems.assets.length ? (
+                  <>
+                    <p className="border-b px-4 py-2 text-xs text-muted-foreground">By asset. Each one opens its row, where its problems are listed.</p>
+                    <ProblemsByAsset assets={problems.assets} href={problemHref} />
+                  </>
+                ) : null}
+                {problems.other.length || !problems.assets.length ? (
+                  <div className={cn(problems.assets.length && "border-t")}>
+                    {problems.assets.length ? <p className="px-4 pt-2 text-xs font-medium text-muted-foreground">About the whole package</p> : null}
+                    <ImportResults results={problems.other.slice(0, RESULT_ROWS).map((r) => plainResult(policy, r))} />
+                    {problems.other.length > RESULT_ROWS ? <p className="border-t px-4 py-2 text-xs text-muted-foreground">and {problems.other.length - RESULT_ROWS} more</p> : null}
+                  </div>
+                ) : null}
               </SectionCard>
               <SectionCard id="import-roles-h" title="File roles" aside={<span className="text-xs text-muted-foreground tabular-nums">{totalFiles} files</span>}>
                 <dl className="grid grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-2 px-4 py-3 text-[13px]">

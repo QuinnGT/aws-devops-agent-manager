@@ -34,8 +34,14 @@ import { findingsForChangelog, getRevision, getRevisionByNameKey, isUuid } from 
 
 // ---------- pure helpers ----------
 
-/** Why a file is read only in the editor: written by the build or the change record, never by a person. */
-export function isGeneratedFile(file: Pick<TreeFile, "path" | "role">, opts: { changelogPath: string | null; validationPath: string | null }): boolean {
+/**
+ * Why a file is read only in the editor: written by the build or the change
+ * record, never by a person. An asset folder's descriptor (`_asset.json` in
+ * the Agent Space folder layout) has the manifest role but is the asset's
+ * metadata, so it stays editable.
+ */
+export function isGeneratedFile(file: Pick<TreeFile, "path" | "role">, opts: { changelogPath: string | null; validationPath: string | null; descriptor?: string | null }): boolean {
+  if (opts.descriptor && file.role === "manifest" && file.path.split("/").pop() === opts.descriptor) return false;
   return file.role === "build-artifact" || file.role === "manifest" || file.path === opts.changelogPath || file.path === opts.validationPath;
 }
 
@@ -347,7 +353,7 @@ export async function loadRevisionPage(space: Space, idOrName: string, viewer?: 
     marks[f.path] = {
       edited: edited.has(f.path),
       errors: errors.get(f.path) ?? 0,
-      generated: isGeneratedFile(f, { changelogPath, validationPath }),
+      generated: isGeneratedFile(f, { changelogPath, validationPath, descriptor: layout?.assetFolders?.descriptor ?? null }),
       instructions: f.role === "asset" && (f.assetKey?.startsWith("agents_md:") ?? false),
     };
   }

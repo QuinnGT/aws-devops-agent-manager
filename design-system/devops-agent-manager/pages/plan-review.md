@@ -21,7 +21,7 @@ Overrides `MASTER.md` for `/spaces/[alias]/plans/[planId]`. Screens (example dat
 2. **`PageHeader`:**
    - Title: the plan title, with the state badge.
    - Meta line: "Plan by <author> from <N> drafts · checked against the live space <Time>". Other origins show the origin line instead of "from <N> drafts", except when it repeats the title (a version restore is titled "Restore <name> to v<N>").
-   - Action: "Discard plan" (ghost), for the author or an Admin. It opens an `AlertDialog`: "Discard this plan?" followed by "The drafts stay saved." for a plan made from drafts, or "Nothing changes in the space." for any other plan.
+   - Actions: "Discard plan" (ghost), for the author or an Admin. It opens an `AlertDialog`: "Discard this plan?" followed by "The drafts stay saved." for a plan made from drafts, or "Nothing changes in the space." for any other plan. Then the approval controls (see "Approve and apply").
 3. **Callouts:**
 
    | When | Tone | Title | Body | Action |
@@ -32,38 +32,43 @@ Overrides `MASTER.md` for `/spaces/[alias]/plans/[planId]`. Screens (example dat
    | Apply failed | destructive | "<N> change(s) failed" | Which items failed and why. Items already written stay written. | "Create a plan for the failed items" |
 
    The re-check action appears only in the callout, not again in the header.
-4. **Summary tiles:**
-   - Content updates, Status changes and Will be skipped (value in warning-fg) are always shown.
-   - Creates is shown only when above zero.
-   - Deletes is shown only when above zero, with its value in destructive-fg. Deletes can only appear when the space setting `deletesEnabled` is on.
-   - Validation shows "Passed" or "<N> failed", with "<checks> checks". Validation needs no live read: when the check failed and the page compares with the last synced version, the same per-asset and set rules run against that version and the last synced index (the index a passing check uses too), and the detail adds ", checked against the last synced version". "Apply will skip" stays "Not checked" until a check passes.
-5. **Two columns:** items and the selected item's diff on the left; "Approve and apply" and "What apply does" on the right.
+4. **Summary chips:** one row of small outlined chips, number first.
+   - Content updates, Status changes and Skipped (number in warning-fg above zero) are always shown. Skipped reads "Skips not checked yet" until a check passes.
+   - Metadata updates and Creates are shown only when above zero.
+   - Deletes is shown only when above zero, with its number in destructive-fg and the title "A snapshot is committed before each delete". Deletes can only appear when the space setting `deletesEnabled` is on.
+   - Validation: CircleCheck and "Validation passed", or CircleX and "Validation failed for <N>", plus ", <N> warnings". Its title gives "<checks> checks, <N> failed". Validation needs no live read: when the check failed and the page compares with the last synced version, the same per-asset and set rules run against that version and the last synced index (the index a passing check uses too), and the title adds ", checked against the last synced version". Before any check: "Validation not checked yet".
+5. **Review area:** the changes list (340 px) and the selected item card side by side. From 1024 px the area is as tall as the window below the top bar (`100dvh` − 88 px, at least 32 rem), and the list and the card body each scroll on their own, so the page doesn't grow with the plan. Below 1024 px they stack: the list is at most 60% and the card at most 85% of the window height.
+6. **Notes**, when the plan has any, under the review area.
 
-## Items table
+## Changes list
 
-Columns:
-
-- **Asset:** bold name over the type label.
-- **Change:** icon and text from the plan-item row of the MASTER status table. Creates use CirclePlus and "Create". Deletes use the destructive tone and "Delete (snapshot taken first)".
-- **Live → new:** mono, for example "v5 → v6", "v1, status only", or "planned v1, live v2". A version restore says where the content comes from: "v2 → v3, same content as v1".
-- **Validation:** a badge.
-- **Progress:** added while applying, with Waiting, Writing, Verifying, Done, Skipped or Failed.
-
-The selected row has a 3 px left bar in foreground and a 5% tint. The selection is `?item=<planItemId>`, and the asset name is the control that sets it.
+- Header: "Changes" and "<N> assets"; a `Segmented` "All", "Errors <N>" and "Warnings <N>" (each only when above zero); then the apply job's `JobProgress` while applying.
+- A search field, "Filter by name or type", from 10 rows.
+- Rows are grouped by change, in this order: Content updates, Metadata updates, Status changes, Deletes, Creates, No change, Not compared yet. Empty groups are left out, and a plan with one group shows no group headers. Group headers are buttons with the count and a chevron (`aria-expanded`). Creates and No change start collapsed when another group is shown, also when they appear after the check. Selecting a row in a collapsed group (Previous, Next) opens it. While a filter or search is active, every group with a match is open.
+- A row is a link: the bold name, wrapping; on the right the validation icon (CircleX destructive-fg, TriangleAlert warning-fg or CircleCheck success-fg) with the count of errors or warnings; below, "<type> · <Live → new>" muted, for example "Instructions (AGENTS.md) · v8 → v9", "Memory in verity · new" or "v2 → v3, same content as v1", with "Set Inactive" or "Set Active" for a status change and "Skip: live changed" in warning-fg for an item apply will skip; on the right the +N and −M counts. While applying, the counts give way to the progress word (Waiting, Writing, Verifying, Done, Skipped or Failed, in the item progress tones), with the message under the type for Skipped and Failed.
+- The selected row has a 3 px left bar in foreground and a 5% tint, and scrolls into view when it changes. The selection is `?item=<planItemId>`.
 
 ## Selected item card
 
-- Header: "<name> · <main file>", the +N and −M counts, a Content or Metadata `ToggleGroup`, and Unified or Split (1024 px and wider, MASTER "Diffs").
+- Header: "<name> · <main file>", the +N and −M counts, a Content or Metadata `ToggleGroup`, and the layout: Words, Lines, or Split (1024 px and wider, MASTER "Diffs"). Then "<position> of <total>" and Previous and Next (icon buttons, links to the rows before and after in list order, also the k and j keys outside a field or dialog). The layout carries over from item to item; Content or Metadata starts again for each.
+- Words, the default: a removed line and an added line from the same run that share at least half of their non-space text show as one row (tint muted 40%, sign "~", both line numbers), with the removed words struck through in destructive and the added words in success. Other lines show as in Lines.
 - For instructions, the `SizeMeterView` for the size after the change ("4.6 KB of 25 KB · 95 lines (about 120 recommended)"), in the tones from `asset-detail.md`.
 - The diff of live against planned content, in the MASTER "Diffs" style.
+- The body under the header scrolls on its own and starts at the top for each item.
 
-## Approve and apply card
+## Approve and apply
 
-**Change reason.**
-- `Textarea` with a visible label. Add "(required for this space)" when the space setting `changeReasonRequired` is on (the default).
-- Help text: "Saved with the git commit and shown in History."
-- Who can type it: the author while requesting approval, and anyone whose role can apply this plan while it is open, even while Apply is still disabled (checking, check failed, waiting for approval). It is sent with Apply. For a role that can't apply, the reason is read only, with `missingRoleReason` for applying. Next to "Approve" it is read only too: approving doesn't save it.
-- An inline error appears when the reason is required and empty at apply.
+In the page header, after "Discard plan": "Reject" (outline) for an approver, and the first button of the table below. A disabled button shows its reason next to it (`DisabledReason`). A closed plan shows the closed note instead ("Applied <Time>. Nothing more to do on this plan.").
+
+The button opens one dialog, which is also the confirmation:
+
+- Title: "Apply <N> changes to <space name>?", "Request approval for this plan?" or "Approve this plan?".
+- Description: for apply "Writes go to <space name>. There is no undo: to go back, restore an earlier version as a new plan."; for a request "The plan waits for a second person to approve it. The change reason is saved with the request."; for approve "Approving lets the plan be applied. Nothing is written to the space until then."
+- For apply, the counts by change type and the skipped items by name.
+- **Change reason.** A `Textarea` with a visible label, "(required for this space)" when the space setting `changeReasonRequired` is on (the default), and the help "Saved with this change in the history and shown on the History page." It can be typed by the author requesting approval and by anyone applying. Next to "Approve" it is read only: approving doesn't save it. An inline error appears when the reason is required and empty at apply.
+- The approval facts.
+- For apply, "What apply does".
+- Buttons: "Cancel" (outline) and the action ("Apply <N> changes", "Request approval", "Approve").
 
 **Approval facts.** A definition list:
 - Approval: "A second person must approve" when the space setting `approvalRequired` is on, or "Not required for this space".
@@ -81,16 +86,11 @@ The selected row has a 3 px left bar in foreground and a 5% tint. The selection 
 
 <N> counts only the items that will be written, not skipped or unchanged ones.
 
-**Apply confirmation.** An `AlertDialog`:
-- Title: "Apply <N> changes to <space name>?"
-- Body: the counts by change type, the skipped items by name, and the change reason.
-- Buttons: "Apply <N> changes" (primary) and "Cancel".
-
-Confirming starts the job, shows the toast "Applying <N> changes", and turns on the Progress column with `JobProgress` above the table.
+Applying starts the job, closes the dialog, shows the toast "Applying <N> changes", and turns on the progress words in the changes list with `JobProgress` above the rows.
 
 ## What apply does
 
-A short numbered list, always shown:
+A short numbered list, in the apply dialog:
 
 1. Re-reads each asset and skips any that changed since this check.
 2. Writes each change once, with the plan item as its client token.

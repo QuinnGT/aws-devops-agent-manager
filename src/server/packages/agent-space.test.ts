@@ -189,11 +189,13 @@ describe("targeting a space", () => {
     expect(reviewer.refs).toEqual({ skills: ["verity", "probe"] });
     expect(reviewer.metadata.skills).toBeUndefined();
     expect(reviewer.metadata.memory_stores).toEqual([]);
-    expect(t.results.filter((r) => r.level === "error")).toEqual([
+    // A custom agent's stores are optional, so the unknown one is dropped with a warning, not an error.
+    expect(t.results.filter((r) => r.level === "error")).toEqual([]);
+    expect(t.results.filter((r) => r.code === "reference.not-in-package")).toEqual([
       {
-        level: "error",
+        level: "warning",
         code: "reference.not-in-package",
-        message: `memory_stores names memory store ${I.liveStore}, which is not in this package or in this space, so the reference can't be kept here.`,
+        message: `memory_stores names memory store ${I.liveStore}, which is not in this package or in this space, so the plan leaves this reference out.`,
         assetKey: "custom_agent:reviewer",
         path: "metadata.memory_stores",
       },
@@ -204,6 +206,24 @@ describe("targeting a space", () => {
     expect(r2).toMatchObject({ refs: { skills: ["verity", "probe"] }, metadata: { memory_stores: [I.liveStore] } });
     expect(t2.results.filter((r) => r.level === "error")).toEqual([]);
     expect(validateAssetSet(t2.assets, { policy, live: [live("ki-live-verity", "skill", { name: "verity" }), live(I.liveStore, "memory_store", { name: "patterns" })], perAsset: false }).filter((r) => r.code.startsWith("reference"))).toEqual([]);
+  });
+
+  it("resolves a store ID through the package's STORE.md asset_id, by name in another space", () => {
+    const store = `---\nstore: notes\nasset_id: ${I.liveStore}\ndescription: Demo notes. Read when testing.\nagent_types: Generic (all agents)\n---\n\nDemo store.\n`;
+    const assets = packageToDesiredAssets(agentSpacePackage({ "memory/notes/STORE.md": store }), layout, { policy }).assets;
+    expect(assets.find((a) => a.assetType === "memory_store")).toMatchObject({ sourceAssetId: I.liveStore, metadata: { name: "notes" } });
+    // Another space with a store named notes: the reference becomes the name, which the plan resolves there.
+    const elsewhere = [live("ki-b0000000-0000-4000-8000-000000000001", "memory_store", { name: "notes" })];
+    const t = targetPackageAssets(assets, { policy, layout, live: elsewhere });
+    expect(t.assets.find((a) => a.assetType === "custom_agent")!.refs).toEqual({ skills: ["verity", "probe"], memoryStores: ["notes"] });
+    expect(t.results.filter((r) => r.code.startsWith("reference"))).toEqual([]);
+  });
+
+  it("checks an asset that matches a live one by name as an update, not a create", () => {
+    // LEARNED skills can't be created, but one that exists here by name is an update.
+    const learned: DesiredAsset = { assetType: "skill", key: "prefs", metadata: { name: "prefs", description: "Customer preferences.", agent_types: ["GENERIC"], skill_type: "LEARNED" }, files: [{ path: "SKILL.md", encoding: "utf8", content: "---\nname: prefs\ndescription: Customer preferences.\n---\n# Prefs\n" }] };
+    expect(validateAssetSet([learned], { policy, live: [] }).map((r) => r.code)).toContain("metadata.create");
+    expect(validateAssetSet([learned], { policy, live: [live("ki-c0000000-0000-4000-8000-000000000001", "skill", { name: "prefs", skill_type: "LEARNED" })] }).map((r) => r.code)).not.toContain("metadata.create");
   });
 
   it("leaves out the asset types that are not selected", () => {
@@ -260,5 +280,15 @@ describe("agent-space-folders export", () => {
     expect(back.results).toEqual([]);
     const shape = (a: DesiredAsset) => ({ type: a.assetType, key: a.key, id: a.sourceAssetId ?? null, metadata: a.metadata, files: a.files.map((f) => [f.path, f.encoding, f.content]) });
     expect(back.assets.map(shape)).toEqual(original.map((a) => ({ ...shape(a) })));
+  });
+
+  it("writes a store's asset ID into STORE.md and reads it back as the source asset ID", () => {
+    const storeId = "ki-a0000000-0000-4000-8000-000000000008";
+    const original = packageToDesiredAssets(agentSpacePackage(), layout, { policy }).assets.map((a) => (a.assetType === "memory_store" ? { ...a, assetId: storeId } : a));
+    const out = exportPackageZip(original, layout, { policy, packageName: "space" });
+    expect(out.contents.files.get("memory/notes/STORE.md")!.toString("utf8")).toContain(`asset_id: ${storeId}`);
+    const back = packageToDesiredAssets(out.contents, layout, { policy });
+    expect(back.assets.find((a) => a.assetType === "memory_store")).toMatchObject({ sourceAssetId: storeId, metadata: { name: "notes" } });
+    expect(back.assets.find((a) => a.assetType === "memory_store")!.metadata).not.toHaveProperty("asset_id");
   });
 });

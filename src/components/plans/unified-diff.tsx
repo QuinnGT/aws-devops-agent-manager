@@ -1,7 +1,7 @@
 import type { FileDiff, ValueChange } from "@/server/assets/diff";
 import { showValue } from "@/server/assets/diff";
 import { cn } from "@/lib/utils";
-import { diffRows } from "./diff-rows";
+import { diffRows, wordRows, type WordRow } from "./diff-rows";
 
 /** A line's text: wraps, keeps its spaces, and breaks a word too long for the column. */
 const TEXT = "whitespace-pre-wrap [overflow-wrap:anywhere]";
@@ -11,16 +11,18 @@ const TEXT = "whitespace-pre-wrap [overflow-wrap:anywhere]";
  * headers, +/− signs, token tints (added 14%, deleted 10%, hunk 8%). Long
  * lines wrap: the numbers and sign stay on the first row, long words break
  * anywhere, nothing scrolls sideways. Content is plain text, never HTML.
+ * With `words`, a removed line and its similar replacement show as one row
+ * with the removed words struck through and the added words marked.
  * No hooks, so it renders on the server or inside a client component.
  */
-export function UnifiedDiff({ file, label }: { file: FileDiff; label?: string }) {
+export function UnifiedDiff({ file, label, words = false }: { file: FileDiff; label?: string; words?: boolean }) {
   if (file.reason) {
     return <p className="px-4 py-3 text-[13px] text-muted-foreground">{file.reason}.</p>;
   }
   if (file.hunks.length === 0) {
     return <p className="px-4 py-3 text-[13px] text-muted-foreground">{file.status === "unchanged" ? "No change in this file." : "No line changes."}</p>;
   }
-  const rows = diffRows(file.hunks);
+  const rows: WordRow[] = words ? wordRows(diffRows(file.hunks)) : diffRows(file.hunks);
   return (
     <div role="region" aria-label={label ?? `Unified diff of ${file.path}`}>
       <table className="w-full table-fixed border-collapse font-mono text-[12.5px] leading-[1.6]">
@@ -39,6 +41,32 @@ export function UnifiedDiff({ file, label }: { file: FileDiff; label?: string })
                   <td className="w-10 select-none" aria-hidden />
                   <td className="w-5 select-none" aria-hidden />
                   <td className={cn("pr-4", TEXT)}>{r.text}</td>
+                </tr>
+              );
+            }
+            if (r.kind === "change") {
+              return (
+                <tr key={i} className="bg-muted/40 align-top">
+                  <td className="w-10 pr-2 text-right text-muted-foreground tabular-nums select-none">{r.old}</td>
+                  <td className="w-10 pr-2 text-right text-muted-foreground tabular-nums select-none">{r.new}</td>
+                  <td className="w-5 text-center text-muted-foreground select-none">
+                    ~<span className="sr-only">changed</span>
+                  </td>
+                  <td className={cn("pr-4", TEXT)}>
+                    {r.parts.map((p, j) =>
+                      p.kind === "del" ? (
+                        <del key={j} className="rounded-sm bg-destructive/25 text-destructive-fg">
+                          {p.text}
+                        </del>
+                      ) : p.kind === "add" ? (
+                        <ins key={j} className="rounded-sm bg-success/30 text-success-fg no-underline">
+                          {p.text}
+                        </ins>
+                      ) : (
+                        p.text
+                      ),
+                    )}
+                  </td>
                 </tr>
               );
             }

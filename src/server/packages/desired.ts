@@ -3,7 +3,7 @@ import type { AssetFoldersRule } from "@/server/policy/sections/package-layouts"
 import { assetIdentity } from "@/server/validation/identity";
 import { error, warning, type ValidationResult } from "@/server/validation/types";
 import { assetMainFile, listAssetFolders, matchesKeep, parseDescriptor, uploadedFiles, type AssetFolder } from "./asset-folders";
-import { parseFrontmatter } from "./frontmatter";
+import { parseFrontmatter, yamlAt, yamlSentence } from "./frontmatter";
 import { agentTypeResolver, getLayout, isNonAsset, parseAgentTypes, sharedSections, type PackageLayout } from "./layout";
 import { manifestMetadata, parseManifest, type PackageManifest } from "./manifest";
 import { basename, fill, sortPaths } from "./paths";
@@ -215,7 +215,7 @@ class Mapper {
       this.results.push(error("package.not-text", `${mainFile.source} must be UTF-8 text.`, { path: mainFile.source }));
     } else {
       const fm = parseFrontmatter(mainText);
-      if (fm.error) this.results.push(error("package.frontmatter-invalid", `${source}/${rule.mainFile} has frontmatter that is not valid YAML: ${fm.error}`, { path: mainFile.source }));
+      if (fm.error) this.results.push(error("package.frontmatter-invalid", yamlSentence(`${source}/${rule.mainFile}`, fm), { path: mainFile.source, ...yamlAt(fm) }));
       for (const [metaKey, fmKey] of Object.entries(rule.frontmatter)) {
         const v = fm.data?.[fmKey];
         if (v === undefined || v === null) continue;
@@ -365,7 +365,7 @@ class Mapper {
         const t = this.text(storePath);
         if (t !== null) {
           const fm = parseFrontmatter(t);
-          if (fm.error) this.results.push(error("package.frontmatter-invalid", `${storePath} has frontmatter that is not valid YAML: ${fm.error}`, { path: storePath }));
+          if (fm.error) this.results.push(error("package.frontmatter-invalid", yamlSentence(`${storePath}`, fm), { path: storePath, ...yamlAt(fm) }));
           const metadata: Record<string, unknown> = {};
           for (const [metaKey, fmKey] of Object.entries(rule.storeFrontmatter)) {
             const v = fm.data?.[fmKey];
@@ -379,8 +379,15 @@ class Mapper {
           storeName = String(metadata.name);
           this.overlayManifest("memory_store", storeName, metadata);
           const body = fm.body.replace(/^(?:\r?\n)+/, "");
+          const sourceAssetId = rule.storeAssetIdKey ? fm.data?.[rule.storeAssetIdKey] : undefined;
           this.add(
-            { assetType: "memory_store", metadata, files: [{ path: rule.storeContentFile, encoding: "utf8", content: body, sourcePath: storePath }], source: storePath },
+            {
+              assetType: "memory_store",
+              metadata,
+              files: [{ path: rule.storeContentFile, encoding: "utf8", content: body, sourcePath: storePath }],
+              source: storePath,
+              ...(typeof sourceAssetId === "string" && sourceAssetId ? { sourceAssetId } : {}),
+            },
             [storePath],
           );
         }
@@ -391,7 +398,7 @@ class Mapper {
         const t = this.text(p);
         if (t === null) continue;
         const fm = parseFrontmatter(t);
-        if (fm.error) this.results.push(error("package.frontmatter-invalid", `${p} has frontmatter that is not valid YAML: ${fm.error}`, { path: p }));
+        if (fm.error) this.results.push(error("package.frontmatter-invalid", yamlSentence(`${p}`, fm), { path: p, ...yamlAt(fm) }));
         const metadata: Record<string, unknown> = {};
         for (const [metaKey, fmKey] of Object.entries(rule.memoryFrontmatter)) {
           const v = fm.data?.[fmKey];
@@ -422,7 +429,7 @@ class Mapper {
       const t = this.text(main);
       if (t === null) continue;
       const fm = parseFrontmatter(t);
-      if (fm.error) this.results.push(error("package.frontmatter-invalid", `${main} has frontmatter that is not valid YAML: ${fm.error}`, { path: main }));
+      if (fm.error) this.results.push(error("package.frontmatter-invalid", yamlSentence(`${main}`, fm), { path: main, ...yamlAt(fm) }));
       const metadata: Record<string, unknown> = {};
       for (const [metaKey, fmKey] of Object.entries(rule.frontmatter)) {
         const v = fm.data?.[fmKey];

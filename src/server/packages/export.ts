@@ -156,6 +156,8 @@ export function desiredAssetsToPackage(
           if (v === undefined) continue;
           fm[fmKey] = metaKey === "agent_types" && Array.isArray(v) ? v.map((id) => agentTypeDisplayName(layout, String(id))).join(", ") : v;
         }
+        const storeId = asset.assetId ?? asset.sourceAssetId;
+        if (rule.storeAssetIdKey && storeId) fm[rule.storeAssetIdKey] = storeId;
         const body = main?.encoding === "utf8" ? main.content : "";
         const storePath = `${rule.dir}/${storeName}/${rule.storeFile}`;
         const baseStore = opts.base?.files.get(storePath);
@@ -266,6 +268,8 @@ function storeFileMatches(data: Buffer, asset: DesiredAsset, body: string, layou
   const parsed = parseFrontmatter(data.toString("utf8"));
   if (!parsed.data || parsed.body.replace(/^(?:\r?\n)+/, "") !== body) return false;
   const resolve = agentTypeResolver(policy, layout);
+  const idKey = layout.memory!.storeAssetIdKey;
+  if (idKey && (parsed.data[idKey] ?? undefined) !== (asset.assetId ?? asset.sourceAssetId)) return false;
   for (const [metaKey, fmKey] of Object.entries(layout.memory!.storeFrontmatter)) {
     let v: unknown = parsed.data[fmKey] ?? undefined;
     if (metaKey === "agent_types" && v !== undefined) v = parseAgentTypes(v, resolve)?.ids;

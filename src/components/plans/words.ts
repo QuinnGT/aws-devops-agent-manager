@@ -141,3 +141,25 @@ export function skipTileDetail(skipped: number, checked: boolean): string {
   if (!checked) return "Known after the live-space check";
   return skipped > 0 ? "Changed in the live space after this plan was made" : "No asset changed in the live space since this plan was made";
 }
+
+const CHANGE_GROUPS: { key: ItemChange | "unchecked"; label: string }[] = [
+  { key: "content", label: "Content updates" },
+  { key: "metadata", label: "Metadata updates" },
+  { key: "status", label: "Status changes" },
+  { key: "delete", label: "Deletes" },
+  { key: "create", label: "Creates" },
+  { key: "none", label: "No change" },
+  { key: "unchecked", label: "Not compared yet" },
+];
+
+/** Groups that start collapsed in the changes list when another group is shown: a new asset has nothing to compare against. */
+export const COLLAPSED_GROUPS: ReadonlySet<string> = new Set(["create", "none"]);
+
+/**
+ * Plan items grouped by change, in the changes list's order (plan-review.md
+ * "Changes list"); empty groups are left out. The order inside a group is the
+ * plan's. Previous and Next follow the same order.
+ */
+export function groupPlanItems<T extends { change: ItemChange | null }>(items: readonly T[]): { key: ItemChange | "unchecked"; label: string; items: T[] }[] {
+  return CHANGE_GROUPS.map((g) => ({ ...g, items: items.filter((i) => (i.change ?? "unchecked") === g.key) })).filter((g) => g.items.length > 0);
+}

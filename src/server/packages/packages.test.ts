@@ -4,12 +4,14 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import type { AssetSnapshot } from "@/lib/assets/types";
 import { getAppPolicy, loadPolicyFromDirs, PolicyError } from "@/server/policy";
+import { kebabName, validateDraftAsset } from "@/server/validation/asset";
 import { resolvedSchema } from "@/server/validation/schemas";
 import { buildRelease } from "./build";
 import { checkPackage } from "./check";
 import { packageToDesiredAssets, packageToPackageFiles } from "./desired";
 import { exportPackageZip } from "./export";
-import { pythonFrontmatter } from "./frontmatter";
+import { parseFrontmatter, pythonFrontmatter } from "./frontmatter";
+import type { DesiredAsset, DesiredFile } from "./types";
 import { getLayout } from "./layout";
 import { snapshotsToDesiredAssets } from "./live";
 import { packageFromFiles, readPackageZip } from "./read";
@@ -227,5 +229,58 @@ describe("Python compatibility helpers", () => {
     expect(pythonJsonDumps({ a: [1, "é"], b: {} })).toBe('{\n  "a": [\n    1,\n    "\\u00e9"\n  ],\n  "b": {}\n}');
     expect(pythonFrontmatter('---\nname: "x"\n  nested: y\ndescription: a: b\n---\nbody')).toEqual({ name: "x", description: "a: b" });
     expect(pythonFrontmatter("no frontmatter")).toBeNull();
+  });
+});
+
+describe("frontmatter errors", () => {
+  const colon = "---\nname: probe\ndescription: Use when a deploy may be the cause: a 5xx spike.\n---\n# Probe\n";
+
+  it("points at the colon in the file, and quotes the value as the fix", () => {
+    const fm = parseFrontmatter(colon);
+    expect(fm.data).toBeNull();
+    // Line 3 of the file (the block starts on line 2), at the ":" after "cause".
+    expect(fm.errorAt).toEqual({ line: 3, column: colon.split("\n")[2]!.indexOf(": a 5xx") + 1 });
+    expect(fm.error).toMatch(/^line 3, column \d+: the description value contains ": " without quotes/);
+    expect(fm.fix).toMatchObject({ label: "Put the description value in quotes", edits: [{ kind: "replace-lines", line: 2, count: 2 }] });
+    const edit = fm.fix!.edits[0] as { text: string; expect: string };
+    expect(edit.expect).toBe("name: probe\ndescription: Use when a deploy may be the cause: a 5xx spike.");
+    expect(parseFrontmatter(`---\n${edit.text}\n---\n`).data).toEqual({ name: "probe", description: "Use when a deploy may be the cause: a 5xx spike." });
+  });
+
+  it("joins a value's continuation lines before quoting it, and reports other errors at the file's line", () => {
+    const fm = parseFrontmatter("---\nname: probe\ndescription: Use when\n  the cause: a deploy.\n---\n");
+    expect(fm.errorAt?.line).toBe(4);
+    expect(parseFrontmatter(`---\n${(fm.fix!.edits[0] as { text: string }).text}\n---\n`).data).toEqual({ name: "probe", description: "Use when the cause: a deploy." });
+    const other = parseFrontmatter("---\nname: [probe\n---\n");
+    expect(other.fix).toBeUndefined();
+    expect(other.error).toMatch(/^line \d+, column \d+: /);
+    expect(other.errorAt!.line).toBeGreaterThanOrEqual(2);
+  });
+
+  it("is a warning for a single-file skill, which the service reads from metadata, and an error for a zip skill", () => {
+    const policy = getAppPolicy().policy;
+    const skill = (files: DesiredFile[]): DesiredAsset => ({ assetType: "skill", key: "probe", metadata: { name: "probe", description: "Use when a deploy may be the cause: a 5xx spike.", agent_types: ["GENERIC"] }, files });
+    const one = validateDraftAsset(skill([{ path: "SKILL.md", encoding: "utf8", content: colon }]), { policy }).find((r) => r.code === "frontmatter.invalid")!;
+    expect(one).toMatchObject({ level: "warning", line: 3, fix: { label: "Put the description value in quotes" } });
+    const zip = validateDraftAsset(skill([{ path: "SKILL.md", encoding: "utf8", content: colon }, { path: "references/a.md", encoding: "utf8", content: "# A\n" }]), { policy }).find((r) => r.code === "frontmatter.invalid")!;
+    expect(zip.level).toBe("error");
+  });
+
+  it("offers a memory with an underscore the kebab-case name and file", () => {
+    const policy = getAppPolicy().policy;
+    const memory: DesiredAsset = {
+      assetType: "memory",
+      key: "patterns/roles/payment_gw",
+      metadata: { name: "roles/payment_gw", description: "Gateway alerts." },
+      refs: { memoryStore: "patterns" },
+      files: [{ path: "payment_gw.md", encoding: "utf8", content: "---\nname: roles/payment_gw\ndescription: Gateway alerts.\n---\n# payment_gw\n", sourcePath: "memory/patterns/roles/payment_gw.md" }],
+    };
+    const r = validateDraftAsset(memory, { policy }).find((x) => x.path === "metadata.name")!;
+    expect(r).toMatchObject({ level: "error", line: 2, fix: { label: "Rename to roles/payment-gw", from: "memory/patterns/roles/payment_gw.md" } });
+    expect(r.fix!.edits).toEqual([
+      { kind: "replace-lines", line: 2, count: 1, expect: "name: roles/payment_gw", text: "name: roles/payment-gw" },
+      { kind: "rename", to: "memory/patterns/roles/payment-gw.md" },
+    ]);
+    expect(kebabName("Roles/Payment__GW")).toBe("roles/payment-gw");
   });
 });

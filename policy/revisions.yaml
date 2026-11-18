@@ -39,6 +39,15 @@ create:
     live: the live space
     # Placeholder: {release}
     release: "release {release}"
+    # A revision started from a package import ("Fix in a revision"). Placeholder: {fileName}
+    import: "the live space and {fileName}"
+  # The first save of a revision started from a package import: the uploaded
+  # files laid over the live space, so the revision's diff shows what the
+  # import would change. It links no finding, so it carries this reason.
+  # Placeholder: {fileName}
+  importSave:
+    message: "Add the files of {fileName}"
+    reason: "Files of the uploaded package {fileName}, moved here from its import to fix before planning."
 
 save:
   # A save that links no accepted finding: refuse, reason (a written reason

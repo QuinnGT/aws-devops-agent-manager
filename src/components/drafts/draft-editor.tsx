@@ -3,7 +3,7 @@
 import { CircleX, Lock } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useId, useMemo, useRef, useState, useTransition, type ReactNode } from "react";
+import { Fragment, useEffect, useId, useMemo, useRef, useState, useTransition, type ReactNode } from "react";
 import { PathTree } from "@/components/assets/path-tree";
 import { AssetTypeIcon } from "@/components/common/asset-type-icon";
 import { Callout } from "@/components/common/callout";
@@ -575,24 +575,119 @@ export function DraftEditor(p: DraftEditorProps) {
   );
 }
 
-/** The plain-text editor of draft-editor.md (mono 13 px, soft wrap, no spellcheck, inset focus ring); the revision editor uses it too. */
-export function EditorArea({ path, value, onChange, readOnly }: { path: string; value: string; onChange: (v: string) => void; readOnly: boolean }) {
+/** A line to mark in the editor's gutter (1-based), with the problem as its title. */
+export interface EditorLineMark {
+  line: number;
+  level: "error" | "warning";
+  text: string;
+}
+
+const EDITOR_TEXT = "font-mono text-[13px] leading-[1.6] break-words whitespace-pre-wrap";
+
+/**
+ * The plain-text editor of draft-editor.md (mono 13 px, soft wrap, no
+ * spellcheck, inset focus ring); the revision editor uses it too. With
+ * `lineNumbers` it shows a gutter: each line's number beside a hidden copy of
+ * the text that wraps exactly as the textarea does, so a wrapped line keeps
+ * one number; marked lines are tinted with their problem as the number's
+ * title. `focus` selects a line and scrolls to it (change `key` to repeat).
+ */
+export function EditorArea({
+  path,
+  value,
+  onChange,
+  readOnly,
+  lineNumbers = false,
+  marks,
+  focus,
+}: {
+  path: string;
+  value: string;
+  onChange: (v: string) => void;
+  readOnly: boolean;
+  lineNumbers?: boolean;
+  marks?: readonly EditorLineMark[];
+  focus?: { line: number; key: number } | null;
+}) {
   const id = useId();
+  const area = useRef<HTMLTextAreaElement>(null);
+  const grid = useRef<HTMLDivElement>(null);
+  const focusKey = focus?.key;
+  useEffect(() => {
+    const el = area.current;
+    if (!el || !focus) return;
+    const lines = el.value.split("\n");
+    const n = Math.min(Math.max(focus.line, 1), lines.length);
+    const start = lines.slice(0, n - 1).reduce((sum, l) => sum + l.length + 1, 0);
+    el.focus({ preventScroll: true });
+    el.setSelectionRange(start, start + (lines[n - 1]?.length ?? 0));
+    (grid.current?.querySelector(`[data-line="${n}"]`) ?? el).scrollIntoView({ block: "center" });
+    // Only a new focus request moves the selection, not every keystroke.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusKey]);
+
+  if (!lineNumbers) {
+    return (
+      <div className="min-w-0">
+        <label htmlFor={id} className="sr-only">
+          {path} content
+        </label>
+        <Textarea
+          ref={area}
+          id={id}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          readOnly={readOnly}
+          wrap="soft"
+          spellCheck={false}
+          className={cn("field-sizing-fixed min-h-[520px] resize-y rounded-none border-0 px-4 py-3 shadow-none focus-visible:ring-0 md:text-[13px] dark:bg-transparent", EDITOR_TEXT)}
+          style={{ outlineOffset: "-2px" }}
+        />
+      </div>
+    );
+  }
+
+  const lines = value.split("\n");
+  const byLine = new Map<number, EditorLineMark>();
+  for (const m of marks ?? []) if (!byLine.has(m.line) || m.level === "error") byLine.set(m.line, m);
+  const gutter = `${String(lines.length).length + 2}ch`;
   return (
     <div className="min-w-0">
       <label htmlFor={id} className="sr-only">
         {path} content
       </label>
-      <Textarea
-        id={id}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        readOnly={readOnly}
-        wrap="soft"
-        spellCheck={false}
-        className="field-sizing-fixed min-h-[520px] resize-y rounded-none border-0 px-4 py-3 font-mono text-[13px] leading-[1.6] break-words whitespace-pre-wrap shadow-none focus-visible:ring-0 md:text-[13px] dark:bg-transparent"
-        style={{ outlineOffset: "-2px" }}
-      />
+      <div className="max-h-[70vh] min-h-[520px] overflow-auto focus-within:outline-2 focus-within:-outline-offset-2 focus-within:outline-ring">
+        <div ref={grid} className="relative grid py-3 font-mono text-[13px]" style={{ gridTemplateColumns: `${gutter} minmax(0,1fr)` }}>
+          {lines.map((l, i) => {
+            const m = byLine.get(i + 1);
+            return (
+              <Fragment key={i}>
+                <div
+                  aria-hidden
+                  title={m?.text}
+                  className={cn("pr-3 text-right leading-[1.6] tabular-nums select-none", m ? (m.level === "error" ? "font-semibold text-destructive-fg" : "font-semibold text-warning-fg") : "text-muted-foreground/60")}
+                >
+                  {i + 1}
+                </div>
+                <div aria-hidden data-line={i + 1} className={cn(EDITOR_TEXT, "px-4 text-transparent", m && (m.level === "error" ? "bg-destructive/10" : "bg-warning/10"))}>
+                  {l || "\u200b"}
+                </div>
+              </Fragment>
+            );
+          })}
+          <textarea
+            ref={area}
+            id={id}
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            readOnly={readOnly}
+            wrap="soft"
+            spellCheck={false}
+            className={cn(EDITOR_TEXT, "absolute top-0 right-0 bottom-0 resize-none overflow-hidden border-0 bg-transparent px-4 py-3 text-foreground outline-none")}
+            style={{ left: gutter }}
+          />
+        </div>
+      </div>
     </div>
   );
 }

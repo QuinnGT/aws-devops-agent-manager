@@ -40,7 +40,11 @@ const createDefault = {
   syncBeforeCreate: true,
   commitMessage: "Start revision {name} of {spaceAlias} from {base}",
   noteMaxChars: 2000,
-  baseLabels: { live: "the live space", release: "release {release}" },
+  baseLabels: { live: "the live space", release: "release {release}", import: "the live space and {fileName}" },
+  importSave: {
+    message: "Add the files of {fileName}",
+    reason: "Files of the uploaded package {fileName}, moved here from its import to fix before planning.",
+  },
 };
 const saveDefault = {
   unlinked: "reason" as UnlinkedSaveRule,
@@ -106,8 +110,18 @@ export const revisionsSection = defineSection(
             live: z.string().min(1).default(createDefault.baseLabels.live),
             /** Placeholder: {release} */
             release: template(["release"]).default(createDefault.baseLabels.release),
+            /** A revision started from a package import. Placeholder: {fileName} */
+            import: template(["fileName"]).default(createDefault.baseLabels.import),
           })
           .default(createDefault.baseLabels),
+        /** The first save of a revision started from a package import: the uploaded files laid over the live space. Placeholder: {fileName} */
+        importSave: z
+          .object({
+            message: template(["fileName"]).default(createDefault.importSave.message),
+            /** The save's unlinked reason (it links no finding) */
+            reason: template(["fileName"]).default(createDefault.importSave.reason),
+          })
+          .default(createDefault.importSave),
       })
       .default(createDefault),
     save: z

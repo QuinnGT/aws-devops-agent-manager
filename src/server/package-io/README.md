@@ -21,6 +21,7 @@ Import from `@/server/package-io`.
 | `importPackage` | `plans.create` |
 | `remapImport` | `plans.create` |
 | `createPlanFromImport` | `plans.create` |
+| "Fix in a revision" (`requestCreateRevision` with `importId`, in revisions) | `revisions.build` |
 | `loadImportList`, `loadImportDetail` | `assets.read` (the pages ask for `plans.create`, per `pages/package-import.md`) |
 | `exportPackage`, `previewExport`, `loadExportOptions` | `history.read` |
 
@@ -69,7 +70,16 @@ Without `layout` the layout is detected: `rankLayouts` maps the upload with ever
 createPlanFromImport(space, importId, actor, { reason?, title?, includeTypes? }): Promise<{ planId, checkRunId, items, summary, notes }>
 ```
 
-Reads the stored upload again (SHA-256 checked), maps it against the index as it is now with only `includeTypes` (default: every type; unknown names are dropped, an empty choice is refused), and calls `createPlan` with `origin: { kind: "package", importId, fileName }`, the plan `notes` from `importPlanNotes` (the types left out by choice as counts, then each left-out duplicate with its reason) and only the create and update items (`baseVersion: null`; update items carry the live `assetId`, create items none; references stay as names in `refs`). Refused with `PackageIoError` when the import is in another space (`not-found`), already planned, rejected, expired, changed on disk, has validation errors (`import.blockPlanOnErrors`) or has nothing to change. Validation results about only the types left out don't block the plan (`checkPackage` `includeTypes`); a refusal with a type selection leaves the stored all-types mapping as it is. A claim (status `planning`) stops a double submit from creating two plans; a failed `createPlan` puts the import back. Audit event `package.plan` (with `includeTypes` when given). Update items found by source asset ID carry the note "From the package folder <dir>, matched by its asset ID."
+Reads the stored upload again (SHA-256 checked), maps it against the index as it is now with only `includeTypes` (default: every type; unknown names are dropped, an empty choice is refused), and calls `createPlan` with `origin: { kind: "package", importId, fileName }`, the plan `notes` from `importPlanNotes` (the types left out by choice as counts, then each left-out duplicate with its reason) and only the create and update items (`baseVersion: null`; update items carry the live `assetId`, create items none; references stay as names in `refs`). Refused with `PackageIoError` when the import is in another space (`not-found`), already planned, held by a revision (`in-revision`), rejected, expired, changed on disk, has validation errors (`import.blockPlanOnErrors`) or has nothing to change. Validation results about only the types left out don't block the plan (`checkPackage` `includeTypes`); a refusal with a type selection leaves the stored all-types mapping as it is. A claim (status `planning`) stops a double submit from creating two plans; a failed `createPlan` puts the import back. Audit event `package.plan` (with `includeTypes` when given). Update items found by source asset ID carry the note "From the package folder <dir>, matched by its asset ID." An item whose optional references were dropped (a `reference.not-in-package` warning) adds "Leaves out 3 references in memory_stores that aren't in this package or this space."
+
+## Fix in a revision
+
+`to-revision.ts`: an import can move to a revision (see `src/server/revisions/README.md`, "Create"), where its files are edited and checked before the plan. The revision's base records `fromImport`.
+
+- `importRevision(spaceId, importId)`: the revision that holds the import (state creating, open or applied), or null.
+- `readImportForRevision(space, importId, policy, { revisionId? })`: the import's row, layout and package, refused like a plan (not found, planned, not read, expired, changed on disk) and when another revision holds it. Validation errors don't refuse it.
+
+While a revision holds the import, `createPlanFromImport` and `remapImport` refuse with `in-revision`, and the detail page says where the import went.
 
 ## Export
 
@@ -88,7 +98,7 @@ The `agent-space-folders` layout exports one folder per asset with its `_asset.j
 ## Loaders for the pages
 
 - `loadImportList(space, { limit?, offset? })`: `{ imports: ImportListItem[], hasMore, pageSize }`, newest first.
-- `loadImportDetail(space, importId)`: `ImportDetail | null`: the import, its summary, the mapping table grouped by asset type (`groups`, each with create, update and unchanged counts), file roles grouped by role, validation errors and warnings, untouched live assets grouped by type, `plan: { planId, canCreate, reason }` (for all types), `leftOut`, `layouts: { candidates, choice, canChange }`, and `planTypes: { types, unattributedErrors, blockOnErrors, stateReason }` for the type choice: per type its assets, changes and errors (`resultTypes` attributes a result by asset key, by the asset its file belongs to, or by type folder). The page's `selectionBlocker` decides the button from the selection.
+- `loadImportDetail(space, importId)`: `ImportDetail | null`: the import, its summary, the mapping table grouped by asset type (`groups`, each with create, update and unchanged counts), file roles grouped by role, validation errors and warnings, untouched live assets grouped by type, `plan: { planId, canCreate, reason }` (for all types), `leftOut`, `layouts: { candidates, choice, canChange }`, `revision: { current, canStart, reason }` for "Fix in a revision", and `planTypes: { types, unattributedErrors, blockOnErrors, stateReason }` for the type choice: per type its assets, changes and errors (`resultTypes` attributes a result by asset key, by the asset its file belongs to, or by type folder). The page's `selectionBlocker` decides the button from the selection.
 - `loadExportOptions(space)`: layouts, the default layout, and export points (`head`, `releases`, `commits`), or `repo.ok: false` with the reason.
 
 ## Input parsing for the actions and handler

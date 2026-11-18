@@ -190,6 +190,7 @@ export class PackageIoError extends Error {
       | "upload-expired"
       | "upload-changed"
       | "already-planned"
+      | "in-revision"
       | "not-plannable"
       | "nothing-to-plan"
       | "no-history"

@@ -57,6 +57,25 @@ export async function createRevisionAction(alias: string, input: z.input<typeof 
   }
 }
 
+/**
+ * "Fix in a revision" on an import: a revision from the live space with the
+ * import's files as its first save. The import ID is bound by the page and
+ * only ever looked up inside this space; base and layout come from the import.
+ */
+export async function createRevisionFromImportAction(alias: string, importId: string, input: z.input<typeof createForm>): Promise<ActionResult<{ runId: string; revisionId: string; name: string }>> {
+  const space = await spaceFor(alias);
+  if (!space) return { ok: false, message: NO_ACCESS, fieldErrors: {} };
+  try {
+    const user = await requirePermission(REVISION_PERMISSIONS.build, space.id);
+    const form = createForm.parse(input);
+    const id = idSchema.parse(importId);
+    const r = await requestCreateRevision(space, { name: form.name, base: { kind: "live" }, importId: id }, actorOf(user));
+    return { ok: true, runId: r.runId, revisionId: r.revisionId, name: form.name };
+  } catch (err) {
+    return failure(err);
+  }
+}
+
 // ---------- save ----------
 
 const saveInput = z.object({

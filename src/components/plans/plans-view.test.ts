@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { diffText } from "@/server/assets/diff";
-import { diffRows, diffTotals } from "./diff-rows";
+import { diffRows, diffTotals, wordRows } from "./diff-rows";
 import { hasFilters, ORIGIN_OPTIONS, parsePlanListParams, PLAN_PAGE, planListQuery } from "./list-params";
 import { formatSize, sizeMeterText } from "./size-meter-line";
-import { DIFF_CHECK_FAILED, DIFF_NOT_READY, defaultPlanTitle, draftChangeWord, itemChangeWord, planStateBadge, reasonEditable, reasonLockedText, skipTileDetail, SYNCED_COMPARISON_NOTE, SYNCED_COUNT_NOTE, SYNCED_VALIDATION_NOTE, validationSpec } from "./words";
+import { COLLAPSED_GROUPS, DIFF_CHECK_FAILED, DIFF_NOT_READY, defaultPlanTitle, groupPlanItems, draftChangeWord, itemChangeWord, planStateBadge, reasonEditable, reasonLockedText, skipTileDetail, SYNCED_COMPARISON_NOTE, SYNCED_COUNT_NOTE, SYNCED_VALIDATION_NOTE, validationSpec } from "./words";
 
 describe("plan list URL state", () => {
   it("defaults to open plans from every origin", () => {
@@ -129,5 +129,53 @@ describe("size meter text", () => {
     expect(formatSize(4710)).toBe("4.6 KB");
     expect(formatSize(812)).toBe("812 B");
     expect(sizeMeterText({ bytes: 4710, maxBytes: 25600, lines: 95, recommendedLines: 120 })).toBe("4.6 KB of 25 KB · 95 lines (about 120 recommended)");
+  });
+});
+
+describe("Words view of a diff", () => {
+  const words = (before: string, after: string) => wordRows(diffRows(diffText(before, after)!));
+
+  it("shows a reworded line as one row with the changed words marked", () => {
+    const rows = words("# Rules - candidate v2.3\nkeep\n", "# Rules - candidate v2.4.2\nkeep\n");
+    const change = rows.find((r) => r.kind === "change");
+    expect(change).toMatchObject({ kind: "change", old: 1, new: 1 });
+    expect(change && "parts" in change ? change.parts : []).toEqual([
+      { kind: "same", text: "# Rules - candidate v2." },
+      { kind: "del", text: "3" },
+      { kind: "add", text: "4.2" },
+    ]);
+    expect(rows.filter((r) => r.kind === "add" || r.kind === "del")).toEqual([]);
+  });
+
+  it("keeps unrelated lines as a removed and an added line, in file order", () => {
+    const rows = words("a\nThe agent reads every log first.\nz\n", "a\nNever deploy to production on Fridays.\nz\n");
+    expect(rows.map((r) => r.kind)).toEqual(["hunk", "ctx", "del", "add", "ctx"]);
+  });
+
+  it("pairs each line with its own replacement when lines are added and removed around it", () => {
+    const before = "1. Read-only. Never execute anything here.\nOld paragraph about something else entirely.\n";
+    const after = "## New heading\n1. Read-only. Never execute or deploy anything here.\n";
+    const kinds = words(before, after).filter((r) => r.kind !== "hunk").map((r) => (r.kind === "change" ? `change ${r.old}->${r.new}` : r.kind));
+    expect(kinds).toEqual(["add", "change 1->2", "del"]);
+  });
+});
+
+describe("changes list groups", () => {
+  it("groups items by change in the list order and leaves out empty groups", () => {
+    const items = [
+      { id: "1", change: "create" as const },
+      { id: "2", change: "content" as const },
+      { id: "3", change: null },
+      { id: "4", change: "content" as const },
+      { id: "5", change: "status" as const },
+    ];
+    expect(groupPlanItems(items).map((g) => [g.label, g.items.map((i) => i.id)])).toEqual([
+      ["Content updates", ["2", "4"]],
+      ["Status changes", ["5"]],
+      ["Creates", ["1"]],
+      ["Not compared yet", ["3"]],
+    ]);
+    expect(COLLAPSED_GROUPS.has("create")).toBe(true);
+    expect(COLLAPSED_GROUPS.has("content")).toBe(false);
   });
 });

@@ -16,6 +16,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import type { ActionButton, PlanActions } from "@/server/plans/actions";
@@ -42,11 +43,14 @@ function FieldError({ id, children }: { id: string; children: ReactNode }) {
 }
 
 /**
- * The "Approve and apply" card body (plan-review.md): the change reason, the
- * approval facts (rendered by the server), and the first button row of the
- * buttons-by-role table that applies to this user and plan.
+ * Approve and apply in the page header (plan-review.md "Approve and apply"):
+ * Reject when the viewer can, and the first button of the buttons-by-role
+ * table, disabled with its reason when it can't run yet. The button opens one
+ * dialog that is also the confirmation: what apply writes, the change reason
+ * (typed in when the viewer may, else read only), the approval facts and,
+ * for apply, what apply does.
  */
-export function ApproveApplyPanel({
+export function ApprovalControls({
   alias,
   planId,
   spaceName,
@@ -54,9 +58,9 @@ export function ApproveApplyPanel({
   reason: initialReason,
   reasonRequired,
   reasonLocked = null,
-  primaryReason,
   facts,
   confirm,
+  steps,
   closedNote,
   run,
 }: {
@@ -68,10 +72,10 @@ export function ApproveApplyPanel({
   reasonRequired: boolean;
   /** Why the reason is read only (reasonLockedText), shown next to it */
   reasonLocked?: string | null;
-  /** Shown instead of the primary button's disabledReason (a failed check: the cause and the next step, with a link) */
-  primaryReason?: ReactNode;
   facts: ReactNode;
   confirm: { title: string; counts: { label: string; n: number }[]; skippedNames: string[]; button: string };
+  /** "What apply does", in the apply dialog */
+  steps: readonly string[];
   /** Shown instead of buttons on a closed plan ("Applied Nov 10, 3:12 PM") */
   closedNote: ReactNode;
   run: PlanControlActions;
@@ -80,54 +84,47 @@ export function ApproveApplyPanel({
   const [pending, startTransition] = useTransition();
   const [reason, setReason] = useState(initialReason ?? "");
   const [result, setResult] = useState<ActionResult<unknown> | null>(null);
-  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [open, setOpen] = useState(false);
   const [rejectOpen, setRejectOpen] = useState(false);
   const [note, setNote] = useState("");
   const [noteError, setNoteError] = useState<string | null>(null);
   const reasonId = useId();
   const reasonErrId = useId();
-  const confirmFocus = useReturnFocus();
+  const openFocus = useReturnFocus();
   const rejectFocus = useReturnFocus();
   const noteId = useId();
   const primary = actions.primary;
-  // The reason is saved with "Request approval" and with apply; someone who can apply may type it before Apply unlocks.
+  // The reason is saved with "Request approval" and with apply; not next to "Approve", which doesn't save it.
   const editable = reasonEditable(actions);
   const reasonError = result && !result.ok ? (result.fieldErrors.reason ?? null) : null;
   const pageError = result && !result.ok && !result.fieldErrors.reason ? result.message : null;
   const text = () => (reason.trim() ? reason.trim() : null);
 
-  const runAction = (fn: () => Promise<ActionResult<unknown>>, done: string, after?: () => void) => {
+  const runAction = (fn: () => Promise<ActionResult<unknown>>, done: string) => {
     startTransition(async () => {
       const r = await fn();
       setResult(r);
       if (r.ok) {
         toast.success(done);
-        after?.();
+        setOpen(false);
         router.refresh();
       }
     });
   };
 
-  const onPrimary = () => {
-    if (!primary?.enabled) return;
+  const onSubmit = () => {
+    if (!primary?.enabled || pending) return;
     if (primary.action === "apply") {
       if (reasonRequired && !text()) {
         setResult({ ok: false, message: "", fieldErrors: { reason: "Enter a change reason. This space requires one." } });
         return;
       }
-      setResult(null);
-      confirmFocus.remember();
-      setConfirmOpen(true);
+      runAction(() => run.apply(alias, planId, text()), confirm.button.replace(/^Apply/, "Applying"));
     } else if (primary.action === "request-approval") {
       runAction(() => run.requestApproval(alias, planId, text()), "Approval requested");
     } else {
       runAction(() => run.approve(alias, planId), "Plan approved");
     }
-  };
-
-  const onApply = () => {
-    setConfirmOpen(false);
-    runAction(() => run.apply(alias, planId, text()), confirm.button.replace(/^Apply/, "Applying"));
   };
 
   const onReject = () => {
@@ -149,77 +146,63 @@ export function ApproveApplyPanel({
     });
   };
 
-  const icon = primary?.action === "request-approval" ? <Send aria-hidden /> : primary?.action === "approve" ? <UserCheck aria-hidden /> : <GitMerge aria-hidden />;
-  const button = primary ? (
-    <Button className="w-full" onClick={onPrimary} disabled={pending}>
+  if (!primary) return <p className="max-w-md text-[13px] text-muted-foreground">{closedNote}</p>;
+
+  const icon = primary.action === "request-approval" ? <Send aria-hidden /> : primary.action === "approve" ? <UserCheck aria-hidden /> : <GitMerge aria-hidden />;
+  const apply = primary.action === "apply";
+  const title = apply ? confirm.title : primary.action === "request-approval" ? "Request approval for this plan?" : "Approve this plan?";
+  const description = apply
+    ? `Writes go to ${spaceName}. There is no undo: to go back, restore an earlier version as a new plan.`
+    : primary.action === "request-approval"
+      ? "The plan waits for a second person to approve it. The change reason is saved with the request."
+      : "Approving lets the plan be applied. Nothing is written to the space until then.";
+  const button = (
+    <Button
+      size="sm"
+      disabled={pending}
+      onClick={() => {
+        setResult(null);
+        openFocus.remember();
+        setOpen(true);
+      }}
+    >
       {icon}
       {primary.label}
     </Button>
-  ) : null;
+  );
 
   return (
-    <div className="space-y-4 px-4 py-4">
-      <div className="space-y-1.5">
-        <Label htmlFor={reasonId} className="block text-[13px] font-medium">
-          Change reason {reasonRequired ? <span className="font-normal text-muted-foreground">(required for this space)</span> : null}
-        </Label>
-        {editable ? (
-          <Textarea
-            id={reasonId}
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            className="min-h-20 text-[13px] md:text-[13px]"
-            aria-invalid={reasonError ? true : undefined}
-            aria-describedby={`${reasonId}-help${reasonError ? ` ${reasonErrId}` : ""}`}
-          />
-        ) : (
-          <p id={reasonId} aria-describedby={`${reasonId}-help`} className="rounded-md border bg-muted/30 px-3 py-2 text-[13px] whitespace-pre-wrap">
-            {initialReason ?? <span className="text-muted-foreground">No reason entered yet.</span>}
-          </p>
-        )}
-        <p id={`${reasonId}-help`} className="text-xs text-muted-foreground">
-          {/* The same role reason sits next to the disabled button below; say it once. */}
-          {!editable && reasonLocked && reasonLocked !== primary?.disabledReason ? `${reasonLocked} ` : null}Saved with this change in the history and shown on the History page.
-        </p>
-        {reasonError ? <FieldError id={reasonErrId}>{reasonError}</FieldError> : null}
-      </div>
+    <>
+      {actions.reject ? (
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => {
+            rejectFocus.remember();
+            setRejectOpen(true);
+          }}
+          disabled={pending}
+        >
+          Reject
+        </Button>
+      ) : null}
+      {primary.enabled ? button : <DisabledReason reason={primary.disabledReason}>{button}</DisabledReason>}
 
-      {facts}
-
-      {primary ? (
-        <div className="space-y-2">
-          {primary.enabled ? (
-            button
-          ) : (
-            <DisabledReason reason={primaryReason ?? primary.disabledReason} className="flex-col items-stretch">
-              {button}
-            </DisabledReason>
-          )}
-          {actions.reject ? (
-            <Button
-              variant="outline"
-              className="w-full"
-              onClick={() => {
-                rejectFocus.remember();
-                setRejectOpen(true);
-              }}
-              disabled={pending}
-            >
-              Reject
-            </Button>
-          ) : null}
-        </div>
-      ) : (
-        <div className="text-[13px] text-muted-foreground">{closedNote}</div>
-      )}
-      {pageError ? <FieldError id={`${reasonId}-page`}>{pageError}</FieldError> : null}
-
-      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-        <AlertDialogContent onCloseAutoFocus={confirmFocus.onCloseAutoFocus}>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{confirm.title}</AlertDialogTitle>
-            <AlertDialogDescription asChild>
-              <div className="space-y-3 text-left text-[13px] text-foreground">
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="sm:max-w-[560px]" onCloseAutoFocus={openFocus.onCloseAutoFocus}>
+          <form
+            className="grid min-w-0 gap-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              onSubmit();
+            }}
+          >
+            <DialogHeader>
+              <DialogTitle>{title}</DialogTitle>
+              <DialogDescription>{description}</DialogDescription>
+            </DialogHeader>
+            {apply ? (
+              <div className="space-y-1 text-[13px]">
                 <ul className="list-disc space-y-0.5 pl-5">
                   {confirm.counts.map((c) => (
                     <li key={c.label}>
@@ -232,23 +215,57 @@ export function ApproveApplyPanel({
                     Skipped because live changed: <span className="font-medium">{confirm.skippedNames.join(", ")}</span>
                   </p>
                 ) : null}
-                <div>
-                  <p className="text-xs text-muted-foreground">Change reason</p>
-                  <p className="whitespace-pre-wrap">{text() ?? "None"}</p>
-                </div>
-                <p className="text-xs text-muted-foreground">Writes go to {spaceName}. There is no undo: to go back, restore an earlier version as a new plan.</p>
               </div>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={onApply}>
-              <GitMerge aria-hidden />
-              {confirm.button}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+            ) : null}
+            <div className="space-y-1.5">
+              <Label htmlFor={reasonId} className="block text-[13px] font-medium">
+                Change reason {reasonRequired ? <span className="font-normal text-muted-foreground">(required for this space)</span> : null}
+              </Label>
+              {editable ? (
+                <Textarea
+                  id={reasonId}
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                  className="max-h-48 min-h-20 text-[13px] md:text-[13px]"
+                  aria-invalid={reasonError ? true : undefined}
+                  aria-describedby={`${reasonId}-help${reasonError ? ` ${reasonErrId}` : ""}`}
+                />
+              ) : (
+                <p id={reasonId} aria-describedby={`${reasonId}-help`} className="max-h-48 overflow-y-auto rounded-md border bg-muted/30 px-3 py-2 text-[13px] whitespace-pre-wrap">
+                  {initialReason ?? <span className="text-muted-foreground">No reason entered yet.</span>}
+                </p>
+              )}
+              <p id={`${reasonId}-help`} className="text-xs text-muted-foreground">
+                {!editable && reasonLocked ? `${reasonLocked} ` : null}Saved with this change in the history and shown on the History page.
+              </p>
+              {reasonError ? <FieldError id={reasonErrId}>{reasonError}</FieldError> : null}
+            </div>
+            {facts}
+            {apply && steps.length ? (
+              <div>
+                <p className="text-xs font-medium text-muted-foreground">What apply does</p>
+                <ol className="mt-1 list-decimal space-y-0.5 pl-5 text-xs text-muted-foreground">
+                  {steps.map((st) => (
+                    <li key={st}>{st}</li>
+                  ))}
+                </ol>
+              </div>
+            ) : null}
+            {pageError ? <FieldError id={`${reasonId}-page`}>{pageError}</FieldError> : null}
+            <DialogFooter>
+              <DialogClose asChild>
+                <Button type="button" variant="outline">
+                  Cancel
+                </Button>
+              </DialogClose>
+              <Button type="submit" disabled={pending}>
+                {icon}
+                {pending ? "Working…" : apply ? confirm.button : primary.label}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       <AlertDialog open={rejectOpen} onOpenChange={setRejectOpen}>
         <AlertDialogContent onCloseAutoFocus={rejectFocus.onCloseAutoFocus}>
@@ -271,7 +288,7 @@ export function ApproveApplyPanel({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </>
   );
 }
 
