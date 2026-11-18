@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { applyQuickFix, changelogPreview, deleteOpenFile, diffGroups, editedFiles, fileTerms, lineCounts, markSaved, namesText, newFileProblem, rankFindings, renameOpenFile, restoreOpenFile, saveButtonReason, searchFindings, splitIncident, type OpenFile } from "./editor-state";
-import { branchPreview, folderPreview, matchesName, matchesState, nameProblem, parseRevisionListParams, planButtonReason, planHint, freeRevisionName, revisionListQuery, revisionNameFromFile, revisionWord, usualLayoutText } from "./words";
+import { branchPreview, exportLeftOutText, folderPreview, matchesName, matchesState, nameProblem, parseRevisionListParams, planButtonReason, planHint, freeRevisionName, revisionListQuery, revisionNameFromFile, revisionWord, usualLayoutText } from "./words";
 
 const file = (path: string, base: string | null, text: string): OpenFile => ({ path, base, text, kind: "text", size: text.length });
 
@@ -58,6 +58,15 @@ describe("New revision dialog", () => {
     expect(freeRevisionName("v2.4.2", ["V2.4.2", "v2.4.2-2"], 64)).toBe("v2.4.2-3");
     expect(freeRevisionName("v2.4.2", [], 64)).toBe("v2.4.2");
     expect(freeRevisionName("a".repeat(64), ["a".repeat(64)], 64)).toBe(`${"a".repeat(62)}-2`);
+  });
+});
+
+describe("export while the build fails", () => {
+  it("says what the download leaves out", () => {
+    expect(exportLeftOutText(2, "reference/EXPORT-NOTES.md")).toBe("Export package zip leaves out 2 assets until the errors are fixed. reference/EXPORT-NOTES.md in the zip says why.");
+    expect(exportLeftOutText(1, null)).toBe("Export package zip leaves out 1 asset until the errors are fixed.");
+    expect(exportLeftOutText(0, "reference/EXPORT-NOTES.md")).toBe("Export package zip keeps every asset, because the service accepts them as they are. reference/EXPORT-NOTES.md in the zip lists the errors.");
+    expect(exportLeftOutText(null, "reference/EXPORT-NOTES.md")).toBe("Export package zip leaves out the assets the service would refuse. reference/EXPORT-NOTES.md in the zip says which and why.");
   });
 });
 

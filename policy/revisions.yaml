@@ -111,8 +111,19 @@ release:
   note: "Applied from revision {name} (plan {planId})."
 
 export:
-  # Publishing is blocked until the build passes: no download before that.
-  requirePassingBuild: true
+  # true: no download until the build passes. false: the download leaves out
+  # the assets the service would refuse (and the assets that need one, such as
+  # a memory whose store is left out), keeps files with layout errors as they
+  # are, and lists both in the note below.
+  requirePassingBuild: false
+  leftOut:
+    # The note's package path; keep it a non-asset path of the layouts. null: no note.
+    path: reference/EXPORT-NOTES.md
+    title: "# Export notes"
+    # Placeholder: {name}
+    intro: "The build of revision {name} has errors. Assets the service would refuse are left out of this zip and listed below; the other errors stay in the files as they are. Fix them in the revision and export again."
+    none: "No asset was left out: the service accepts every asset as it is."
+    remaining: "## Errors still in this package"
 
 # Push the revision branch after each commit when the repository has a remote
 # and pushes are on.

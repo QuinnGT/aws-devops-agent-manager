@@ -267,11 +267,23 @@ describe("saving a revision", () => {
     expect(await repo.branchHead(branch)).toBe(result.commit);
   });
 
-  it("refuses a plan and the download while the build fails", async () => {
+  it("refuses a plan while the build fails, and still downloads the package with a note", async () => {
     await expect(createPlanFromRevision(space, revId, alex)).rejects.toMatchObject({ code: "build-failed" });
-    await expect(exportRevision(space, revId, alex)).rejects.toMatchObject({ code: "export-blocked" });
+    const res = await exportRevision(space, revId, alex);
+    // A missing safety message is a layout text rule, not something the service refuses: the file stays.
+    expect(res.leftOut).toEqual([]);
+    const { entries, problems } = readZip(res.zip, policy.limits.packageRead);
+    expect(problems).toEqual([]);
+    const names = entries.map((e) => e.name);
+    expect(names).toContain("v2/instructions/global.md");
+    const note = entries.find((e) => e.name === "v2/reference/EXPORT-NOTES.md")!.data.toString();
+    expect(note).toContain("# Export notes");
+    expect(note).toContain("No asset was left out");
+    expect(note).toContain("## Errors still in this package\n\n- instructions/global.md: ");
     const detail = await loadRevisionDetail(space, "v2", { permissions: ["audits.read", "revisions.build", "plans.create"], role: "publisher" });
     expect(detail!.actions.createPlan).toEqual({ available: false, reason: "The build and validation failed with 1 error. Fix it and save again." });
+    expect(detail!.actions.export).toMatchObject({ available: true });
+    expect(detail!.build!.leftOut).toEqual([]);
     const viewer = await loadRevisionDetail(space, revId, { permissions: ["audits.read"], role: "viewer" });
     expect(viewer!.actions.createPlan.reason).toMatch(/^Only .* can create plans\. You're a Viewer\.$/);
   });
@@ -430,6 +442,8 @@ describe("a revision from the live space", () => {
     });
     await expect(createRevisionHandler({ revisionId }, ctx(), { sync: failing as never })).rejects.toThrow(/sync of the space failed: throttled/);
     expect(await row(revisionId)).toMatchObject({ state: "failed" });
+    // There is no package to download, so the export is still refused (and audited).
+    await expect(exportRevision(space, revisionId, alex)).rejects.toMatchObject({ code: "export-blocked" });
     const again = await requestCreateRevision(space, { name: "live-2", base: { kind: "live" }, layout: "strict-instructions" }, alex);
     expect(again.revisionId).not.toBe(revisionId);
   });

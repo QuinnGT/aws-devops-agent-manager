@@ -7,7 +7,7 @@ import { getAppPolicy, loadPolicyFromDirs, PolicyError } from "@/server/policy";
 import { kebabName, validateDraftAsset } from "@/server/validation/asset";
 import { resolvedSchema } from "@/server/validation/schemas";
 import { buildRelease } from "./build";
-import { checkPackage } from "./check";
+import { checkPackage, withoutFailingAssets } from "./check";
 import { packageToDesiredAssets, packageToPackageFiles } from "./desired";
 import { exportPackageZip } from "./export";
 import { parseFrontmatter, pythonFrontmatter } from "./frontmatter";
@@ -121,6 +121,39 @@ describe("buildRelease", () => {
     expect(r.contents.files.has("skills/demo-skill.zip")).toBe(true);
     // Reported once, by the package checks.
     expect(r.results.map((x) => x.code)).toEqual(["package.shared-markers"]);
+  });
+
+  it("withoutFailingAssets leaves out the assets the service would refuse and the ones that need them, and keeps the rest byte for byte", () => {
+    const opts = { policy: strict, layout: STRICT };
+    const big = `---\nname: notes/big\ndescription: Too big.\n---\n\n${"x".repeat(strict.limits.memoryMaxBytes)}\n`;
+    const longDescription = "d".repeat(strict.limits.descriptionMaxChars + 1);
+    const first = checkPackage(demoPackage({ "memory/demo-store/notes/big.md": big, "skills/demo-skill/SKILL.md": `---\nname: demo-skill\ndescription: ${longDescription}\n---\n# Demo\n` }), opts);
+    expect(first.ok).toBe(false);
+    const { check, leftOut } = withoutFailingAssets(first, opts);
+    expect(check.ok).toBe(true);
+    expect(leftOut.map((a) => [a.assetKey, a.paths])).toEqual([
+      ["skill:demo-skill", ["skills/demo-skill/SKILL.md", "skills/demo-skill.zip"]],
+      ["memory:demo-store/notes/big", ["memory/demo-store/notes/big.md"]],
+    ]);
+    expect(leftOut.every((a) => a.reasons.length > 0)).toBe(true);
+    const files = check.build.contents.files;
+    expect([...files.keys()].filter((p) => p.startsWith("skills/"))).toEqual([]);
+    expect(files.get("memory/demo-store/INDEX.md")!.toString()).not.toContain("big");
+    expect(files.get("memory/demo-store/notes/first.md")).toEqual(first.build.contents.files.get("memory/demo-store/notes/first.md"));
+
+    // A store with an error takes its memories and its index with it.
+    const store = checkPackage(demoPackage({ "memory/demo-store/STORE.md": "Demo store without frontmatter.\n" }), opts);
+    const out = withoutFailingAssets(store, opts);
+    expect(out.leftOut.map((a) => a.assetKey)).toEqual(["memory_store:demo-store", "memory:demo-store/notes/first"]);
+    expect(out.leftOut[1]!.reasons).toEqual(["It needs memory/demo-store/STORE.md, which is left out."]);
+    expect([...out.check.build.contents.files.keys()].filter((p) => p.startsWith("memory/"))).toEqual([]);
+
+    // A layout error (here a skill folder that doesn't match its name) keeps the files: the service accepts them.
+    const layoutOnly = checkPackage(demoPackage({ "skills/demo-skill/SKILL.md": "---\nname: other-name\ndescription: Use when testing.\n---\n# Demo\n" }), opts);
+    expect(layoutOnly.results.filter((r) => r.level === "error").map((r) => r.code)).toEqual(["package.skill-identity"]);
+    const kept = withoutFailingAssets(layoutOnly, opts);
+    expect(kept.leftOut).toEqual([]);
+    expect(kept.check.build.contents.files.has("skills/demo-skill/SKILL.md")).toBe(true);
   });
 
   it("checkPackage maps the built package to valid assets", () => {

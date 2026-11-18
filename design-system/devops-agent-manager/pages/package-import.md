@@ -146,7 +146,8 @@ Opened from "Export package" on the Releases list (latest commit selected) and "
   - Built: "Skill zips and memory indexes are rebuilt. Metadata the files can't carry goes to <manifest path>." The path comes from the layout's `manifest`.
 - **Buttons:** "Cancel" (outline) and "Download zip" (primary, Download).
 - **Download:** a Route Handler `GET` that streams the zip from `exportPackageZip`, with the source, layout and name in the query.
-- **Disabled reason** for the download: "The package doesn't pass its checks: <N> errors." The errors are listed in a destructive `Callout` in the dialog. Each problem is listed once (the build leaves a missing shared section to the package checks), and files a layout marks optional (`requiredFiles` with `level: warning`, such as a layout's optional extra files) are warnings that don't count.
+- **Failing checks:** the download still works (`package-io.yaml` `export.blockOnFailedChecks: false`). The space already holds each asset, so every one goes in the zip as it is, with `reference/EXPORT-NOTES.md` listing the errors. The dialog shows a warning `Callout` "Every asset is in the zip, with <N> package errors", the errors, and "<notes file> in the zip lists them." Each problem is listed once (the build leaves a missing shared section to the package checks), and files a layout marks optional (`requiredFiles` with `level: warning`) are warnings that don't count.
+- **Disabled reason** when policy blocks (`blockOnFailedChecks: true`): "The package doesn't pass its checks: <N> errors.", with the errors in a destructive `Callout`.
 
 ## Permissions
 
@@ -175,5 +176,5 @@ Record:
 ## Open items
 
 - **Live assets not in the package.** The default leaves them as they are. Rollback sets added skills Inactive instead, so an import option may be wanted to do the same for skills and memories that a package dropped. The original design is silent.
-- **Export with failing checks.** The default blocks the download. A package that fails `validate_package` would also fail an external package-validation tool, but blocking stops a user who wants the files anyway.
+- **Export with failing checks.** Decided 2026-11-18: the download is never blocked by default, because a customer could not export at all. A package that fails `validate_package` would also fail an external package-validation tool, so the zip carries the errors in `reference/EXPORT-NOTES.md`.
 - **"Load it on the Agents page by hand"** in the `package.no-agent-type` message names a console page. Check that the name matches the console's current wording.

@@ -346,6 +346,23 @@ function ExportForm({ alias, options, initialRef, showCodes = false, onDone }: O
             </ul>
           </Callout>
         ) : null}
+        {p && !p.ok && !p.blockedReason ? (
+          <Callout tone="warning" title={`Every asset is in the zip, with ${p.errors.length} package ${p.errors.length === 1 ? "error" : "errors"}`}>
+            <ul className="mt-1 max-h-36 list-disc space-y-0.5 overflow-y-auto pl-4" tabIndex={0} aria-label="Package check errors">
+              {p.errors.map((e, i) => (
+                <li key={`${i}:${e.code}`} className="break-words" title={e.code}>
+                  {e.message}
+                  {showCodes ? <span className="ml-1 font-mono text-xs text-muted-foreground">{e.code}</span> : null}
+                </li>
+              ))}
+            </ul>
+            {p.notesFile ? (
+              <p className="mt-2 text-xs">
+                <span className="font-mono">{p.notesFile}</span> in the zip lists them.
+              </p>
+            ) : null}
+          </Callout>
+        ) : null}
         {downloadError ? (
           <Callout tone="destructive" title="The download was refused" afterAction>
             <p className="break-words whitespace-pre-line">{downloadError}</p>

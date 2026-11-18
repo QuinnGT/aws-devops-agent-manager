@@ -19,7 +19,14 @@ const exportDefault = {
   packageName: "{spaceAlias}-{ref}",
   recentCommits: 20,
   gitReadConcurrency: 4,
-  blockOnFailedChecks: true,
+  blockOnFailedChecks: false,
+  notes: {
+    path: "reference/EXPORT-NOTES.md",
+    title: "# Export notes",
+    intro: "The space's assets at {ref} don't pass every package check in the {layout} layout. The space already holds each asset, so every one is in this zip as it is.",
+    none: "No asset was left out.",
+    remaining: "## Package check errors",
+  },
 };
 
 /**
@@ -55,8 +62,22 @@ export const packageIoSection = defineSection(
         recentCommits: z.number().int().min(0).max(500).default(exportDefault.recentCommits),
         /** Parallel git reads when reading a space's assets at a commit */
         gitReadConcurrency: z.number().int().min(1).max(32).default(exportDefault.gitReadConcurrency),
-        /** Refuse the download while the package fails its checks (pages/package-import.md, "Export dialog") */
+        /** Refuse the download while the package fails its checks (pages/package-import.md, "Export dialog"). false: download every asset, with the errors in the notes file */
         blockOnFailedChecks: z.boolean().default(exportDefault.blockOnFailedChecks),
+        /** The notes file a download with errors carries */
+        notes: z
+          .object({
+            /** Package path of the note (a non-asset path of the layout); null: no note */
+            path: z.string().min(1).nullable().default(exportDefault.notes.path),
+            title: z.string().min(1).default(exportDefault.notes.title),
+            /** Placeholders: {ref} {layout} */
+            intro: template(["ref", "layout"]).default(exportDefault.notes.intro),
+            /** Shown when no asset was left out */
+            none: z.string().min(1).default(exportDefault.notes.none),
+            /** Heading over the errors still in the package */
+            remaining: z.string().min(1).default(exportDefault.notes.remaining),
+          })
+          .default(exportDefault.notes),
       })
       .default(exportDefault),
   }),

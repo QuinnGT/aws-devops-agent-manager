@@ -203,3 +203,15 @@ export function basedOnText(base: { kind: string; label: string }): string {
 export function baseCellText(base: { kind: string; releaseName?: string | null }): string {
   return base.kind === "release" && base.releaseName ? `Release ${base.releaseName}` : "Live space";
 }
+
+/**
+ * The build card's line about "Export package zip" while the build fails
+ * (revision-detail.md): the download leaves out the assets the service would refuse.
+ * `leftOut` is null for a build stored before the count was recorded.
+ */
+export function exportLeftOutText(leftOut: number | null, note: string | null): string {
+  const where = (what: string) => (note ? ` ${note} in the zip ${what}.` : "");
+  if (leftOut === null) return `Export package zip leaves out the assets the service would refuse.${where("says which and why")}`;
+  if (leftOut === 0) return `Export package zip keeps every asset, because the service accepts them as they are.${where("lists the errors")}`;
+  return `Export package zip leaves out ${leftOut} ${leftOut === 1 ? "asset" : "assets"} until the errors are fixed.${where("says why")}`;
+}

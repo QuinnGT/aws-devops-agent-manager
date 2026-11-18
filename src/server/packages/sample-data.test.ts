@@ -132,7 +132,9 @@ describe.each(["v1", "v2"] as const)("sample package %s", (version) => {
     expect(noOther.results.filter((r) => r.code === "package.safety-message").map((r) => r.message)).toEqual([expect.stringContaining("[DATA REDACTED]: The request contains credentials or personal data and was not processed.")]);
 
     const big = checkPackage(change(contents, { "memory/runbooks/log-query-limits.md": `${text(contents, "memory/runbooks/log-query-limits.md")}\n${"x".repeat(17000)}\n` }), { policy, layout });
-    expect(big.results.map((r) => r.code)).toContain("package.memory-size");
+    // A design target warns but doesn't fail the package, so a revision with large memories can still be exported.
+    expect(big.results.filter((r) => r.code === "package.memory-size").map((r) => r.level)).toEqual(["warning"]);
+    expect(big.ok).toBe(true);
   });
 
   it("holds the memory bodies exactly as the story gives them, between the frontmatter and the two closing lines", async () => {

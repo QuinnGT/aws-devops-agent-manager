@@ -24,7 +24,7 @@ The two options show the same revision at different moments: option 1 after save
 
   | Action | Permission | Does |
   |---|---|---|
-  | "Export package zip" (outline, Download) | `audits.read` | Downloads the package at the branch head as a zip in the revision's layout, for a space this app can't write to (the `package-import.md` export path) |
+  | "Export package zip" (outline, Download) | `audits.read` | Downloads the package at the branch head as a zip in the revision's layout, for a space this app can't write to (the `package-import.md` export path). While the build fails it still downloads, without the assets the service would refuse (and the assets that need one), with `reference/EXPORT-NOTES.md` saying which and why and listing the errors still in the files (`revisions.yaml` `export`) |
   | "Create plan" (primary, GitPullRequest) | `revisions.build` and `plans.create` | Calls `createPlan` with `origin: { kind: "revision", ... }` through the package import mapping and opens the plan in "checking" |
 
   Under the actions in muted 12.5 px: "Checks the package against the live space. Nothing is written until the plan is applied." **Disabled reasons** for "Create plan" (`DisabledReason`):
@@ -41,7 +41,7 @@ The two options show the same revision at different moments: option 1 after save
 - **Changelog entry** preview: the title, "Files: <paths>", "Evidence: <incident> (R<n>, ...)" built from the linked findings' citations.
 - Buttons "Cancel" and "Save and build" (primary, Save). Disabled reasons: "Write a message." / "Link at least one accepted finding."
 
-**Build and validation card:** header badge "Passed", "<N> errors" or "Building" (info, Loader). Rows with `ValidationList`, errors first, each naming the file as a link (opens it in the editor) on its own line, then the message and the code in mono. A success row "<N> skill zips and <N> memory indexes rebuilt, shared sections copied" with "After save <N>, <Time>". The build is the package build and validation in `src/server/packages/` and `src/server/validation/`, so its codes are those modules' codes.
+**Build and validation card:** header badge "Passed", "<N> errors" or "Building" (info, Loader). Rows with `ValidationList`, errors first, each naming the file as a link (opens it in the editor) on its own line, then the message and the code in mono. A success row "<N> skill zips and <N> memory indexes rebuilt, shared sections copied" with "After save <N>, <Time>". The build is the package build and validation in `src/server/packages/` and `src/server/validation/`, so its codes are those modules' codes. While the build fails (and the viewer can export), a last row says what the download leaves out: "Export package zip leaves out <N> assets until the errors are fixed. reference/EXPORT-NOTES.md in the zip says why." (with none left out: "Export package zip keeps every asset, because the service accepts them as they are. reference/EXPORT-NOTES.md in the zip lists the errors."), then each asset's source path in mono with its first reason in muted 12 px (`exportLeftOutText`).
 
 **Generated files** (`reference/CHANGELOG.md`, skill zips, memory indexes, the Agent Space folder index `INDEX.json`) are read only. The tree marks them "Built" with a Lock icon, and opening one shows it with "This file is built from the package. Edit its sources instead." An asset folder's descriptor (`_asset.json`) is the asset's metadata, so it stays editable.
 

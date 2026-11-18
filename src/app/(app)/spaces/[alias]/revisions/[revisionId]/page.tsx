@@ -249,9 +249,10 @@ export default async function RevisionDetailPage({ params, searchParams }: PageP
         initial={initial}
         build={
           detail.build
-            ? { status: detail.build.status, errors: detail.build.errors, warnings: detail.build.warnings, ranAt: detail.build.ranAt, results: detail.build.results, omitted: detail.build.omitted, saveNumber: buildSave }
+            ? { status: detail.build.status, errors: detail.build.errors, warnings: detail.build.warnings, ranAt: detail.build.ranAt, results: detail.build.results, omitted: detail.build.omitted, saveNumber: buildSave, leftOut: detail.build.leftOut ?? null }
             : null
         }
+        leftOutNote={policy.revisions.export.leftOut.path}
         resultFiles={page.resultFiles}
         rebuilt={page.rebuilt}
         findings={detail.findings.map((f) => ({ id: f.id, title: f.title, incidentId: f.incidentId, kindLabel: page.findingLinks[f.id]?.kindLabel ?? f.kind, auditName: f.auditName, href: page.findingLinks[f.id]?.href ?? null, state: f.state }))}

@@ -31,7 +31,7 @@ import { applyQuickFix, deleteOpenFile, editedFiles, isEdited, markSaved, newFil
 import { SaveDialog, type SaveOutcome, type SaveRevisionAction, type SaveRules } from "./save-dialog";
 import { SavesList, type SaveRow } from "./saves-list";
 import { FileDiffPanel } from "./file-diff-panel";
-import { planButtonReason, planHint, REVISION_STATUS, revisionWord, type RevisionStateInput } from "./words";
+import { exportLeftOutText, planButtonReason, planHint, REVISION_STATUS, revisionWord, type RevisionStateInput } from "./words";
 
 export type CreateRevisionPlanAction = (revisionId: string) => Promise<ActionResult<{ planId: string }>>;
 
@@ -76,7 +76,19 @@ export interface RevisionWorkspaceProps {
   folders: PackageFolder[];
   marks: Record<string, PageFileMark>;
   initial: { path: string; view: FileView } | null;
-  build: { status: "passed" | "failed"; errors: number; warnings: number; ranAt: string; results: ValidationResult[]; omitted: number; saveNumber: number | null } | null;
+  build: {
+    status: "passed" | "failed";
+    errors: number;
+    warnings: number;
+    ranAt: string;
+    results: ValidationResult[];
+    omitted: number;
+    saveNumber: number | null;
+    /** While the build fails: what the package download leaves out; null for older builds */
+    leftOut?: { assetKey: string; source: string | null; reasons: string[] }[] | null;
+  } | null;
+  /** Package path of the note a download with build errors carries, or null */
+  leftOutNote?: string | null;
   /** The file each build result is about, by result index */
   resultFiles: (string | null)[];
   rebuilt: string | null;
@@ -560,6 +572,21 @@ export function RevisionWorkspace(p: RevisionWorkspaceProps) {
               />
             ) : null}
             {p.build.omitted ? <p className="border-t px-4 py-2 text-xs text-muted-foreground">{p.build.omitted} more results are not shown.</p> : null}
+            {p.can.export && p.build.status === "failed" ? (
+              <div className="border-t px-4 py-2 text-[13px]">
+                <p>{exportLeftOutText(p.build.leftOut ? p.build.leftOut.length : null, p.leftOutNote ?? null)}</p>
+                {p.build.leftOut?.length ? (
+                  <ul className="mt-1 grid gap-1">
+                    {p.build.leftOut.map((a) => (
+                      <li key={a.assetKey} className="min-w-0">
+                        <span className="font-mono text-xs break-all">{a.source ?? a.assetKey}</span>
+                        <p className="text-xs text-muted-foreground">{a.reasons[0]}</p>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
+            ) : null}
             <div className="grid grid-cols-[16px_minmax(0,1fr)] gap-2 border-t px-4 py-2 text-[13px] first:border-t-0">
               <CircleCheck className="mt-0.5 size-4 text-success-fg" aria-hidden />
               <div>

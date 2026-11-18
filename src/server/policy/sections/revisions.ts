@@ -77,7 +77,16 @@ const planDefault = {
   noFindings: "none linked",
 };
 const releaseDefault = { name: "{name}", note: "Applied from revision {name} (plan {planId})." };
-const exportDefault = { requirePassingBuild: true };
+const exportDefault = {
+  requirePassingBuild: false,
+  leftOut: {
+    path: "reference/EXPORT-NOTES.md",
+    title: "# Export notes",
+    intro: "The build of revision {name} has errors. Assets the service would refuse are left out of this zip and listed below; the other errors stay in the files as they are. Fix them in the revision and export again.",
+    none: "No asset was left out: the service accepts every asset as it is.",
+    remaining: "## Errors still in this package",
+  },
+};
 const pagesDefault = { listPageSize: 50, maxDiffBytes: 200_000, maxFileBytes: 512_000, maxResults: 200 };
 
 export const revisionsSection = defineSection(
@@ -205,8 +214,22 @@ export const revisionsSection = defineSection(
       .default(releaseDefault),
     export: z
       .object({
-        /** Refuse the package download until the latest build passed */
+        /** Refuse the package download until the latest build passed. false: the download leaves out the assets with errors */
         requirePassingBuild: z.boolean().default(exportDefault.requirePassingBuild),
+        /** The note a download with build errors carries */
+        leftOut: z
+          .object({
+            /** Package path of the note (a non-asset path of the layout); null: no note */
+            path: z.string().min(1).nullable().default(exportDefault.leftOut.path),
+            title: z.string().min(1).default(exportDefault.leftOut.title),
+            /** Placeholder: {name} */
+            intro: template(["name"]).default(exportDefault.leftOut.intro),
+            /** Shown when only errors no asset owns failed the build */
+            none: z.string().min(1).default(exportDefault.leftOut.none),
+            /** Heading over the errors no asset owns, which stay in the zip */
+            remaining: z.string().min(1).default(exportDefault.leftOut.remaining),
+          })
+          .default(exportDefault.leftOut),
       })
       .default(exportDefault),
     /** Push revision branches after each commit when the repository allows pushes */
