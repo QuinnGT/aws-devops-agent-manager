@@ -600,7 +600,7 @@ export class HistoryRepo {
           GIT_COMMITTER_EMAIL: opts.committer.email,
           GIT_COMMITTER_DATE: iso,
         })
-        .raw(["commit", "-q", "--no-verify", ...(opts.allowEmpty ? ["--allow-empty"] : []), "-F", msgFile]);
+        .raw(["commit", "-q", ...(opts.allowEmpty ? ["--allow-empty"] : []), "-F", msgFile]);
       return (await this.git.revparse(["HEAD"])).trim();
     });
   }
