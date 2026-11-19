@@ -21,9 +21,19 @@ Parameters:
     Default: "true"
     AllowedValues: ["true", "false"]
     Description: Set to false if this app should only read. Without a write role, plans cannot be applied.
+  AllowChatReviews:
+    Type: String
+    Default: "false"
+    AllowedValues: ["true", "false"]
+    Description: >-
+      Set to true to let audits use the DevOps Agent chat as the reviewer. The write role may then also create a chat
+      and send it messages in this Agent Space. It has no effect when CreateWriteRole is false.
 
 Conditions:
   WithWriteRole: !Equals [!Ref CreateWriteRole, "true"]
+  WithChatReviews: !And
+    - !Condition WithWriteRole
+    - !Equals [!Ref AllowChatReviews, "true"]
 
 Resources:
   ReadRole:
@@ -95,7 +105,7 @@ Resources:
     Condition: WithWriteRole
     Properties:
       RoleName: DevOpsAgentManagerWrite
-      Description: Asset writes to one Agent Space, used only when DevOps Agent Manager applies a plan.
+      Description: Asset writes to one Agent Space, used only when DevOps Agent Manager applies a plan or, if enabled, runs a DevOps Agent chat review.
       MaxSessionDuration: 3600
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
@@ -128,6 +138,15 @@ Resources:
                   - aidevops:UpdateAssetFile
                   - aidevops:DeleteAssetFile
                 Resource: !Ref AgentSpaceArn
+              - !If
+                - WithChatReviews
+                - Sid: RunChatReviews
+                  Effect: Allow
+                  Action:
+                    - aidevops:CreateChat
+                    - aidevops:SendMessage
+                  Resource: !Ref AgentSpaceArn
+                - !Ref AWS::NoValue
 
 Outputs:
   ReadRoleArn:

@@ -191,3 +191,27 @@ No model is built in. Pick one on "New audit", or ask an Admin to set a default 
 ### A review stops at the step limit, or the answer does not match the schema
 
 These are limits of the profile in [`policy/audits.yaml`](../policy/audits.yaml): `stepLimit`, `timeoutSeconds` and `outputSchema`. Rerun the review first. If it keeps happening, try a more capable model, or raise `stepLimit` in an overlay. See [Policy](policy.md#audit-profiles-and-prompts).
+
+### "AWS refused the request: the space's write role isn't allowed to run a DevOps Agent chat"
+
+A review with the reviewer **DevOps Agent chat** starts a chat in the space and sends it a message. The identity the worker uses for writes needs `aidevops:CreateChat` and `aidevops:SendMessage` on the Agent Space, and `aidevops:CreateAsset` and `aidevops:DeleteAsset` for the two temporary attachments. Add [`chat-review-policy.json`](iam/chat-review-policy.json) to the write role, or deploy the CloudFormation template with `AllowChatReviews=true`, and rerun the review. See [DevOps Agent chat reviews](aws-setup.md#devops-agent-chat-reviews).
+
+### "The review files are ... together" or "The review message is ... characters"
+
+The chat takes one message of at most 32,768 characters and, in testing, read attached files up to about 1.8 MB. The review stops before any call when the files are larger than `review.chat.attachmentBytesCap` (1.5 MB by default). The error names the settings to lower: `review.files.recordCharsCap` cuts long records, and `review.traceCharsInPrompt` and `review.groundTruthCharsInPrompt` shorten the brief. A message that is too long comes from the reviewer system prompt, the output schema or the chat template, which are policy files. Change these in an overlay. See [Policy](policy.md#audit-profiles-and-prompts).
+
+### "The chat returned an empty answer"
+
+The files were probably too large for the chat to read. A chat answered nothing for 2.6 MB of attachments in testing. Lower `review.files.recordCharsCap` as above and rerun the review.
+
+### "The chat asked for an approval or an interrupt"
+
+The chat wanted to run something that needs a person's approval. A review only reads two files, so it should need none. Possible causes are the space's own instructions, which the chat loads, or text in the journal that the chat followed. The app approves nothing and fails the review. Check what the space's instructions tell a chat to do, or run the audit in a separate reviewer space. See [Security](security.md#untrusted-content).
+
+### Attachments named `dam-review-...` stay in the space
+
+The worker deletes them when a review ends. If the worker was stopped in the middle or a delete failed, the files stay. The worker log names each file it could not delete. Delete them in the DevOps Agent console or with `DeleteAsset`. They start with `dam-review-`, and the sync does not record them.
+
+### A review with the DevOps Agent chat times out
+
+The audit profile's `timeoutSeconds` covers the whole review, including both attachments, the chat and the reply. A review took about 2 minutes in testing. Check that the profile's timeout is above that. When the app stops waiting it closes the connection and deletes the attachments. Whether the service then stops the chat's work was not tested, so check the space's usage if reviews time out often.
