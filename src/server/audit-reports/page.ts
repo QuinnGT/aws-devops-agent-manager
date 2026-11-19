@@ -124,6 +124,8 @@ export function audienceSummaries(view: Pick<ReportView, "sections">): Record<Au
 export interface ReportPage {
   view: ReportView;
   model: ReportModel;
+  /** Who wrote the audit's reviews (profile review.runner), for the words about drafting */
+  runner: string;
   /** The profile's finding kinds with their labels, in profile order */
   kinds: { kind: string; label: string; perInvestigation: boolean }[];
   narrativeMaxChars: number;
@@ -197,6 +199,7 @@ export async function loadReportPage(space: Space, auditId: string): Promise<Rep
   return {
     view,
     model: reportModelOf(profile, space.parsedSettings, policy.policy.audits.profiles[audit.profileId] ?? null),
+    runner: profile.review.runner,
     kinds: profile.findings.map((f) => ({ kind: f.kind, label: f.label, perInvestigation: f.from === "$" })),
     narrativeMaxChars: profile.report.narrativeMaxChars,
     excerptChars: policy.policy.outputRules.excerptChars,

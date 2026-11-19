@@ -14,7 +14,7 @@ import { Time } from "@/components/common/time";
 import { SafeMarkdown } from "@/components/safe-markdown";
 import { getAnalyzer } from "@/server/analyzers/registry";
 import { decodeParam } from "@/server/assets/guard";
-import { loadReportPage, NO_REPORT_MODEL_REASON, REPORT_PERMISSIONS, unapprovedNarratives, type Audience, type ExportRecord, type ReportPage, type ReportSectionView } from "@/server/audit-reports";
+import { loadReportPage, noReportModelReason, REPORT_PERMISSIONS, unapprovedNarratives, type Audience, type ExportRecord, type ReportPage, type ReportSectionView } from "@/server/audit-reports";
 import { can, requireUserOrRedirect } from "@/server/auth/dal";
 import { getSpaceByAlias } from "@/server/spaces/queries";
 import { approveNarrativeAction, buildReportAction, draftNarrativeAction, finalizeAuditAction, saveNarrativeAction, setSectionHiddenAction } from "./actions";
@@ -177,7 +177,7 @@ export default async function AuditReportPage({ params }: PageProps<"/spaces/[al
     const c = s.content;
     if (c.type === "narrative") {
       const d = page.drafts[s.id];
-      const disabledReason = !page.model.id ? NO_REPORT_MODEL_REASON : accepted === 0 ? "Accept some findings first." : null;
+      const disabledReason = !page.model.id ? noReportModelReason(page.runner) : accepted === 0 ? "Accept some findings first." : null;
       return (
         <NarrativeSection
           key={s.id}

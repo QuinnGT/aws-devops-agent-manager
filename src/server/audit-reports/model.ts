@@ -37,3 +37,14 @@ export function reportModelOf(
 
 /** Why "Draft with the model" can't run when no model resolves. */
 export const NO_REPORT_MODEL_REASON = "No model is set for this audit's report. Choose one on the audit, or ask an Admin to set a default in Space settings.";
+
+/**
+ * The same reason, worded for the audit's reviewer. Only the Bedrock reviewer
+ * falls back to its review model for the report; review files and the other
+ * runners use none, so without a report model chosen on the draft a person
+ * writes each narrative section.
+ */
+export function noReportModelReason(runner: string): string {
+  if (runner === "ai-sdk") return NO_REPORT_MODEL_REASON;
+  return "This audit's reviews don't use a model in Amazon Bedrock, and no report model was chosen when it was a draft. Write each narrative section yourself with Edit.";
+}

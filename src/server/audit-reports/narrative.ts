@@ -10,6 +10,7 @@ import type { AuditProfile } from "@/server/policy/sections/audits";
 import { getSpaceById, toAwsConfig } from "@/server/spaces/queries";
 import { AuditReportError } from "./errors";
 import { loadReportContext } from "./loader";
+import { noReportModelReason } from "./model";
 import { buildTime } from "./queries";
 import { sectionMarkdown } from "./report-md";
 import { incidentName } from "./sections";
@@ -165,7 +166,7 @@ export async function draftNarrativeHandler(input: DraftNarrativeInput, ctx: Job
   const targets = input.sectionIds.length ? narratives.filter((s) => input.sectionIds.includes(s.id)) : narratives;
 
   const modelId = profile.report.modelId ?? profile.review.modelId ?? (deps.model ? "injected" : undefined);
-  if (!modelId) throw new AuditReportError("No model is set for this audit's report. Choose one on the audit or in Space settings.", "invalid");
+  if (!modelId) throw new AuditReportError(noReportModelReason(profile.review.runner), "invalid");
   const region = inferenceRegion(space, space.parsedSettings);
   const model = deps.model ?? bedrockModel(toAwsConfig(space), ctx.actor, modelId, region);
   const system = profile.report.systemPrompt ? readPolicyFile(policy.dirs, profile.report.systemPrompt) : null;
