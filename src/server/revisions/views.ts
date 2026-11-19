@@ -21,7 +21,7 @@ import { fileView, readRevisionPackage } from "./package-files";
 import { MAX_LEFT_ALONE_NOTES } from "./plan-input";
 import { conflictSentence, leftAloneSentences, loadRevisionScope, scopeAfter } from "./scope";
 import { revisionNameKey } from "./names";
-import { findingsForChangelog, getRevision, getRevisionByNameKey, isUuid } from "./queries";
+import { findingsForChangelog, findingsForToAddress, getRevision, getRevisionByNameKey, isUuid, type ToAddressRow } from "./queries";
 
 /**
  * What the revision pages add to loadRevisionDetail: per-file marks
@@ -183,6 +183,58 @@ export function capDiffLines(files: FileDiff[], maxLines: number): FileDiff[] {
   });
 }
 
+/** The longest title the to-address card shows. */
+const MAX_FULL_TITLE_CHARS = 2000;
+
+/**
+ * A finding's title as the audit stored it is clipped with "..." at about 300
+ * characters. When one of the finding's text values continues the clipped
+ * title, this is the full text (the incident prefix of the title kept);
+ * otherwise the title as it is.
+ */
+export function fullTitle(title: string, incidentId: string | null, values: Record<string, unknown>): string {
+  if (!title.endsWith("...")) return title;
+  const prefix = incidentId && title.startsWith(`${incidentId}: `) ? `${incidentId}: ` : "";
+  const head = title.slice(prefix.length, -3).trimEnd();
+  if (!head) return title;
+  for (const v of Object.values(values)) {
+    if (typeof v !== "string") continue;
+    const t = v.replace(/\s+/g, " ").trim();
+    if (t.length > head.length && t.startsWith(head)) return `${prefix}${t.length > MAX_FULL_TITLE_CHARS ? `${t.slice(0, MAX_FULL_TITLE_CHARS - 3).trimEnd()}...` : t}`;
+  }
+  return title;
+}
+
+/** The finding on its audit's page (the audit page selects the finding named in `finding`). */
+export function findingHref(alias: string, auditId: string, findingId: string): string {
+  return `/spaces/${encodeURIComponent(alias)}/audits/${encodeURIComponent(auditId)}/findings?finding=${encodeURIComponent(findingId)}`;
+}
+
+export function auditHref(alias: string, auditId: string): string {
+  return `/spaces/${encodeURIComponent(alias)}/audits/${encodeURIComponent(auditId)}`;
+}
+
+/** Why a finding on the to-address list can't be linked now, in plain words; null while it is accepted. `state` is the finding's own state, or "missing" when it no longer exists. */
+export function notAcceptedReason(state: string): string | null {
+  if (state === "accepted") return null;
+  if (state === "proposed") return "Reopened on its audit, so it isn't accepted now. It can be linked again once it is accepted.";
+  if (state === "rejected") return "Rejected on its audit. It can't be linked unless it is accepted again.";
+  if (state === "missing") return "This finding is no longer in the space.";
+  return "Not accepted on its audit.";
+}
+
+/** The audits the findings come from, each once, in the order they first appear. */
+export function sourceAuditsOf(alias: string, findings: readonly { auditId: string; auditName: string }[]): SourceAudit[] {
+  const seen = new Set<string>();
+  const out: SourceAudit[] = [];
+  for (const f of findings) {
+    if (!f.auditId || seen.has(f.auditId)) continue;
+    seen.add(f.auditId);
+    out.push({ id: f.auditId, name: f.auditName, href: auditHref(alias, f.auditId) });
+  }
+  return out;
+}
+
 // ---------- git reads ----------
 
 /** Line diffs of package paths between two commits of a revision branch (from null: every file is added). */
@@ -231,8 +283,44 @@ export interface ResultLink {
   file: string | null;
 }
 
+/** A finding on the revision's to-address list, as the "To address" card shows it. */
+export interface ToAddressView {
+  id: string;
+  /** The finding's full title: the audit clips its stored title at about 300 characters, and this continues it from the finding's values */
+  title: string;
+  incidentId: string | null;
+  kind: string;
+  kindLabel: string;
+  /** The fix owner in the audit profile's words ("Instruction and skill package"), when the finding has one */
+  owner: string | null;
+  /** The profile's name for the owner field ("Owner") */
+  ownerLabel: string | null;
+  auditId: string;
+  auditName: string;
+  /** The audit page; null when the finding no longer exists */
+  auditHref: string | null;
+  /** The finding on its audit's page; null when the finding no longer exists */
+  href: string | null;
+  /** The finding's state on its audit: accepted, proposed (reopened), rejected, or missing */
+  state: string;
+  /** Accepted now: a save can link it */
+  accepted: boolean;
+  /** Why it can't be linked now; null while accepted */
+  notAcceptedReason: string | null;
+}
+
+export interface SourceAudit {
+  id: string;
+  name: string;
+  href: string;
+}
+
 export interface RevisionPage {
   detail: RevisionDetail;
+  /** The to-address list, in the order the findings were added */
+  toAddress: ToAddressView[];
+  /** The audits the revision's findings (to address and linked) come from */
+  sourceAudits: SourceAudit[];
   /** Per package path */
   marks: Record<string, PageFileMark>;
   /** The package's files grouped by top folder, in the layout's order */
@@ -362,7 +450,9 @@ export async function loadRevisionPage(space: Space, idOrName: string, viewer?: 
   let saves: SaveView[] = [];
   let branchMissing = false;
   const allFindingIds = detail.changes.flatMap((c) => c.findingIds);
-  const [labels, items] = await Promise.all([kindLabels(detail.findings.map((f) => f.auditId)), itemIds(allFindingIds)]);
+  const toAddressRows = await findingsForToAddress(space.id, r.toAddressIds);
+  const [profiles, items] = await Promise.all([auditProfiles([...detail.findings.map((f) => f.auditId), ...toAddressRows.map((f) => f.auditId)]), itemIds(allFindingIds)]);
+  const labels = await kindLabels([], profiles);
   const base = `/spaces/${encodeURIComponent(space.alias)}/audits`;
   const findingLinks: RevisionPage["findingLinks"] = {};
   for (const f of detail.findings) {
@@ -401,6 +491,7 @@ export async function loadRevisionPage(space: Space, idOrName: string, viewer?: 
       // The detail already says when the repository can't be read.
     }
   }
+  const toAddress = toAddressViews(space.alias, r.toAddressIds, toAddressRows, profiles, labels);
   const baseTotals = diffTotals(baseFiles);
   // The person's files and the build's: a 4-line edit should not read as +15 because the change record and VALIDATION.json changed too.
   const { edited: editedTotals, built: builtTotals, builtPaths } = splitBuiltFiles(baseFiles, detail.changes.flatMap((c) => c.changedPaths), marks);
@@ -419,6 +510,8 @@ export async function loadRevisionPage(space: Space, idOrName: string, viewer?: 
     detail,
     pendingRun,
     scope,
+    toAddress,
+    sourceAudits: sourceAuditsOf(space.alias, [...toAddress, ...detail.findings]),
     branchMissing,
     marks,
     folders: layout ? packageFolders(detail.tree.map((f) => f.path), layout) : [{ name: null, files: detail.tree.map((f) => f.path) }],
@@ -431,6 +524,32 @@ export async function loadRevisionPage(space: Space, idOrName: string, viewer?: 
     baseRelease: r.baseRelease ?? null,
     changelogPath,
   };
+}
+
+/** The to-address list as the card shows it: in list order, each with its labels and links; an ID with no finding left stays so it can be removed. */
+export function toAddressViews(alias: string, ids: readonly string[], rows: readonly ToAddressRow[], profiles: ReadonlyMap<string, AuditProfile>, kindLabelsByAudit: ReadonlyMap<string, string>): ToAddressView[] {
+  const byId = new Map(rows.map((x) => [x.id, x]));
+  return ids.map((id): ToAddressView => {
+    const f = byId.get(id);
+    if (!f) {
+      return { id, title: "A finding that is no longer in this space", incidentId: null, kind: "", kindLabel: "", owner: null, ownerLabel: null, auditId: "", auditName: "", auditHref: null, href: null, state: "missing", accepted: false, notAcceptedReason: notAcceptedReason("missing") };
+    }
+    return {
+      id,
+      title: fullTitle(f.title, f.incidentId, f.values),
+      incidentId: f.incidentId,
+      kind: f.kind,
+      kindLabel: kindLabelsByAudit.get(`${f.auditId}:${f.kind}`) ?? sentence(f.kind),
+      ...ownerOf(profiles.get(f.auditId), f.kind, f.values),
+      auditId: f.auditId,
+      auditName: f.auditName,
+      auditHref: auditHref(alias, f.auditId),
+      href: findingHref(alias, f.auditId, f.id),
+      state: f.state,
+      accepted: f.state === "accepted",
+      notAcceptedReason: notAcceptedReason(f.state),
+    };
+  });
 }
 
 /** The revision's create or last save job, when it is still queued or running. */
@@ -480,6 +599,8 @@ export interface SaveFinding {
   records: number[];
   /** Linked by an earlier save of this revision */
   linkedBefore: boolean;
+  /** Sent to this revision from an audit and not linked yet: the save dialog preselects it */
+  toAddress: boolean;
   /** The finding's own text (title and text values), for matching it to the edited files */
   text: string;
 }
@@ -488,6 +609,14 @@ export interface SaveFinding {
 function labelProfile(p: AuditProfile | undefined): Parameters<typeof fieldValueLabel>[0] | null {
   if (!p) return null;
   return { failureModes: p.failureModes ?? [], fixOwners: p.fixOwners ?? [], cohorts: p.cohorts ?? [], findings: p.findings ?? [] };
+}
+
+/** A fix's owner in the profile's words, and the profile's name for the field. Null when the finding has no owner. */
+function ownerOf(profile: AuditProfile | undefined, kind: string, values: Record<string, unknown>): { owner: string | null; ownerLabel: string | null } {
+  const raw = typeof values.owner === "string" ? values.owner : null;
+  if (raw === null) return { owner: null, ownerLabel: null };
+  const labels = labelProfile(profile);
+  return labels ? { owner: fieldValueLabel(labels, "owner", raw, kind), ownerLabel: fieldLabel(labels, "owner", kind) } : { owner: raw, ownerLabel: "Owner" };
 }
 
 /** The text values of a finding (fix text, one-line diagnosis, detail), joined for matching. */
@@ -501,21 +630,25 @@ function findingText(title: string, values: Record<string, unknown>): string {
 }
 
 /**
- * Findings the save dialog offers: accepted and linkable (listLinkableFindings),
- * those already linked by earlier saves first, each with the records its
- * citations confirm for the changelog preview and its owner in the profile's
- * words. The dialog puts the findings that name an edited file first. The
+ * Findings the save dialog offers: accepted and linkable (listLinkableFindings).
+ * The revision's to-address findings (`opts.toAddress`, those still accepted)
+ * come first, in the order they were added, then those already linked by
+ * earlier saves, each with the records its citations confirm for the changelog
+ * preview and its owner in the profile's words. The dialog preselects the
+ * to-address ones and puts the findings that name an edited file next. The
  * caller has checked `audits.read`.
  */
-export async function loadSaveFindings(space: Space, linkedBefore: readonly string[] = [], opts: { limit?: number } = {}): Promise<SaveFinding[]> {
-  const rows = await listLinkableFindings(space.id, { limit: opts.limit ?? 500 });
+export async function loadSaveFindings(space: Space, linkedBefore: readonly string[] = [], opts: { limit?: number; toAddress?: readonly string[] } = {}): Promise<SaveFinding[]> {
+  // The to-address findings are always offered, also when their item was reviewed again since (a finding's accepted decision stays linkable).
+  const wanted = [...new Set(opts.toAddress ?? [])];
+  const [listed, sent] = await Promise.all([listLinkableFindings(space.id, { limit: opts.limit ?? 500 }), wanted.length ? listLinkableFindings(space.id, { ids: wanted, limit: wanted.length }) : Promise.resolve([])]);
+  const rows = [...sent, ...listed.filter((f) => !sent.some((x) => x.id === f.id))];
   const profiles = await auditProfiles(rows.map((f) => f.auditId));
   const [cited, labels] = await Promise.all([findingsForChangelog(space.id, rows.map((f) => f.id)), kindLabels(rows.map((f) => f.auditId), profiles)]);
   const citations = new Map(cited.map((f) => [f.id, f.citations]));
   const before = new Set(linkedBefore);
+  const toAddress = new Set(wanted);
   const out = rows.map((f): SaveFinding => {
-    const raw = typeof f.values.owner === "string" ? f.values.owner : null;
-    const profile = labelProfile(profiles.get(f.auditId));
     return {
       id: f.id,
       title: f.title,
@@ -523,13 +656,15 @@ export async function loadSaveFindings(space: Space, linkedBefore: readonly stri
       kind: f.kind,
       kindLabel: labels.get(`${f.auditId}:${f.kind}`) ?? sentence(f.kind),
       auditName: f.auditName,
-      owner: raw === null ? null : profile ? fieldValueLabel(profile, "owner", raw, f.kind) : raw,
-      ownerLabel: raw === null ? null : profile ? fieldLabel(profile, "owner", f.kind) : "Owner",
+      ...ownerOf(profiles.get(f.auditId), f.kind, f.values as Record<string, unknown>),
       acceptedBy: f.reviewedBy,
       records: citedRecords(citations.get(f.id) ?? []),
       linkedBefore: before.has(f.id),
+      toAddress: toAddress.has(f.id),
       text: findingText(f.title, f.values as Record<string, unknown>),
     };
   });
-  return [...out.filter((f) => f.linkedBefore), ...out.filter((f) => !f.linkedBefore)];
+  // The to-address findings in the order they were added, then the ones earlier saves linked, then the rest.
+  const sentInOrder = wanted.flatMap((id) => out.find((f) => f.id === id) ?? []);
+  return [...sentInOrder, ...out.filter((f) => !f.toAddress && f.linkedBefore), ...out.filter((f) => !f.toAddress && !f.linkedBefore)];
 }

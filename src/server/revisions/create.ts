@@ -75,9 +75,10 @@ export interface CreateRevisionResult {
 /**
  * Check a create request and insert the revision (state "creating"). The
  * caller has checked `revisions.build` for the space, and enqueues the
- * revisions.create job with the returned ID.
+ * revisions.create job with the returned ID. `toAddressFindingIds` (checked
+ * by the caller, findings.ts) is the revision's to-address list from the start.
  */
-export async function prepareCreateRevision(space: Space, request: CreateRevisionRequest, actor: RevisionActor): Promise<RevisionRow> {
+export async function prepareCreateRevision(space: Space, request: CreateRevisionRequest, actor: RevisionActor, opts: { toAddressFindingIds?: readonly string[] } = {}): Promise<RevisionRow> {
   const parsed = createRevisionRequest.safeParse(request);
   if (!parsed.success) {
     const issue = parsed.error.issues[0];
@@ -142,6 +143,7 @@ export async function prepareCreateRevision(space: Space, request: CreateRevisio
       baseRef,
       base,
       note: req.note,
+      toAddressFindingIds: [...(opts.toAddressFindingIds ?? [])],
       state: "creating",
       createdBy: actor.email,
     })

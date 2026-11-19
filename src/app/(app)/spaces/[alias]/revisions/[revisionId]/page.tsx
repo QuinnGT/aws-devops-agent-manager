@@ -18,7 +18,7 @@ import type { PlanState } from "@/server/plans/types";
 import { REVISION_PERMISSIONS } from "@/server/revisions";
 import { loadRevisionPage, loadSaveFindings, readRevisionFile, type RevisionPage } from "@/server/revisions/views";
 import { getSpaceByAlias } from "@/server/spaces/queries";
-import { abandonRevisionAction, createRevisionPlanAction, saveRevisionAction } from "../actions";
+import { abandonRevisionAction, createRevisionPlanAction, removeToAddressFindingAction, saveRevisionAction } from "../actions";
 
 const OPEN_PLAN = ["checking", "ready", "waiting", "approved", "applying"];
 const TONE_RANK: Record<CalloutTone, number> = { destructive: 0, warning: 1, info: 2, success: 3 };
@@ -63,11 +63,12 @@ export default async function RevisionDetailPage({ params, searchParams }: PageP
   const canSave = perms.has(REVISION_PERMISSIONS.build);
   const canPlan = canSave && perms.has(REVISION_PERMISSIONS.plan);
   const canExport = perms.has(REVISION_PERMISSIONS.export);
-  const [zone, { policy }, saveFindings] = await Promise.all([getViewerZone(), policyForSpace(space), canSave ? loadSaveFindings(space, detail.changes.flatMap((c) => c.findingIds)) : Promise.resolve([])]);
+  const [zone, { policy }, saveFindings] = await Promise.all([getViewerZone(), policyForSpace(space), canSave ? loadSaveFindings(space, detail.changes.flatMap((c) => c.findingIds), { toAddress: r.toAddressIds }) : Promise.resolve([])]);
   const buildSave = detail.build ? page.saves.find((s) => s.commit === detail.build!.commit)?.number ?? null : null;
   const plan = detail.plan;
   const planOpen = plan ? OPEN_PLAN.includes(plan.state) : false;
   const planHref = plan ? `${base}/plans/${encodeURIComponent(plan.planId)}` : null;
+  const takesFindings = r.state === "open" || r.state === "creating";
 
   // At most three callouts, most severe first (MASTER "Attention callouts").
   const ranked: { rank: number; node: ReactNode }[] = [];
@@ -255,6 +256,12 @@ export default async function RevisionDetailPage({ params, searchParams }: PageP
         leftOutNote={policy.revisions.export.leftOut.path}
         resultFiles={page.resultFiles}
         rebuilt={page.rebuilt}
+        toAddress={page.toAddress}
+        showToAddress={page.toAddress.length > 0 || takesFindings}
+        canRemoveToAddress={canSave && takesFindings}
+        removeToAddressAction={removeToAddressFindingAction.bind(null, space.alias, r.id)}
+        auditsHref={`${base}/audits`}
+        sourceAudits={page.sourceAudits}
         findings={detail.findings.map((f) => ({ id: f.id, title: f.title, incidentId: f.incidentId, kindLabel: page.findingLinks[f.id]?.kindLabel ?? f.kind, auditName: f.auditName, href: page.findingLinks[f.id]?.href ?? null, state: f.state }))}
         changelog={detail.changelog}
         changelogPath={page.changelogPath}
@@ -263,7 +270,7 @@ export default async function RevisionDetailPage({ params, searchParams }: PageP
         limits={page.limits}
         pendingRunId={page.pendingRun?.runId ?? null}
         saveFindings={saveFindings}
-        saveRules={{ unlinked: policy.revisions.save.unlinked, reasonMinChars: policy.revisions.save.reasonMinChars, reasonMaxChars: policy.revisions.save.reasonMaxChars, messageMaxChars: policy.revisions.save.messageMaxChars }}
+        saveRules={{ unlinked: policy.revisions.save.unlinked, reasonMinChars: policy.revisions.save.reasonMinChars, reasonMaxChars: policy.revisions.save.reasonMaxChars, messageMaxChars: policy.revisions.save.messageMaxChars, maxFindings: policy.revisions.save.maxFindings }}
         saveAction={saveRevisionAction.bind(null, space.alias)}
         planAction={createRevisionPlanAction.bind(null, space.alias)}
         abandonAction={abandonRevisionAction.bind(null, space.alias)}

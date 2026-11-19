@@ -7,6 +7,7 @@ Overrides `MASTER.md` for `/spaces/[alias]/revisions`. One revision opens `revis
 - A revision is a git branch `revision/<space-alias>/<branch name>` in the history repository, holding a package in the space's layout under `packages/<space-alias>/<branch name>/`.
 - It starts from the live space (as of the last sync) or from a release.
 - Each save is a commit that links to one or more accepted findings; the changelog is built from those links.
+- A revision can also have a **to-address list**: accepted package fixes sent to it from an audit ("Add to revision…" on the audit page, or a new revision started from findings). A save that links a finding takes it off the list.
 - Build and validation run on every save. "Create plan" turns the package into a plan against the live space through the package import mapping (`PlanOrigin` kind `revision`). Applying that plan tags a release.
 
 ## Layout, top to bottom
@@ -22,6 +23,7 @@ Overrides `MASTER.md` for `/spaces/[alias]/revisions`. One revision opens `revis
 | Revision | Bold name linked to the revision page, the branch in mono 12 px below |
 | Based on | "Release <name>" as one link to the release page, or "Live space, <date>" (no wrap) |
 | State | `StatusBadge` from the table below |
+| To address | Findings sent to the revision from an audit that are accepted now and not linked by a save yet, right-aligned. A finding reopened or rejected on its audit is not counted |
 | Linked findings | Distinct findings linked by any save, right-aligned |
 | Last build | "Passed" (success, Check) or "<N> errors" (destructive, CircleX), the build time below in muted 12 px. "Not built yet" for a revision with no save |
 | Plan and release | The plan title as a link with its plan state below ("Waiting for approval"), then "Release <name>" as a link once applied. "No plan yet" in muted text |
@@ -82,5 +84,5 @@ A `Dialog` (nothing is written to the space).
 
 ## Data
 
-- `listRevisions(spaceId, filter)`: name, branch, base (release name or live with time), state, linked finding count, last build result and time, the open or applied plan (ID, title, state), the release tagged at apply, updated time.
+- `listRevisions(spaceId, filter)`: name, branch, base (release name or live with time), state, to-address count, linked finding count, last build result and time, the open or applied plan (ID, title, state), the release tagged at apply, updated time.
 - Service function `createRevision({ name, branch, base, layoutId }, actor)` enqueues the worker job and returns its run ID.

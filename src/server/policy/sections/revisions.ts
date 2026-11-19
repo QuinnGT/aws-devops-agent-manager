@@ -55,6 +55,7 @@ const saveDefault = {
   maxFiles: 500,
   maxBytes: 10 * 1024 * 1024,
 };
+const toAddressDefault = { maxFindings: 200 };
 const trailersDefault = { revisionId: "Revision-Id", findingId: "Finding-Id", changeId: "Revision-Change-Id", unlinkedReason: "Unlinked-Reason" };
 const changelogDefault = {
   path: "reference/CHANGELOG.md",
@@ -149,6 +150,13 @@ export const revisionsSection = defineSection(
         maxBytes: z.number().int().min(1).default(saveDefault.maxBytes),
       })
       .default(saveDefault),
+    /** The findings an audit sends to a revision, to be addressed by its saves */
+    toAddress: z
+      .object({
+        /** Most findings on one revision's to-address list */
+        maxFindings: z.number().int().min(1).default(toAddressDefault.maxFindings),
+      })
+      .default(toAddressDefault),
     /** Commit trailers on revision commits */
     trailers: z
       .object({

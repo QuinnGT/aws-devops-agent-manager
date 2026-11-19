@@ -188,14 +188,53 @@ export function rankFindings<T extends SearchableFinding>(list: readonly T[], pa
   return { related, rest: list.filter((f) => !related.includes(f)) };
 }
 
+export type FindingGroupKey = "sent" | "related" | "rest";
+
+export interface FindingGroup<T> {
+  key: FindingGroupKey;
+  label: string;
+  items: T[];
+}
+
+/**
+ * The save dialog's groups of findings: the ones sent to this revision from an
+ * audit (`toAddress`), then those that name an edited file (rankFindings), then
+ * the rest. Empty groups are left out; each keeps the given order.
+ */
+export function groupFindings<T extends SearchableFinding & { toAddress?: boolean }>(list: readonly T[], paths: readonly string[]): FindingGroup<T>[] {
+  const sent = list.filter((f) => f.toAddress);
+  const ranked = rankFindings(
+    list.filter((f) => !f.toAddress),
+    paths,
+  );
+  return [
+    { key: "sent" as const, label: "Sent to this revision", items: sent },
+    { key: "related" as const, label: "About the files you changed", items: ranked.related },
+    { key: "rest" as const, label: "Other accepted findings", items: ranked.rest },
+  ].filter((g) => g.items.length > 0);
+}
+
+/** The findings to tick when the save dialog opens: those sent to the revision, up to the most one save may link. */
+export function preselectedFindings(list: readonly { id: string; toAddress?: boolean }[], max: number): { ids: string[]; left: number } {
+  const sent = list.filter((f) => f.toAddress).map((f) => f.id);
+  return { ids: sent.slice(0, Math.max(0, max)), left: Math.max(0, sent.length - Math.max(0, max)) };
+}
+
+/** A finding's title without the incident prefix the title may carry, with the incident ID to show before it. "INCIDENT-1: Ruled out" gives ("INCIDENT-1", "Ruled out"). */
+export function incidentAndText(title: string, incidentId: string | null): { incident: string | null; text: string } {
+  if (incidentId && title.startsWith(`${incidentId}: `)) return { incident: incidentId, text: title.slice(incidentId.length + 2) };
+  return { incident: incidentId, text: title };
+}
+
 export type UnlinkedRule = "reason" | "refuse" | "allow";
 
 /** Why "Save and build" can't be pressed yet, or null. */
-export function saveButtonReason(s: { message: string; findings: number; reason: string; rule: UnlinkedRule; reasonMinChars: number; messageMaxChars: number; files: number }): string | null {
+export function saveButtonReason(s: { message: string; findings: number; reason: string; rule: UnlinkedRule; reasonMinChars: number; messageMaxChars: number; files: number; maxFindings?: number }): string | null {
   if (!s.files) return "Edit a file first.";
   const msg = s.message.trim();
   if (!msg) return "Write a message.";
   if (msg.replace(/\s+/g, " ").length > s.messageMaxChars) return `Keep the message to ${s.messageMaxChars} characters or fewer.`;
+  if (s.maxFindings !== undefined && s.findings > s.maxFindings) return `One save can link at most ${s.maxFindings} findings.`;
   if (s.findings > 0 || s.rule === "allow") return null;
   if (s.rule === "refuse") return "Link at least one accepted finding.";
   if (s.reason.trim().length < Math.max(1, s.reasonMinChars)) return "Link at least one accepted finding, or say why the change is needed.";

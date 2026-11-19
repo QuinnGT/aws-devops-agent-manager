@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { getLayout } from "@/server/packages/layout";
 import { getAppPolicy } from "@/server/policy";
-import { capDiffLines, citedRecords, diffTotals, errorsByFile, fileDiffOf, isGeneratedFile, packageFolders, rebuiltLine, resultFile, splitBuiltFiles } from "./views";
+import { auditHref, capDiffLines, citedRecords, diffTotals, errorsByFile, fileDiffOf, findingHref, fullTitle, isGeneratedFile, notAcceptedReason, packageFolders, rebuiltLine, resultFile, sourceAuditsOf, splitBuiltFiles, toAddressViews } from "./views";
 
 const policy = getAppPolicy().policy;
 const v23 = getLayout(policy, "instruction-folders-shared");
@@ -120,5 +120,69 @@ describe("diff totals for the Diff tab", () => {
     // A generated file counts as built even when a save named it; a file no save named was written by the build.
     expect(splitBuiltFiles(files, ["reference/CHANGELOG.md", "instructions/incident-rca.md"], marks).builtPaths).toEqual(["reference/CHANGELOG.md", "reference/VALIDATION.json"]);
     expect(splitBuiltFiles(files, [], {}).edited).toEqual({ added: 0, removed: 0 });
+  });
+});
+
+describe("to-address words and links", () => {
+  it("links a finding to its audit's page and escapes the parts", () => {
+    expect(findingHref("prod space", "a1", "f1")).toBe("/spaces/prod%20space/audits/a1/findings?finding=f1");
+    expect(auditHref("prod", "a1")).toBe("/spaces/prod/audits/a1");
+  });
+
+  it("says why a finding can't be linked, and nothing while it is accepted", () => {
+    expect(notAcceptedReason("accepted")).toBeNull();
+    expect(notAcceptedReason("proposed")).toBe("Reopened on its audit, so it isn't accepted now. It can be linked again once it is accepted.");
+    expect(notAcceptedReason("rejected")).toBe("Rejected on its audit. It can't be linked unless it is accepted again.");
+    expect(notAcceptedReason("missing")).toBe("This finding is no longer in the space.");
+  });
+
+  it("lists each audit once, in the order the findings first name it, and skips findings with no audit", () => {
+    const f = (auditId: string, auditName: string) => ({ auditId, auditName });
+    expect(sourceAuditsOf("prod", [f("b", "Second"), f("a", "First"), f("b", "Second"), f("", "")])).toEqual([
+      { id: "b", name: "Second", href: "/spaces/prod/audits/b" },
+      { id: "a", name: "First", href: "/spaces/prod/audits/a" },
+    ]);
+    expect(sourceAuditsOf("prod", [])).toEqual([]);
+  });
+
+  it("shows the list in order with labels from the audit's profile, and keeps an ID whose finding is gone", () => {
+    const row = (id: string, state: string, values: Record<string, unknown> = {}) => ({ id, auditId: "a1", auditName: "Late October", incidentId: "INCIDENT-1", title: `Title ${id}`, kind: "fix", state, values });
+    const profile = { fixOwners: [{ id: "instructions", label: "Instruction and skill package" }], findings: [{ kind: "fix", label: "Fix" }] } as never;
+    const views = toAddressViews("prod", ["f2", "gone", "f1"], [row("f1", "accepted", { owner: "instructions" }), row("f2", "proposed")], new Map([["a1", profile]]), new Map([["a1:fix", "Fix"]]));
+    expect(views.map((v) => [v.id, v.state, v.accepted])).toEqual([
+      ["f2", "proposed", false],
+      ["gone", "missing", false],
+      ["f1", "accepted", true],
+    ]);
+    expect(views[2]).toMatchObject({ title: "Title f1", kindLabel: "Fix", owner: "Instruction and skill package", href: "/spaces/prod/audits/a1/findings?finding=f1", auditHref: "/spaces/prod/audits/a1", notAcceptedReason: null });
+    expect(views[0]).toMatchObject({ owner: null, ownerLabel: null, notAcceptedReason: expect.stringContaining("Reopened") });
+    expect(views[1]).toMatchObject({ href: null, auditHref: null, auditId: "", notAcceptedReason: "This finding is no longer in the space." });
+  });
+});
+
+describe("full title of a clipped finding", () => {
+  const fix = "Revise the skills cache-path-check and change-window-search. Step 4 of cache-path-check calls the cache healthy when status and latency match the previous day. Require evicted_keys before the cache is ruled out, and say which keys were read.";
+  const clipped = `${fix.slice(0, 80)}...`;
+
+  it("continues a clipped title from the value that starts the same way", () => {
+    expect(fullTitle(clipped, "INCIDENT-1", { owner: "instructions", fix })).toBe(fix);
+    // Line breaks in the value read as one space, as the title does.
+    expect(fullTitle(clipped, null, { fix: fix.replace(/\. /g, ".\n") })).toBe(fix);
+    // The incident prefix of a title built as "{incidentId}: {one_line}" stays.
+    expect(fullTitle(`INCIDENT-1: ${clipped}`, "INCIDENT-1", { one_line: fix })).toBe(`INCIDENT-1: ${fix}`);
+  });
+
+  it("leaves a title that is not clipped, or that no value continues, as it is", () => {
+    expect(fullTitle("Short title", null, { fix: "Short title and more" })).toBe("Short title");
+    expect(fullTitle(clipped, null, { fix: "Something else entirely" })).toBe(clipped);
+    expect(fullTitle(clipped, null, { fix: clipped.slice(0, -3) })).toBe(clipped);
+    expect(fullTitle("...", null, { fix })).toBe("...");
+  });
+
+  it("caps what a very long value adds", () => {
+    const long = `${fix} ${"x".repeat(5000)}`;
+    const out = fullTitle(clipped, null, { fix: long });
+    expect(out.length).toBe(2000);
+    expect(out.endsWith("...")).toBe(true);
   });
 });
