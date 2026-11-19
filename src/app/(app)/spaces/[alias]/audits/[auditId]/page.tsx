@@ -8,6 +8,7 @@ import { auditDetail, getAuditCached } from "@/components/audits/detail-data";
 import { auditFormProps } from "@/components/audits/form-data";
 import { AUDIT_PAGE, itemListQuery, parseItemListParams, type ItemShow } from "@/components/audits/list-params";
 import { auditsBase, loadAuditsPage } from "@/components/audits/page-guard";
+import { ReviewFilesCard } from "@/components/audits/review-files-card";
 import { citationCell, failedShortReason, findingCountsText, itemReviewBadge } from "@/components/audits/words";
 import { AutoRefresh } from "@/components/plans/auto-refresh";
 import { ConnectionNextStep } from "@/components/common/connection-next-step";
@@ -17,7 +18,9 @@ import { buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
+import { loadedPolicyForSpace } from "@/server/audits/profiles";
 import type { AuditItemSummary } from "@/server/audits/loaders";
+import { itemWaitingLabel } from "@/server/audits/states";
 import { actorOf } from "@/server/spaces/actor";
 
 const SHOW_LABELS: Record<ItemShow, string> = { all: "All", proposed: "With proposed findings", citations: "Citation problems", failed: "Failed" };
@@ -66,10 +69,16 @@ export default async function AuditPage({ params, searchParams }: PageProps<"/sp
   const count = (s: ItemShow) => all.filter((i) => matchesShow(i, s)).length;
   const primaryLabel = detail.profile.primaryField?.label ?? "Diagnosis";
   const hasScore = detail.profile.columns.length > 0;
+  const handoff = detail.profile.runner === "handoff";
+  const files = detail.actions.reviewFiles;
+  const maxUploadMb = files.visible ? Math.floor((await loadedPolicyForSpace(space.id)).policy.audits.handoff.import.maxUploadBytes / 1048576) : 0;
 
   return (
     <>
       <AutoRefresh active={detail.audit.state === "running"} seconds={10} />
+      {files.visible ? (
+        <ReviewFilesCard alias={space.alias} auditId={audit.id} waiting={detail.progress.waitingForReview} download={{ enabled: files.download.enabled, reason: files.download.disabledReason }} import={{ enabled: files.import.enabled, reason: files.import.disabledReason }} maxUploadMb={maxUploadMb} />
+      ) : null}
       <Card className="gap-0 py-0" role="region" aria-label="Investigations">
         <div role="toolbar" aria-label="Filter investigations" className="flex flex-wrap items-center gap-2 border-b px-4 py-2.5">
           <nav aria-label="Show" className="inline-flex flex-wrap overflow-hidden rounded-lg border">
@@ -131,7 +140,7 @@ export default async function AuditPage({ params, searchParams }: PageProps<"/sp
                     </TableCell>
                     {hasScore ? <TableCell className="text-right tabular-nums">{i.score ?? ""}</TableCell> : null}
                     <TableCell className="whitespace-normal">
-                      <StatusBadge {...itemReviewBadge(i.state)} />
+                      <StatusBadge {...itemReviewBadge(i.state, handoff && i.state === "pending" ? itemWaitingLabel("handoff") : null)} />
                       {failed ? <p className="mt-0.5 text-xs text-muted-foreground">{failedShortReason(i.stateReason)}</p> : null}
                       {i.state === "skipped" && i.stateReason ? <p className="mt-0.5 max-w-[32ch] text-xs text-muted-foreground">{i.stateReason}</p> : null}
                     </TableCell>

@@ -10,9 +10,10 @@ import { FailureDetails } from "@/components/audits/failure-details";
 import { failureGroups } from "@/components/audits/failure-view";
 import { nextIncidentToReview } from "@/components/audits/next-incident";
 import { auditsBase, loadAuditsPage } from "@/components/audits/page-guard";
+import { ReviewFilesCard } from "@/components/audits/review-files-card";
 import { ReviewWorkspace, type CardFinding, type EvidenceDoc } from "@/components/audits/review-workspace";
 import { decideFindingsNote } from "@/components/audits/role-text";
-import { citationProblemSentence, kindPosition, plural, uniqueProblems } from "@/components/audits/words";
+import { citationProblemSentence, kindPosition, plural, reviewedBy, uniqueProblems } from "@/components/audits/words";
 import { Callout } from "@/components/common/callout";
 import { RoleNote } from "@/components/common/role-note";
 import { EmptyState } from "@/components/common/empty-state";
@@ -30,6 +31,7 @@ import { cn } from "@/lib/utils";
 import { checkBedrock } from "@/server/audits/bedrock-check";
 import { reviewFailureKind } from "@/server/audits/failure";
 import { loadAuditItem } from "@/server/audits/loaders";
+import { loadedPolicyForSpace } from "@/server/audits/profiles";
 import { profileOf } from "@/server/audits/store";
 import { getRecordText, journalRecordCount, reviewHighlights } from "@/server/audits/ui";
 import { displayNames } from "@/server/drafts/loaders";
@@ -137,7 +139,11 @@ export default async function AuditItemPage({ params, searchParams }: PageProps<
   const checkedRecords = review ? new Set(cards.flatMap((f) => f.citations.filter((c) => !c.ok && c.checked).map((c) => c.record))).size : 0;
   const allDecided = !!review?.current && counts.total > 0 && counts.proposed === 0;
   const nextToDecide = detail ? nextIncidentToReview(detail.items, view.item.id) : null;
-  const running = view.item.state === "pending" || view.item.state === "analyzing" || view.item.state === "reviewing";
+  const handoff = view.runner === "handoff";
+  const files = view.actions.reviewFiles;
+  const maxUploadMb = files.visible ? Math.floor((await loadedPolicyForSpace(space.id)).policy.audits.handoff.import.maxUploadBytes / 1048576) : 0;
+  const waitingForFile = handoff && view.item.state === "pending" && !review;
+  const running = !handoff && (view.item.state === "pending" || view.item.state === "analyzing" || view.item.state === "reviewing");
 
   const callouts: React.ReactNode[] = [];
   if (review && review.citationCheck && review.citationCheck.failed > 0) {
@@ -240,6 +246,7 @@ export default async function AuditItemPage({ params, searchParams }: PageProps<
             <span key="r">
               Reviewed <Time value={review.finishedAt} format="datetime" />
               {review.steps ? ` in ${review.steps} steps` : ""}
+              {handoff ? ` by ${reviewedBy(review.runner, review.modelId)}` : ""}
             </span>
           ) : null,
           view.journalPresent ? `${plural(totalRecords, "journal record")}` : "Journal not cached",
@@ -302,6 +309,20 @@ export default async function AuditItemPage({ params, searchParams }: PageProps<
           ))}
           {review && !review.current ? <span className="text-xs text-muted-foreground">An earlier review is read only.</span> : null}
         </nav>
+      ) : null}
+      {files.visible ? (
+        <ReviewFilesCard
+          alias={space.alias}
+          auditId={audit.id}
+          itemId={view.item.id}
+          incident={incident}
+          download={{ enabled: files.download.enabled, reason: files.download.disabledReason }}
+          import={{ enabled: files.import.enabled, reason: files.import.disabledReason }}
+          maxUploadMb={maxUploadMb}
+        />
+      ) : null}
+      {waitingForFile ? (
+        <EmptyState title="Waiting for a review file">Its findings appear here when its review is imported.</EmptyState>
       ) : null}
       {running && !review ? (
         <EmptyState title="This investigation is being reviewed">
