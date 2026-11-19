@@ -101,7 +101,7 @@ describe("the report view", () => {
       "1 finding is still proposed. Accept or reject each one first.",
     ]);
     expect(finalizeProblems({ state: "reviewing" }, [], [])).toEqual(["The audit has no investigations."]);
-    expect(finalizeProblems({ state: "finalized" }, [i1], [])).toEqual(["The audit is already finalized."]);
+    expect(finalizeProblems({ state: "finalized" }, [i1], [])).toEqual(["The audit's record is already saved."]);
     expect(finalizeProblems({ state: "cancelled" }, [i1], [])).toEqual(["The audit was cancelled."]);
     expect(finalizeProblems({ state: "reviewing" }, [i1, item(6, { state: "skipped" })], [diagnosis(i1, {}, { state: "rejected" })])).toEqual([]);
     expect(view({ audit: auditRecord({ state: "finalized" }) }).readOnly).toBe(true);

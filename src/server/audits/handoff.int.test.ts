@@ -397,7 +397,7 @@ describe("hand-off audit over three benchmark journals", () => {
 
   it("refuses to export or import once the audit is cancelled or finalized", async () => {
     await db().update(audits).set({ state: "finalized" }).where(eq(audits.id, auditId));
-    await expect(exportReviewFiles(actor, space.id, auditId)).rejects.toMatchObject({ code: "state", message: expect.stringContaining("The audit is finalized") });
+    await expect(exportReviewFiles(actor, space.id, auditId)).rejects.toMatchObject({ code: "state", message: expect.stringContaining("The audit is closed, with its record saved") });
     await expect(importReviews(actor, space.id, auditId, [{ fileName: "review.json", bytes: Buffer.from("{}") }], { reviewer: LABEL })).rejects.toMatchObject({ code: "state" });
     await db().update(audits).set({ state: "reviewing" }).where(eq(audits.id, auditId));
   });

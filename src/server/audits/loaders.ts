@@ -12,6 +12,7 @@ import { citationProblemCounts, hasOpenProblem } from "./citation-state";
 import { OPEN_CITATION_PROBLEM } from "./finding-review";
 import type { Citation, CitationCheck } from "./contract";
 import { enumOf, propertySchemas } from "./edits";
+import { fullFindingTitle } from "./findings";
 import { loadedPolicyForSpace, profileLabel, readOutputSchema } from "./profiles";
 import { summarizeReadiness, type ItemReadiness, type ReadinessSummary } from "./readiness";
 import { AUDIT_STATE_LABELS, FINDING_STATE_LABELS, ITEM_STATE_LABELS, filesEligible, isItemFinished, itemWaitingLabel, type AuditItemState, type AuditState, type FindingState, type ReviewState } from "./states";
@@ -314,7 +315,8 @@ function itemStateLabel(i: Pick<AuditItemRow, "state" | "analyzedAt">, runner = 
   return i.state === "pending" && i.analyzedAt ? itemWaitingLabel(runner) : ITEM_STATE_LABELS[i.state];
 }
 
-async function currentFindingsOf(auditId: string): Promise<FindingRow[]> {
+/** The findings of every item's current review, by item, kind and position. */
+export async function currentFindingsOf(auditId: string): Promise<FindingRow[]> {
   return db()
     .select({ f: findings })
     .from(findings)
@@ -454,10 +456,17 @@ export interface CitationView extends Citation {
 
 export interface FindingView {
   id: string;
+  /** The investigation (audit item) and its incident */
+  itemId: string;
+  incidentId: string | null;
   kind: string;
   kindLabel: string;
   ordinal: number;
   title: string;
+  /** The title with none of its text cut off (the stored one is cut for lists) */
+  fullTitle: string;
+  /** The finding's current values by field, as the review and the person's edits left them */
+  values: Record<string, unknown>;
   state: FindingState;
   stateLabel: string;
   edited: boolean;
@@ -547,6 +556,62 @@ function dotted(v: unknown, path: string): unknown {
   return cur;
 }
 
+/**
+ * Builds a finding's view from its row: profile labels for the fields, the
+ * choices of enum fields, the actions the viewer has, and the full title.
+ * Shared by the incident page and the Findings tab's detail. `citationView`
+ * says how a citation is shown (the incident page links records, the detail
+ * opens them through the records route).
+ */
+export function findingViewBuilder(audit: Pick<AuditRow, "state">, profile: AuditProfile, policyDirs: string[], viewer: AuditViewer) {
+  const schema = readOutputSchema(profile, policyDirs);
+  const propsByKind = new Map(profile.findings.map((ex) => [ex.kind, schema ? propertySchemas(schema, ex, ex.fields) : {}]));
+  return (f: FindingRow, isCurrent: boolean, citationView: (c: Citation) => CitationView): FindingView => {
+    const ex = profile.findings.find((x) => x.kind === f.kind);
+    const props = propsByKind.get(f.kind) ?? {};
+    const keys = ex?.fields ?? Object.keys(f.current);
+    return {
+      id: f.id,
+      itemId: f.auditItemId,
+      incidentId: f.incidentId,
+      kind: f.kind,
+      kindLabel: ex?.label ?? f.kind,
+      ordinal: f.ordinal,
+      title: f.title,
+      fullTitle: fullFindingTitle(ex, f.title, f.current, f.incidentId, f.ordinal),
+      values: f.current,
+      state: f.state,
+      stateLabel: FINDING_STATE_LABELS[f.state],
+      edited: f.edited,
+      linkable: !!ex?.linkable,
+      current: isCurrent,
+      fields: keys
+        .filter((k) => Object.hasOwn(f.current, k) || Object.hasOwn(f.proposed, k))
+        .map((k) => {
+          const prop = props[k];
+          const choices = enumOf(prop, schema ?? undefined);
+          return {
+            key: k,
+            label: fieldLabel(profile, k, f.kind),
+            value: f.current[k],
+            valueLabel: fieldValueLabel(profile, k, f.current[k], f.kind),
+            proposed: f.proposed[k],
+            changed: JSON.stringify(f.current[k]) !== JSON.stringify(f.proposed[k]),
+            editable: !!ex?.editable.includes(k),
+            choices: choices ? choices.filter((v): v is string => typeof v === "string").map((v) => ({ value: v, label: fieldValueLabel(profile, k, v, f.kind) })) : null,
+            multiple: !!prop && !Array.isArray(prop.enum) && !!choices,
+          };
+        }),
+      citations: f.citations.map(citationView),
+      reviewNote: f.reviewNote,
+      reviewedBy: f.reviewedBy,
+      reviewedAt: f.reviewedAt,
+      carriedFromId: f.carriedFromId,
+      actions: findingActions(audit.state, { state: f.state, current: isCurrent, editable: !!ex?.editable.length }, viewer),
+    };
+  };
+}
+
 export async function loadAuditItem(space: Pick<SpaceRow, "id" | "alias">, auditId: string, itemId: string, viewer: AuditViewer): Promise<AuditItemView | null> {
   const audit = await getAudit(space.id, auditId);
   if (!audit || !isUuid(itemId)) return null;
@@ -583,48 +648,8 @@ export async function loadAuditItem(space: Pick<SpaceRow, "id" | "alias">, audit
     return { ...c, recordId, href: recordId ? recordHref(space.alias, item.taskId, recordId, position.get(recordId) ?? null, pageSize) : null };
   };
 
-  const schema = readOutputSchema(profile, loaded.dirs);
-  const propsByKind = new Map(profile.findings.map((ex) => [ex.kind, schema ? propertySchemas(schema, ex, ex.fields) : {}]));
-  const findingView = (f: FindingRow, isCurrent: boolean): FindingView => {
-    const ex = profile.findings.find((x) => x.kind === f.kind);
-    const props = propsByKind.get(f.kind) ?? {};
-    const keys = ex?.fields ?? Object.keys(f.current);
-    return {
-      id: f.id,
-      kind: f.kind,
-      kindLabel: ex?.label ?? f.kind,
-      ordinal: f.ordinal,
-      title: f.title,
-      state: f.state,
-      stateLabel: FINDING_STATE_LABELS[f.state],
-      edited: f.edited,
-      linkable: !!ex?.linkable,
-      current: isCurrent,
-      fields: keys
-        .filter((k) => Object.hasOwn(f.current, k) || Object.hasOwn(f.proposed, k))
-        .map((k) => {
-          const prop = props[k];
-          const choices = enumOf(prop, schema ?? undefined);
-          return {
-            key: k,
-            label: fieldLabel(profile, k, f.kind),
-            value: f.current[k],
-            valueLabel: fieldValueLabel(profile, k, f.current[k], f.kind),
-            proposed: f.proposed[k],
-            changed: JSON.stringify(f.current[k]) !== JSON.stringify(f.proposed[k]),
-            editable: !!ex?.editable.includes(k),
-            choices: choices ? choices.filter((v): v is string => typeof v === "string").map((v) => ({ value: v, label: fieldValueLabel(profile, k, v, f.kind) })) : null,
-            multiple: !!prop && !Array.isArray(prop.enum) && !!choices,
-          };
-        }),
-      citations: f.citations.map(citationView),
-      reviewNote: f.reviewNote,
-      reviewedBy: f.reviewedBy,
-      reviewedAt: f.reviewedAt,
-      carriedFromId: f.carriedFromId,
-      actions: findingActions(audit.state, { state: f.state, current: isCurrent, editable: !!ex?.editable.length }, viewer),
-    };
-  };
+  const buildFinding = findingViewBuilder(audit, profile, loaded.dirs, viewer);
+  const findingView = (f: FindingRow, isCurrent: boolean) => buildFinding(f, isCurrent, citationView);
 
   const reviewViews: ReviewView[] = reviewRows.map((r: ReviewRow) => {
     const isCurrent = r.id === item.currentReviewId;

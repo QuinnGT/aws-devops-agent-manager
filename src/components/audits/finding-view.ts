@@ -104,3 +104,14 @@ export function changedValues(current: Record<string, unknown>, edited: Record<s
   for (const [k, v] of Object.entries(edited)) if (JSON.stringify(v) !== JSON.stringify(current[k])) out[k] = v;
   return out;
 }
+
+/** The evidence list of one finding: a row per record and quote, in record order. A failed copy of a citation wins over a passed one, and a checked failure over an unchecked one. */
+export function evidenceRows<T extends CitationRef>(citations: readonly T[]): T[] {
+  const by = new Map<string, T>();
+  for (const c of citations) {
+    const key = `${c.record}\0${c.quote ?? ""}`;
+    const prev = by.get(key);
+    if (!prev || (!c.ok && (prev.ok || (prev.checked && !c.checked)))) by.set(key, c);
+  }
+  return [...by.values()].sort((a, b) => a.record - b.record || (a.quote ?? "").localeCompare(b.quote ?? ""));
+}

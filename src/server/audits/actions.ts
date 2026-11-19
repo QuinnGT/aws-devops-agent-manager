@@ -10,7 +10,7 @@ import {
   canStartAudit,
   findingActionReason,
   nextFindingState,
-  AUDIT_STATE_LABELS,
+  auditStatePhrase,
   type AuditItemState,
   type AuditState,
   type FindingAction,
@@ -57,7 +57,7 @@ const DOWNLOAD_ROLE = "Your role can't export journals in this space, and review
 
 export function reviewFileActions(state: AuditState, runner: string, eligible: number, viewer: AuditViewer): ReviewFileActions {
   const inReview = state === "running" || state === "reviewing";
-  const stateReason = `The audit is ${AUDIT_STATE_LABELS[state].toLowerCase()}; review files are for an audit that is running or in review.`;
+  const stateReason = `The audit is ${auditStatePhrase(state)}; review files are for an audit that is running or in review.`;
   return {
     visible: runner === "handoff" && inReview,
     download: gate(has(viewer, "journals.export"), DOWNLOAD_ROLE, inReview && eligible > 0, inReview ? "No investigation has finished its analyzers yet." : stateReason),
@@ -98,7 +98,7 @@ export function auditActions(
     cancel: gate(run, RUN_ROLE, canCancelAudit(state), auditStateReason("cancel", state)),
     delete: gate(run, RUN_ROLE, canDeleteAudit(state), auditStateReason("delete", state)),
     editSelection: gate(run, RUN_ROLE, canEditSelection(state), auditStateReason("edit", state)),
-    uploadGroundTruth: gate(run, RUN_ROLE, state !== "finalized", "The audit is finalized."),
+    uploadGroundTruth: gate(run, RUN_ROLE, state !== "finalized", "The audit's record is saved, so its ground truth can't change."),
     reviewFiles: reviewFileActions(state, review.runner, review.filesEligible, viewer),
   };
 }

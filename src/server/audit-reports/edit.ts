@@ -30,7 +30,7 @@ async function resolve(ref: ReportRef): Promise<{ space: SpaceRow; audit: AuditR
   if (!space) throw new AuditReportError("Space not found.", "not-found");
   const audit = await getAuditInSpace(space.id, parsed.auditId);
   if (!audit) throw new AuditReportError("Audit not found.", "not-found");
-  if (audit.state === "finalized") throw new AuditReportError("This audit is finalized, so its report can't be changed.", "read-only");
+  if (audit.state === "finalized") throw new AuditReportError("This audit's record is saved, so its report can't be changed.", "read-only");
   return { space, audit };
 }
 
