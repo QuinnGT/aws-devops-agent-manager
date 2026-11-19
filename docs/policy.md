@@ -137,6 +137,17 @@ The `handoff` block sets the review files and the import:
 
 The review files themselves come from the profile: `review.promptTemplate` and `review.outputSchema` as for the Bedrock review, and `review.files` for the files mode: `systemPrompt` (the reviewer's instructions when the records are in `records.md`), `recordAccessPrompt` (the text for `{{record_access}}`) and `recordCharsCap` (the longest record text before it is cut with a note).
 
+A `devops-agent-chat` review uses the same review files, attached to a chat, and the profile's optional `review.chat` block:
+
+| Key | What it sets |
+|---|---|
+| `messageTemplate` | The chat message, with `{{system_prompt}}`, `{{schema}}`, `{{brief_file}}` and `{{records_file}}`. Shipped: `prompts/reviewer-chat.md` |
+| `repairPrompt` | The one follow-up message sent when the first reply is not JSON. Shipped: `prompts/reviewer-chat-repair.md` |
+| `messageCharsCap` | Longest message, 32768 (the service's limit) |
+| `attachmentBytesCap` | Most bytes of `brief.md` and `records.md` together, 1500000 by default. A chat read 1.8 MB in full in testing and returned nothing for 2.6 MB |
+| `attachmentPrefix` | Start of the temporary attachment names, `dam-review-` by default. Keep it in step with `ignoredAttachmentPrefixes` in `sync.yaml`, which leaves these attachments out of history |
+| `cancelCheckSeconds` | How often a running chat review checks whether the audit was cancelled |
+
 ## When policy has an error
 
 A policy that fails its schema is rejected as a whole. The app never runs with part of a file applied.
