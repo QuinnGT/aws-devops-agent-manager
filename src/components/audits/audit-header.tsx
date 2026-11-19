@@ -1,13 +1,16 @@
-import { CheckCheck, CircleCheck, FileCheck2, ListChecks, Microscope, Sparkles, Workflow } from "lucide-react";
+import { CheckCheck, ListChecks, Microscope } from "lucide-react";
 import Link from "next/link";
 import { Callout } from "@/components/common/callout";
 import { LinkTabs } from "@/components/common/link-tabs";
 import { LiveJobProgress } from "@/components/common/live-job-progress";
 import { PageHeader } from "@/components/common/page-header";
-import { StatTile } from "@/components/common/stat-tile";
 import { StatusBadge } from "@/components/common/status-badge";
 import { Time } from "@/components/common/time";
 import { buttonVariants } from "@/components/ui/button";
+import { CopyCommit } from "@/components/audit-reports/copy-commit";
+import { savedPushText } from "@/components/audit-reports/words";
+import type { RecordInfo } from "@/server/audit-reports/record";
+import type { FixProgress } from "@/server/audits/next-step";
 import type { AuditDetailView } from "@/server/audits/loaders";
 import type { ReviewerView } from "@/server/audits/reviewers";
 import type { ActorAt, AuditModelView } from "@/server/audits/ui";
@@ -15,7 +18,10 @@ import { CancelAuditButton, RerunFailedButton, RerunItemButton } from "./audit-b
 import { FailureDetails } from "./failure-details";
 import { failureGroups, failureNextStep, incidentList } from "./failure-view";
 import { nextIncidentToReview } from "./next-incident";
-import { allReviewsFailed, auditStateBadge, compactNumber, plural, readyToFinalize, reviewProgressText, type AuditStateFacts } from "./words";
+import { flowStrip } from "./flow";
+import { FlowStrip } from "./flow-strip";
+import { findingListQuery } from "./list-params";
+import { allReviewsFailed, auditStateBadge, compactNumber, plural, readyToSave, reviewProgressText, type AuditStateFacts } from "./words";
 
 export type AuditTab = "investigations" | "findings" | "report";
 
@@ -29,7 +35,12 @@ export interface AuditHeaderData {
   usage: { inputTokens: number; calls?: number };
   analyzers: { count: number; words: string };
   stepLimit: number;
-  repository: string | null;
+  /** Where the saved record went; null until the record is saved */
+  record: RecordInfo | null;
+  /** The accepted package fixes and how many are in a revision */
+  fix: FixProgress;
+  /** Whether the report is built, and how many sections it shows */
+  report: { built: boolean; sections: number };
   nameOf: (email: string) => string;
   can: { run: boolean; review: boolean; manage?: boolean };
   /** The space's Bedrock check passes now (checked only when a review failed for missing or expired credentials) */
@@ -74,6 +85,8 @@ export function AuditHeader({ data, tab }: { data: AuditHeaderData; tab: AuditTa
   const progress = reviewProgressText(detail.progress.byState);
   const groups = failureGroups(failed, { canManage: !!can.manage, stepLimit: data.stepLimit, accessWorksNow: !!data.accessWorksNow });
   const rerunnable = groups.filter((g) => g.rerun).flatMap((g) => g.itemIds);
+  const citations = withReview.reduce((c, i) => ({ checked: c.checked + i.review!.citationCheck!.checked, failed: c.failed + i.review!.citationCheck!.failed }), { checked: 0, failed: 0 });
+  const flow = flowStrip({ state: a.state, items: detail.progress.byState, citations, findings: counts, fix: data.fix, report: data.report, commit: a.finalizedCommit });
   const analyzersRunning = a.state === "running" && !!detail.job && (detail.job.status === "queued" || detail.job.status === "running");
 
   const actions = (
@@ -118,12 +131,12 @@ export function AuditHeader({ data, tab }: { data: AuditHeaderData; tab: AuditTa
       </Callout>,
     );
   }
-  if (tab !== "report" && readyToFinalize(a.state, facts)) {
+  if (tab !== "report" && readyToSave(a.state, facts)) {
     callouts.push(
       <Callout
         key="ready"
         tone="success"
-        title="Ready to finalize"
+        title="Ready to save the record"
         action={
           <Link href={`${base}/report`} className={buttonVariants({ size: "sm" })}>
             <CheckCheck aria-hidden />
@@ -131,7 +144,7 @@ export function AuditHeader({ data, tab }: { data: AuditHeaderData; tab: AuditTa
           </Link>
         }
       >
-        Every investigation is reviewed and every finding has a decision: {counts.accepted} accepted, {counts.rejected} rejected. Build the report and finalize the audit on the Report tab.
+        Every investigation is reviewed and every finding has a decision: {counts.accepted} accepted, {counts.rejected} rejected. Build the report, then save the audit record on the Report tab. Saving it changes nothing in the Agent Space.
       </Callout>,
     );
   }
@@ -148,24 +161,44 @@ export function AuditHeader({ data, tab }: { data: AuditHeaderData; tab: AuditTa
     );
   }
   if (a.state === "finalized") {
+    const saved = data.record?.saved ?? null;
+    const plan = data.record?.plan ?? null;
+    const push = saved ? savedPushText(saved.push, plan?.push ?? null) : null;
     callouts.push(
       <Callout
         key="final"
         tone="success"
         title={
           <>
-            Finalized {a.finalizedAt ? <Time value={a.finalizedAt} format="datetime" /> : null}
+            Record saved {a.finalizedAt ? <Time value={a.finalizedAt} format="datetime" /> : null}
             {a.finalizedBy ? ` by ${nameOf(a.finalizedBy)}` : ""}
           </>
         }
       >
-        The record is in {data.repository ? <span className="font-mono text-xs">{data.repository}</span> : "the history repository"}
         {a.finalizedCommit ? (
           <>
-            , commit <span className="font-mono text-xs">{a.finalizedCommit.slice(0, 7)}</span>
+            Commit <CopyCommit commit={a.finalizedCommit} />
           </>
-        ) : null}
-        . Findings and the report can&apos;t change.
+        ) : (
+          "The commit is not recorded"
+        )}
+        {saved ? (
+          <>
+            {" "}
+            in <span className="font-mono text-xs">{saved.folder}</span> on <span className="font-mono text-xs">{saved.branch}</span>
+            {plan ? (
+              <>
+                {" "}
+                of <span className="font-mono text-xs">{plan.repository}</span>
+              </>
+            ) : null}
+            : <span className="font-mono text-xs">audit.json</span>, <span className="font-mono text-xs">findings.json</span> and <span className="font-mono text-xs">report.md</span>.
+          </>
+        ) : (
+          "."
+        )}
+        {push ? <span className={push.tone === "destructive" ? "block text-destructive-fg" : "block"}>{push.text}.</span> : null}
+        <span className="block">Findings and the report can&apos;t change. Nothing in the Agent Space changed.</span>
       </Callout>,
     );
   }
@@ -210,43 +243,41 @@ export function AuditHeader({ data, tab }: { data: AuditHeaderData; tab: AuditTa
         ]}
         actions={actions}
       />
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <StatTile
-          icon={<Workflow />}
-          label="Analyzers"
-          value={
-            <>
-              {analyzerTotal > 0 && analyzerDone >= analyzerTotal ? <CircleCheck className="text-success-fg" aria-hidden /> : null}
-              {analyzerDone} of {analyzerTotal}
-            </>
-          }
-          detail={`${plural(data.analyzers.count, "analyzer")} on ${plural(reviewable.length, "investigation")}${analyzerErrors ? `, ${analyzerErrors} failed` : ""}`}
-          action={analyzersRunning && a.runId ? <LiveJobProgress runId={a.runId} /> : undefined}
-        />
-        <StatTile
-          icon={<Sparkles />}
-          label="Reviews"
-          value={progress.value}
-          detail={
-            <>
-              {progress.failed ? <span className="text-destructive-fg">{progress.failed} · </span> : null}
-              {data.reviewer.runner === "handoff" ? `${detail.progress.waitingForReview} waiting for a review file` : `${detail.profile.reviewConcurrency} at a time`}
-            </>
-          }
-        />
-        <StatTile icon={<ListChecks />} label="Findings" value={`${counts.accepted} accepted`} detail={`${counts.proposed} proposed · ${counts.rejected} rejected · ${counts.total} in all`} />
-        <StatTile
-          icon={<FileCheck2 />}
-          label="Citation check"
-          value={`${citationsPassed} passed`}
-          detail={citationsFailed ? <span><span className="text-warning-fg">{plural(citationsFailed, "review")}</span> {citationsFailed === 1 ? "cites" : "cite"} records that failed the check</span> : withReview.length ? "Every review's citations passed" : "No review has finished yet"}
-        />
-      </div>
+      <FlowStrip
+        strip={flow}
+        hrefs={{ reviews: base, decide: `${base}/findings`, fix: `${base}/findings${findingListQuery({ state: "accepted", fix: "package" })}`, report: `${base}/report`, record: `${base}/report#report-record` }}
+        extra={analyzersRunning && a.runId ? { reviews: <LiveJobProgress runId={a.runId} /> } : undefined}
+      />
       <details className="group -mt-2 text-xs text-muted-foreground">
         <summary className="cursor-pointer rounded-sm py-0.5">Details</summary>
         <dl className="mt-1 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5">
           <dt>Analyzers</dt>
-          <dd>{data.analyzers.words.charAt(0).toUpperCase() + data.analyzers.words.slice(1)}</dd>
+          <dd>
+            {analyzerDone} of {analyzerTotal} done on {plural(reviewable.length, "investigation")}
+            {analyzerErrors ? `, ${analyzerErrors} failed` : ""}: {data.analyzers.words}
+          </dd>
+          <dt>Reviews</dt>
+          <dd>
+            {progress.value}
+            {progress.failed ? <span className="text-destructive-fg">, {progress.failed}</span> : null}
+            {data.reviewer.runner === "handoff" ? `, ${detail.progress.waitingForReview} waiting for a review file` : `, ${detail.profile.reviewConcurrency} at a time`}
+          </dd>
+          <dt>Findings</dt>
+          <dd>
+            {counts.accepted} accepted, {counts.proposed} proposed, {counts.rejected} rejected, {counts.total} in all
+          </dd>
+          <dt>Citation check</dt>
+          <dd>
+            {citationsFailed ? (
+              <>
+                <span className="text-warning-fg">{plural(citationsFailed, "review")}</span> {citationsFailed === 1 ? "cites" : "cite"} records that failed the check; {citationsPassed} passed
+              </>
+            ) : withReview.length ? (
+              "Every review's citations passed"
+            ) : (
+              "No review has finished yet"
+            )}
+          </dd>
           {data.reviewer.runner === "ai-sdk" || data.usage.calls ? (
             <>
               <dt>Model input</dt>
