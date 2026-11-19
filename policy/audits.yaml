@@ -6,6 +6,19 @@ maxItemsPerAudit: 500
 maxEvidenceUploadBytes: 52428800
 defaultProfile: benchmark
 
+# Hand-off audits: the text written beside each investigation's review files, and the
+# limits on the reviews a person imports back (a zip of review folders or one review.json).
+handoff:
+  readme: prompts/handoff-readme.md
+  import:
+    maxUploadBytes: 26214400
+    maxZipEntries: 2000
+    # A zip of the review folders holds records.md beside review.json.
+    maxEntryBytes: 16777216
+    maxUncompressedBytes: 536870912
+    maxReviewBytes: 2097152
+    maxLabelChars: 80
+
 # Who writes each review. The audit form offers these, with their options; the
 # profile's review.runner is the default. Leave a runner out to stop offering it.
 reviewers:

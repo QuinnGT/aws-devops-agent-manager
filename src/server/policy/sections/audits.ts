@@ -232,6 +232,34 @@ export const auditProfileSchema = z.object({
 
 export type AuditProfile = z.output<typeof auditProfileSchema>;
 
+const MIB = 1024 * 1024;
+
+/**
+ * Hand-off audits (runner "handoff"): the review files written for each investigation
+ * and the limits on the reviews imported back. Every size is a cap, so an upload that is
+ * too large or unpacks to too much is refused before it is read.
+ */
+const handoffConfig = z.object({
+  /** Text written beside each investigation's review files; {{placeholders}} are filled in */
+  readme: policyPath.default("prompts/handoff-readme.md"),
+  import: z
+    .object({
+      /** Largest upload, a zip or one review file, in bytes */
+      maxUploadBytes: z.number().int().positive().default(25 * MIB),
+      /** Most entries in an uploaded zip */
+      maxZipEntries: z.number().int().positive().default(2000),
+      /** Largest file inside an uploaded zip, in bytes (a zip of the review folders holds records.md beside review.json) */
+      maxEntryBytes: z.number().int().positive().default(16 * MIB),
+      /** Largest total of an uploaded zip's files once unzipped, in bytes */
+      maxUncompressedBytes: z.number().int().positive().default(512 * MIB),
+      /** Largest review.json or manifest.json, in bytes */
+      maxReviewBytes: z.number().int().positive().default(2 * MIB),
+      /** Longest reviewer label, in characters */
+      maxLabelChars: z.number().int().positive().default(80),
+    })
+    .prefault({}),
+});
+
 export const auditsSection = defineSection(
   "audits.yaml",
   z.object({
@@ -246,5 +274,7 @@ export const auditsSection = defineSection(
       .object({ "ai-sdk": runnerEntry.optional(), handoff: runnerEntry.optional(), "devops-agent-chat": runnerEntry.optional() } satisfies Record<ReviewRunner, unknown>)
       .default({}),
     profiles: z.record(z.string().regex(/^[a-z][a-z0-9-]*$/), auditProfileSchema).refine((p) => Object.keys(p).length > 0, "at least one profile"),
+    /** Review files and review import for hand-off audits */
+    handoff: handoffConfig.prefault({}),
   }),
 );

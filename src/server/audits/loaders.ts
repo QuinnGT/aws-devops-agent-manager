@@ -14,7 +14,7 @@ import type { Citation, CitationCheck } from "./contract";
 import { enumOf, propertySchemas } from "./edits";
 import { loadedPolicyForSpace, profileLabel, readOutputSchema } from "./profiles";
 import { summarizeReadiness, type ItemReadiness, type ReadinessSummary } from "./readiness";
-import { AUDIT_STATE_LABELS, FINDING_STATE_LABELS, ITEM_STATE_LABELS, isItemFinished, type AuditItemState, type AuditState, type FindingState, type ReviewState } from "./states";
+import { AUDIT_STATE_LABELS, FINDING_STATE_LABELS, ITEM_STATE_LABELS, filesEligible, isItemFinished, itemWaitingLabel, type AuditItemState, type AuditState, type FindingState, type ReviewState } from "./states";
 import { currentEvidenceDocs, getAudit, isUuid, listAuditItems, profileOf, readinessOf, type AuditItemRow, type AuditRow, type FindingRow, type ReviewRow } from "./store";
 
 /**
@@ -281,9 +281,15 @@ export interface AuditDetailView {
     /** The field the item list shows as the diagnosis */
     primaryField: { kind: string; field: string; label: string } | null;
     reviewConcurrency: number;
-    /** Null until a model is chosen for the audit or set as the space default */
+    /** Null until a model is chosen for the audit or set as the space default; empty for a runner that uses no Bedrock model */
     modelId: string | null;
+    /** Who writes the reviews: "ai-sdk", "handoff" or "devops-agent-chat" (policy.audits.reviewers) */
+    runner: string;
+    /** The runner's option values by option ID */
+    runnerOptions: Record<string, string>;
   };
+  /** Items whose review files can be downloaded and whose review can be imported (hand-off audits) */
+  filesEligible: number;
   progress: AuditProgress;
   /** The audits.run job */
   job: JobStatusView | null;
@@ -304,8 +310,8 @@ export function progressOf(items: readonly Pick<AuditItemRow, "state" | "analyze
   return { total: items.length, byState, waitingForReview: waiting, finished, fraction: items.length ? finished / items.length : 0 };
 }
 
-function itemStateLabel(i: Pick<AuditItemRow, "state" | "analyzedAt">): string {
-  return i.state === "pending" && i.analyzedAt ? "Waiting for review" : ITEM_STATE_LABELS[i.state];
+function itemStateLabel(i: Pick<AuditItemRow, "state" | "analyzedAt">, runner = "ai-sdk"): string {
+  return i.state === "pending" && i.analyzedAt ? itemWaitingLabel(runner) : ITEM_STATE_LABELS[i.state];
 }
 
 async function currentFindingsOf(auditId: string): Promise<FindingRow[]> {
@@ -377,7 +383,7 @@ export async function loadAuditDetail(space: Pick<SpaceRow, "id">, auditId: stri
       cohort: i.cohort,
       cohortLabel: i.cohort ? (profile.cohorts.find((c) => c.id === i.cohort)?.label ?? i.cohort) : null,
       state: i.state,
-      stateLabel: itemStateLabel(i),
+      stateLabel: itemStateLabel(i, profile.review.runner),
       stateReason: i.stateReason,
       columns: cols,
       score: cols[0]?.value ?? null,
@@ -398,6 +404,7 @@ export async function loadAuditDetail(space: Pick<SpaceRow, "id">, auditId: stri
     byKind.set(f.kind, c);
   }
   const readinessSummary = readiness ? summarizeReadiness(readiness, profile) : null;
+  const eligibleFiles = items.filter(filesEligible).length;
   return {
     audit: auditSummary(audit, profile),
     profile: {
@@ -409,13 +416,16 @@ export async function loadAuditDetail(space: Pick<SpaceRow, "id">, auditId: stri
       primaryField: primaryEx?.summaryField ? { kind: primaryEx.kind, field: primaryEx.summaryField, label: fieldLabel(profile, primaryEx.summaryField, primaryEx.kind) } : null,
       reviewConcurrency: profile.review.concurrency,
       modelId: profile.review.modelId ?? null,
+      runner: profile.review.runner,
+      runnerOptions: profile.review.runnerOptions ?? {},
     },
+    filesEligible: eligibleFiles,
     progress: progressOf(items),
     job,
     readiness: readinessSummary,
     items: summaries,
     findingCounts: [...byKind.entries()].map(([kind, counts]) => ({ kind, label: profile.findings.find((f) => f.kind === kind)?.label ?? kind, counts })),
-    actions: auditActions(audit.state, readinessSummary ? { total: readinessSummary.total, ready: readinessSummary.ready } : null, viewer),
+    actions: auditActions(audit.state, readinessSummary ? { total: readinessSummary.total, ready: readinessSummary.ready } : null, viewer, { runner: profile.review.runner, filesEligible: eligibleFiles }),
   };
 }
 
@@ -527,6 +537,8 @@ export interface AuditItemView {
   analyzers: AnalyzerView[];
   reviews: ReviewView[];
   actions: ItemActions;
+  /** Who writes this audit's reviews */
+  runner: string;
 }
 
 function dotted(v: unknown, path: string): unknown {
@@ -659,7 +671,7 @@ export async function loadAuditItem(space: Pick<SpaceRow, "id" | "alias">, audit
     cohort: item.cohort,
     cohortLabel: item.cohort ? (profile.cohorts.find((c) => c.id === item.cohort)?.label ?? item.cohort) : null,
     state: item.state,
-    stateLabel: itemStateLabel(item),
+    stateLabel: itemStateLabel(item, profile.review.runner),
     stateReason: item.stateReason,
     columns: cols,
     score: cols[0]?.value ?? null,
@@ -727,7 +739,8 @@ export async function loadAuditItem(space: Pick<SpaceRow, "id" | "alias">, audit
     }),
     analyzers,
     reviews: reviewViews,
-    actions: itemActions(audit.state, item.state, current?.findingCounts.proposed ?? 0, viewer),
+    actions: itemActions(audit.state, item.state, current?.findingCounts.proposed ?? 0, viewer, { runner: profile.review.runner, eligible: filesEligible(item) }),
+    runner: profile.review.runner,
   };
 }
 
