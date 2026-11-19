@@ -197,10 +197,10 @@ describe("runChatReview", () => {
     expect(names().filter((n) => n === "DeleteAssetCommand")).toHaveLength(2);
   });
 
-  it("returns output that fails the schema with every error listed", async () => {
+  it("asks once to fix schema problems, listing them, and keeps the first answer when the repair is no better", async () => {
     const bad = { ...validBenchmarkOutput(), primary_failure_mode: "Z_unknown" } as Record<string, unknown>;
     delete bad.one_line;
-    serve([replyEvents(JSON.stringify(bad))]);
+    serve([replyEvents(JSON.stringify(bad)), replyEvents("Sorry, here is prose instead.")]);
     const r = await run();
     expect(r.state).toBe("failed");
     expect(r.schemaValid).toBe(false);
@@ -208,7 +208,23 @@ describe("runChatReview", () => {
     expect(r.schemaErrors).toEqual(expect.arrayContaining(["one_line is required", expect.stringMatching(/^primary_failure_mode must be one of: /)]));
     expect(r.error).toBe(`The output does not match the schema (${r.schemaErrors.length} errors).`);
     expect(r.citationCheck).not.toBeNull();
-    expect(r.modelCalls).toHaveLength(1);
+    expect(r.modelCalls).toHaveLength(2);
+    const [first, repair] = sends();
+    expect(repair!.executionId).toBe(first!.executionId);
+    expect(repair!.content).toContain("- one_line is required");
+    expect(repair!.content).not.toContain("{{");
+    expect(sends()).toHaveLength(2);
+  });
+
+  it("uses the repaired answer when it fixes the schema problems", async () => {
+    const long = { ...validBenchmarkOutput(), one_line: "x".repeat(5000) };
+    serve([replyEvents(JSON.stringify(long)), replyEvents(answerJson())]);
+    const r = await run();
+    expect(r.error).toBeNull();
+    expect(r.state).toBe("succeeded");
+    expect(r.output).toEqual(validBenchmarkOutput());
+    expect(r.steps).toBe(2);
+    expect(names().filter((n) => n === "DeleteAssetCommand")).toHaveLength(2);
   });
 
   it("flags a quote that is not in the cited record", async () => {

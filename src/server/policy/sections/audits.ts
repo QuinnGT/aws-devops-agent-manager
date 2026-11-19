@@ -96,6 +96,8 @@ const reviewConfig = z.object({
       messageTemplate: policyPath.optional(),
       /** Message sent in the same chat when the first reply is not a JSON object */
       repairPrompt: policyPath.optional(),
+      /** Message sent in the same chat when the reply is JSON but breaks the output schema ({{schema_errors}} filled by the app) */
+      schemaRepairPrompt: policyPath.optional(),
       /** Longest message the chat accepts, in characters (the service refuses more) */
       messageCharsCap: z.number().int().positive().optional(),
       /** Largest total size of the attached review files, in bytes; a larger review fails before any call */

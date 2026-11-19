@@ -29,7 +29,7 @@ export interface ReviewSettings {
   /** Reviews written from files (hand-off and chat) */
   files: { systemPrompt: string; recordAccessPrompt: string; recordCharsCap: number };
   /** Reviews that run as a DevOps Agent chat */
-  chat: { messageTemplate: string; repairPrompt: string; messageCharsCap: number; attachmentBytesCap: number; attachmentPrefix: string; cancelCheckSeconds: number };
+  chat: { messageTemplate: string; repairPrompt: string; schemaRepairPrompt: string; messageCharsCap: number; attachmentBytesCap: number; attachmentPrefix: string; cancelCheckSeconds: number };
 }
 
 export const REVIEW_DEFAULTS = {
@@ -47,6 +47,7 @@ export const REVIEW_DEFAULTS = {
   chat: {
     messageTemplate: "prompts/reviewer-chat.md",
     repairPrompt: "prompts/reviewer-chat-repair.md",
+    schemaRepairPrompt: "prompts/reviewer-chat-schema-repair.md",
     messageCharsCap: 32_768,
     attachmentBytesCap: 1_500_000,
     attachmentPrefix: "dam-review-",
@@ -82,6 +83,7 @@ export function reviewSettings(profile: AuditProfile): ReviewSettings {
     chat: {
       messageTemplate: r.chat?.messageTemplate ?? REVIEW_DEFAULTS.chat.messageTemplate,
       repairPrompt: r.chat?.repairPrompt ?? REVIEW_DEFAULTS.chat.repairPrompt,
+      schemaRepairPrompt: r.chat?.schemaRepairPrompt ?? REVIEW_DEFAULTS.chat.schemaRepairPrompt,
       messageCharsCap: r.chat?.messageCharsCap ?? REVIEW_DEFAULTS.chat.messageCharsCap,
       attachmentBytesCap: r.chat?.attachmentBytesCap ?? REVIEW_DEFAULTS.chat.attachmentBytesCap,
       attachmentPrefix: r.chat?.attachmentPrefix ?? REVIEW_DEFAULTS.chat.attachmentPrefix,

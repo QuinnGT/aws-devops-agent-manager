@@ -25,6 +25,6 @@ The files contain journal text from your company's systems: what the agent read,
 
 ## Import the review
 
-Open the audit in DevOps Agent Manager. To import one review, open this investigation and choose Import review, then select review.json. To import many, zip the investigation folders (each with its review.json and manifest.json) and import the zip from the audit's Investigations tab. Type a reviewer label that says who or what wrote the review, for example "Claude Code, Opus 5.5". The label is shown with the review.
+Open the audit in DevOps Agent Manager. To import one review, open this investigation and choose Import review, then select review.json and manifest.json from this folder together, so the app can check that the review was made from the current journal. To import many, zip the investigation folders (each with its review.json and manifest.json) and import the zip from the audit's Investigations tab. Type a reviewer label that says who or what wrote the review, for example "Claude Code, Opus 5.5". The label is shown with the review.
 
 The app refuses a review that does not match schema.json or that was made from files of another audit or an older journal, and says why. Quotes that cannot be found in the records are not refused: the app flags the findings that rely on them for a person to check.

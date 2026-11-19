@@ -358,6 +358,17 @@ async function attach(run: Run, name: string, text: string): Promise<string> {
   return id;
 }
 
+/** Schema problems the repair message lists; more are counted in the error, not sent. */
+const SCHEMA_ERRORS_IN_REPAIR = 20;
+
+function schemaProblems(schema: Record<string, unknown>, output: unknown): string[] {
+  try {
+    return validateOutput(schema, output);
+  } catch (e) {
+    return [`The output could not be validated: ${safeErrorMessage(e)}`];
+  }
+}
+
 export async function runChatReview(input: ReviewRunInput, deps: ChatDeps = {}): Promise<ReviewRunResult> {
   const started = Date.now();
   const s = reviewSettings(input.profile);
@@ -442,10 +453,23 @@ export async function runChatReview(input: ReviewRunInput, deps: ChatDeps = {}):
       if (output === null) throw new ChatStop("The chat's answer was not valid JSON, also after one request to repair it.");
     }
 
-    try {
-      schemaErrors = validateOutput(files.schemaObject, output);
-    } catch (e) {
-      schemaErrors = [`The output could not be validated: ${safeErrorMessage(e)}`];
+    schemaErrors = schemaProblems(files.schemaObject, output);
+    if (schemaErrors.length) {
+      // One request to fix the schema problems in the same chat: a long field or a misplaced note otherwise loses a whole review.
+      await run.checkCancelled(true);
+      run.phase = "while the chat was repairing its reply";
+      const listed = schemaErrors.slice(0, SCHEMA_ERRORS_IN_REPAIR).map((e) => `- ${e}`).join("\n");
+      const template = readPolicyText(input.policyDirs, s.chat.schemaRepairPrompt, "chat schema repair prompt");
+      const content = fillTemplate(template, (k) => (k === "schema_errors" ? listed : undefined)).trim();
+      const repaired = parseLooseJson((await sendMessage(run, chat.executionId, { content, modelTier: tier })).text);
+      if (repaired !== null) {
+        const after = schemaProblems(files.schemaObject, repaired);
+        // Keep the first answer when the repair is not better, so its errors are the ones reported.
+        if (after.length < schemaErrors.length) {
+          output = repaired;
+          schemaErrors = after;
+        }
+      }
     }
     citationCheck = typeof output === "object" ? checkCitations(output, input.bundle) : null;
     if (schemaErrors.length) error = `The output does not match the schema (${schemaErrors.length} ${schemaErrors.length === 1 ? "error" : "errors"}).`;

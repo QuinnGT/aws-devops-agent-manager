@@ -197,6 +197,9 @@ describe("reruns", () => {
 
   it("says why a review gave no findings", () => {
     expect(reviewFailureReason({ state: "failed", error: "Throttled", schemaValid: false, schemaErrors: [], output: null })).toBe("Throttled");
+    expect(
+      reviewFailureReason({ state: "failed", error: "The output does not match the schema (1 error).", schemaValid: false, schemaErrors: ["timing.incident_created must NOT have more than 100 characters"], output: {} }),
+    ).toBe("The output does not match the schema (1 error). timing.incident_created must NOT have more than 100 characters.");
     expect(reviewFailureReason({ state: "succeeded", error: null, schemaValid: false, schemaErrors: ["/score must be string"], output: {} })).toContain("/score must be string");
     expect(reviewFailureReason({ state: "succeeded", error: null, schemaValid: true, schemaErrors: [], output: null })).toBe("The model returned no structured output.");
   });

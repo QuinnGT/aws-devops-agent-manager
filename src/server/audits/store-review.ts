@@ -27,10 +27,11 @@ export interface ReviewItemResult {
 
 /** Why a review gives no findings, in words. */
 export function reviewFailureReason(r: Pick<ReviewRunResult, "state" | "error" | "schemaValid" | "schemaErrors" | "output">): string {
-  if (r.state === "failed") return r.error ?? "The review failed.";
+  // The runners' schema error only counts the problems; name the first ones so a person can act on them.
+  const first = r.schemaErrors.slice(0, 3).join("; ");
+  if (r.state === "failed") return first && !r.error?.includes(first) ? `${r.error ?? "The review failed."} ${first}.` : (r.error ?? "The review failed.");
   if (r.output === null || r.output === undefined) return "The model returned no structured output.";
   if (!r.schemaValid) {
-    const first = r.schemaErrors.slice(0, 3).join("; ");
     return `The review output did not pass the profile's output schema${first ? ` (${first})` : ""}.`;
   }
   return r.error ?? "The review failed.";

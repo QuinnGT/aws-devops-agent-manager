@@ -143,6 +143,7 @@ A `devops-agent-chat` review uses the same review files, attached to a chat, and
 |---|---|
 | `messageTemplate` | The chat message, with `{{system_prompt}}`, `{{schema}}`, `{{brief_file}}` and `{{records_file}}`. Shipped: `prompts/reviewer-chat.md` |
 | `repairPrompt` | The one follow-up message sent when the first reply is not JSON. Shipped: `prompts/reviewer-chat-repair.md` |
+| `schemaRepairPrompt` | The one follow-up message sent when the reply is JSON but breaks the output schema, with the problems in `{{schema_errors}}`. The app keeps whichever answer has fewer problems. Shipped: `prompts/reviewer-chat-schema-repair.md` |
 | `messageCharsCap` | Longest message, 32768 (the service's limit) |
 | `attachmentBytesCap` | Most bytes of `brief.md` and `records.md` together, 1500000 by default. A chat read 1.8 MB in full in testing and returned nothing for 2.6 MB |
 | `attachmentPrefix` | Start of the temporary attachment names, `dam-review-` by default. Keep it in step with `ignoredAttachmentPrefixes` in `sync.yaml`, which leaves these attachments out of history |

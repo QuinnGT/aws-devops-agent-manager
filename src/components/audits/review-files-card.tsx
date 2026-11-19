@@ -156,7 +156,7 @@ export function ReviewFilesCard(p: ReviewFilesCardProps) {
                 aria-describedby={`${ids}-reviewer-help${fieldProblem ? ` ${ids}-reviewer-err` : ""}`}
               />
               <p id={`${ids}-reviewer-help`} className="text-xs text-muted-foreground">
-                Who or what wrote the reviews. It is shown with each review.
+                {single ? "Who or what wrote the review. It is shown with the review." : "Who or what wrote the reviews. It is shown with each review."}
               </p>
               {fieldProblem ? (
                 <p id={`${ids}-reviewer-err`} role="alert" className="text-xs text-destructive-fg">
@@ -165,7 +165,7 @@ export function ReviewFilesCard(p: ReviewFilesCardProps) {
               ) : null}
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor={`${ids}-file`}>{single ? "review.json" : "Zip of the review folders"}</Label>
+              <Label htmlFor={`${ids}-file`}>{single ? "review.json and manifest.json" : "Zip of the review folders"}</Label>
               <div className="flex flex-wrap items-center gap-2">
                 <input
                   ref={fileRef}
@@ -180,12 +180,12 @@ export function ReviewFilesCard(p: ReviewFilesCardProps) {
                 />
                 <Button type="button" variant="outline" size="sm" disabled={!p.import.enabled || uploading !== null} onClick={() => fileRef.current?.click()}>
                   <FileUp aria-hidden />
-                  Choose {single ? "file" : "a zip"}
+                  Choose {single ? "files" : "a zip"}
                 </Button>
                 <span className={`min-w-0 truncate text-xs text-muted-foreground ${files.length ? "font-mono" : ""}`}>{files.length ? files.map((f) => f.name).join(", ") : "No file chosen"}</span>
               </div>
               <p id={`${ids}-file-help`} className="text-xs text-muted-foreground">
-                {single ? "Add manifest.json from the same folder, so the app can check that the review was made from this journal. " : "Each folder holds its review.json and its manifest.json, as downloaded. "}
+                {single ? "Select both files from the investigation's folder at once, so the app can check that the review was made from this journal. " :"Each folder holds its review.json and its manifest.json, as downloaded. "}
                 Up to {p.maxUploadMb} MB.
               </p>
             </div>
