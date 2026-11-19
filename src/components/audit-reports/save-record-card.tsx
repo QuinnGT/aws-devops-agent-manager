@@ -1,6 +1,6 @@
 "use client";
 
-import { GitCommitHorizontal } from "lucide-react";
+import { Check, GitCommitHorizontal } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useRef, useState, useTransition, type ReactNode } from "react";
@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { Callout } from "@/components/common/callout";
 import { DisabledReason } from "@/components/common/disabled-reason";
 import { SectionCard } from "@/components/common/section-card";
+import { StatusBadge } from "@/components/common/status-badge";
 import { JobProgress, type JobStatus } from "@/components/job-progress";
 import {
   AlertDialog,
@@ -19,10 +20,12 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button, buttonVariants } from "@/components/ui/button";
+import type { PushPlan, RecordFile } from "@/server/audit-reports/record";
+import { CopyCommit } from "./copy-commit";
 import { useReport } from "./report-context";
-import { goToSection, localRecordText, sectionAnchor, type FinalizeBlock } from "./words";
+import { fileStatusText, goToSection, localRecordText, pushPlanText, savedPushText, sectionAnchor, type FinalizeBlock } from "./words";
 
-export interface FinalizeIssueLink {
+export interface RecordIssueLink {
   message: string;
   href: string | null;
   linkLabel: string | null;
@@ -30,9 +33,29 @@ export interface FinalizeIssueLink {
   sections?: { id: string; title: string }[];
 }
 
-export interface FinalizeCardProps {
+/** What a save does (the repository now) and, once saved, what it did. Plain data, so it crosses to the client. */
+export interface RecordCardRecord {
+  repository: string;
+  branch: string;
+  folder: string;
+  push: PushPlan;
+  files: RecordFile[];
+  saved: {
+    commit: string;
+    branch: string;
+    folder: string;
+    files: RecordFile[];
+    push: { pushed: boolean; error: string | null; remote: string | null } | null;
+    /** "Nov 18, 3:41 PM", as a server-rendered time */
+    when: ReactNode;
+    by: string | null;
+  } | null;
+}
+
+export interface SaveRecordCardProps {
   auditName: string;
-  repository: { name: string; folder: string; local: "no-remote" | "push-off" | null } | null;
+  /** Null when the space has no history repository */
+  record: RecordCardRecord | null;
   /** Repository settings (App settings), for people who can change them */
   repositorySettingsHref: string | null;
   journalCount: number;
@@ -44,57 +67,69 @@ export interface FinalizeCardProps {
   findingsHref: string;
   /** Space settings, for Admins only */
   settingsHref: string | null;
-  /** The other reasons the server refuses to finalize, listed in the dialog */
-  issues: FinalizeIssueLink[];
+  /** The other reasons the server refuses to save the record, listed in the dialog */
+  issues: RecordIssueLink[];
   /** The report was built before the latest finding changes: a warning, not a block */
   stale: ReactNode | null;
   actor: string;
-  /** A finalize job already queued or running */
+  /** A save job already queued or running */
   runId: string | null;
-  /** The latest finalize job failed */
+  /** The latest save failed */
   lastFailed: string | null;
 }
 
-function Facts({ p, detailed }: { p: FinalizeCardProps; detailed: boolean }) {
+const mono = "font-mono text-xs";
+
+/** What each file holds, with the counts from this audit. */
+function holds(name: RecordFile["name"], p: Pick<SaveRecordCardProps, "journalCount" | "acceptedCount" | "reportSections">): string {
   const s = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+  if (name === "audit.json") return `profile, ${s(p.journalCount, "journal SHA-256", "journal SHA-256s")}, analyzer and model versions`;
+  if (name === "findings.json") return `${s(p.acceptedCount, "accepted finding", "accepted findings")} with their citations`;
+  return `the report, ${s(p.reportSections, "section", "sections")}`;
+}
+
+/**
+ * The facts of the save as a definition list: the repository and branch, the
+ * folder, each file with whether it is new or replaces one, and where the
+ * commit goes. The same list before and after saving; after, it is what
+ * happened, not what will.
+ */
+function Facts({ p, files, repository, branch, folder, push }: { p: SaveRecordCardProps; files: RecordFile[]; repository: string; branch: string; folder: string; push: ReactNode }) {
   return (
-    <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-[13px]">
-      <dt className="font-mono text-xs leading-5 text-muted-foreground">audit.json</dt>
-      <dd>{detailed ? `Profile and policy digest, ${s(p.journalCount, "journal SHA-256", "journal SHA-256s")}, analyzer versions, model ID and prompt digest` : `Profile, ${s(p.journalCount, "journal SHA-256", "journal SHA-256s")}, analyzer and model versions`}</dd>
-      <dt className="font-mono text-xs leading-5 text-muted-foreground">findings.json</dt>
-      <dd>{detailed ? `${s(p.acceptedCount, "accepted finding", "accepted findings")} with their record citations and check results` : `${s(p.acceptedCount, "accepted finding", "accepted findings")} with their citations`}</dd>
-      <dt className="font-mono text-xs leading-5 text-muted-foreground">report.md</dt>
-      <dd>{detailed ? `${p.reportSections === 1 ? "The 1 shown section" : `All ${p.reportSections} shown sections`}, each marked Internal or Shareable` : "The report as shown here"}</dd>
-      {detailed ? (
-        <>
-          <dt className="text-muted-foreground">Commit by</dt>
-          <dd>{p.actor}</dd>
-        </>
-      ) : null}
+    <dl className="grid grid-cols-[5.5rem_minmax(0,1fr)] gap-x-3 gap-y-1.5 text-[13px]">
+      <dt className="text-muted-foreground">Repository</dt>
+      <dd className="[overflow-wrap:anywhere]">
+        <span className="font-semibold">{repository}</span>, branch <span className={mono}>{branch}</span>
+      </dd>
+      <dt className="text-muted-foreground">Folder</dt>
+      <dd className={`${mono} [overflow-wrap:anywhere]`}>{folder}</dd>
+      <dt className="text-muted-foreground">Files</dt>
+      <dd>
+        <ul className="space-y-0.5">
+          {files.map((f) => (
+            <li key={f.name}>
+              <span className={mono}>{f.name}</span> <span className="text-muted-foreground">({fileStatusText(f.status)})</span>
+              <span className="block text-xs text-muted-foreground">{holds(f.name, p)}</span>
+            </li>
+          ))}
+        </ul>
+      </dd>
+      <dt className="text-muted-foreground">Push</dt>
+      <dd>{push}</dd>
     </dl>
   );
 }
 
-/** The folder in the history repository (it holds the audit's ID), in a muted Details disclosure. */
-function FolderDetails({ folder }: { folder: string | undefined }) {
-  if (!folder) return null;
-  return (
-    <details className="text-xs text-muted-foreground">
-      <summary className="inline-flex min-h-6 cursor-pointer items-center rounded-sm hover:text-foreground">Details</summary>
-      <p>
-        Folder in the repository: <span className="font-mono break-all">{folder}</span>
-      </p>
-    </details>
-  );
-}
-
 /**
- * The "Finalize audit" side card and its confirmation (pages/audit-report.md): every finding needs a decision first, so undecided
- * findings disable the button with a link to them; other refusals are listed
- * in the dialog; a stale report is a warning there. Finalizing runs in the
- * worker and shows its progress.
+ * The "Save the audit record" side card and its confirmation (pages/audit-report.md).
+ * Saving commits the record to the space's history repository and changes
+ * nothing in the Agent Space. Every finding needs a decision first, so
+ * undecided findings disable the button with a link to them; other refusals are
+ * listed in the dialog; a stale report is a warning there. Saving runs in the
+ * worker and shows its progress. Once saved, the card says where the record
+ * went, which files, and whether it was pushed.
  */
-export function FinalizeCard(p: FinalizeCardProps) {
+export function SaveRecordCard(p: SaveRecordCardProps) {
   const { alias, auditId, actions } = useReport();
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -106,14 +141,16 @@ export function FinalizeCard(p: FinalizeCardProps) {
   /** A section the person chose to go to from the dialog */
   const target = useRef<string | null>(null);
   const runId = localRun ?? (p.runId && p.runId !== finishedRun ? p.runId : null);
-  const localText = p.repository ? localRecordText(p.repository.name, p.repository.local) : null;
+  const rec = p.record;
+  const saved = rec?.saved ?? null;
+  const localText = rec && !saved ? localRecordText(rec.repository, rec.push.kind === "local" ? rec.push.reason : null) : null;
 
   const onDone = (s: JobStatus) => {
     if (s.status !== "succeeded") return;
     setFinishedRun(runId);
     setLocalRun(null);
     setOpen(false);
-    toast.success(`Finalized ${p.auditName}`);
+    toast.success(`Saved the record of ${p.auditName}`);
     router.refresh();
   };
 
@@ -128,57 +165,90 @@ export function FinalizeCard(p: FinalizeCardProps) {
   const button = (
     <Button>
       <GitCommitHorizontal aria-hidden />
-      Finalize audit
+      Save the audit record
     </Button>
   );
 
+  const pushNow = rec ? pushPlanText(rec.push) : null;
+  const pushAfter = saved ? savedPushText(saved.push, rec?.push ?? null) : null;
+
   return (
-    <SectionCard id="report-finalize-title" title="Finalize audit">
+    <SectionCard id="report-record" title="Save the audit record" aside={saved ? <StatusBadge tone="success" icon={Check} label="Saved" /> : undefined} className="scroll-mt-20">
       <div className="space-y-3 px-4 py-4 text-[13px]">
-        {p.repository ? (
-          <p>
-            Commits the audit record to <span className="font-mono text-xs">{p.repository.name}</span>:
-          </p>
+        {saved && rec ? (
+          <>
+            <p>
+              Saved {saved.when}
+              {saved.by ? ` by ${saved.by}` : ""}. Nothing in the Agent Space changed.
+            </p>
+            <dl className="grid grid-cols-[5.5rem_minmax(0,1fr)] gap-x-3 gap-y-1.5">
+              <dt className="text-muted-foreground">Commit</dt>
+              <dd>
+                <CopyCommit commit={saved.commit} />
+              </dd>
+            </dl>
+            <Facts
+              p={p}
+              files={saved.files}
+              repository={rec.repository}
+              branch={saved.branch}
+              folder={saved.folder}
+              push={pushAfter ? <StatusBadge tone={pushAfter.tone} label={pushAfter.text} className="h-auto max-w-full whitespace-normal py-0.5 text-left" /> : null}
+            />
+            <p className="text-xs text-muted-foreground">Findings and the report can&apos;t change. The journals stay in this app&apos;s database.</p>
+          </>
         ) : (
-          <p>Commits the audit record to the space&apos;s history repository:</p>
-        )}
-        <Facts p={p} detailed={false} />
-        <p className="text-xs text-muted-foreground">Findings and the report can&apos;t change after this. The journals stay in this app&apos;s database.</p>
-        <FolderDetails folder={p.repository?.folder} />
-        {p.lastFailed && !runId ? (
-          <Callout tone="destructive" title="The last finalize attempt failed">
-            {p.lastFailed}
-          </Callout>
-        ) : null}
-        {runId && !open ? (
-          <JobProgress runId={runId} onDone={onDone} />
-        ) : p.block ? (
-          <div className="space-y-1.5">
-            <DisabledReason reason={p.block.reason}>{button}</DisabledReason>
-            {p.block.link === "findings" ? (
-              <Link href={p.findingsHref} className="inline-flex min-h-6 items-center text-[13px] underline underline-offset-4">
-                Open the proposed findings
-              </Link>
-            ) : p.block.link === "settings" && p.settingsHref ? (
-              <Link href={p.settingsHref} className="inline-flex min-h-6 items-center text-[13px] underline underline-offset-4">
-                Open Space settings
-              </Link>
-            ) : p.block.link === "settings" ? (
-              <p className="text-xs text-muted-foreground">An Admin sets it up in Space settings.</p>
+          <>
+            <p>Saves what this audit found, as files in the space&apos;s history repository. Nothing in the Agent Space changes.</p>
+            {rec ? (
+              <Facts
+                p={p}
+                files={rec.files}
+                repository={rec.repository}
+                branch={rec.branch}
+                folder={rec.folder}
+                push={pushNow ? <StatusBadge tone={pushNow.tone} label={pushNow.text} className="h-auto max-w-full whitespace-normal py-0.5 text-left" /> : null}
+              />
+            ) : (
+              <p className="text-muted-foreground">The history repository isn&apos;t set up for this space, so there is nowhere to save the record yet.</p>
+            )}
+            <p className="text-xs text-muted-foreground">Findings and the report can&apos;t change after this. The journals stay in this app&apos;s database.</p>
+            {p.lastFailed && !runId ? (
+              <Callout tone="destructive" title="The last attempt to save the record failed">
+                {p.lastFailed}
+              </Callout>
             ) : null}
-          </div>
-        ) : (
-          <Button
-            onClick={() => {
-              trigger.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-              target.current = null;
-              setError(null);
-              setOpen(true);
-            }}
-          >
-            <GitCommitHorizontal aria-hidden />
-            Finalize audit
-          </Button>
+            {runId && !open ? (
+              <JobProgress runId={runId} onDone={onDone} />
+            ) : p.block ? (
+              <div className="space-y-1.5">
+                <DisabledReason reason={p.block.reason}>{button}</DisabledReason>
+                {p.block.link === "findings" ? (
+                  <Link href={p.findingsHref} className="inline-flex min-h-6 items-center text-[13px] underline underline-offset-4">
+                    Open the proposed findings
+                  </Link>
+                ) : p.block.link === "settings" && p.settingsHref ? (
+                  <Link href={p.settingsHref} className="inline-flex min-h-6 items-center text-[13px] underline underline-offset-4">
+                    Open Space settings
+                  </Link>
+                ) : p.block.link === "settings" ? (
+                  <p className="text-xs text-muted-foreground">An Admin sets it up in Space settings.</p>
+                ) : null}
+              </div>
+            ) : (
+              <Button
+                onClick={() => {
+                  trigger.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+                  target.current = null;
+                  setError(null);
+                  setOpen(true);
+                }}
+              >
+                <GitCommitHorizontal aria-hidden />
+                Save the audit record
+              </Button>
+            )}
+          </>
         )}
       </div>
 
@@ -198,15 +268,22 @@ export function FinalizeCard(p: FinalizeCardProps) {
           }}
         >
           <AlertDialogHeader>
-            <AlertDialogTitle>Finalize {p.auditName}?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Commits the audit record to {p.repository ? <span className="font-mono text-xs">{p.repository.name}</span> : "the history repository"}. Findings and the report can&apos;t change after this.
-            </AlertDialogDescription>
+            <AlertDialogTitle>Save the audit record?</AlertDialogTitle>
+            <AlertDialogDescription>Saves what {p.auditName} found. Nothing in the Agent Space changes. Findings and the report can&apos;t change after this.</AlertDialogDescription>
           </AlertDialogHeader>
-          <Facts p={p} detailed />
-          <FolderDetails folder={p.repository?.folder} />
+          {rec ? (
+            <Facts
+              p={p}
+              files={rec.files}
+              repository={rec.repository}
+              branch={rec.branch}
+              folder={rec.folder}
+              push={pushNow ? <StatusBadge tone={pushNow.tone} label={pushNow.text} className="h-auto max-w-full whitespace-normal py-0.5 text-left" /> : null}
+            />
+          ) : null}
+          <p className="text-xs text-muted-foreground">Commit by {p.actor}.</p>
           {p.issues.length ? (
-            <Callout tone="destructive" title="This audit can't be finalized yet">
+            <Callout tone="destructive" title="The record can't be saved yet">
               <ul className="list-disc space-y-1 pl-4">
                 {p.issues.map((i) => (
                   <li key={i.message}>
@@ -276,13 +353,13 @@ export function FinalizeCard(p: FinalizeCardProps) {
               <DisabledReason reason="Resolve the items above first.">
                 <Button>
                   <GitCommitHorizontal aria-hidden />
-                  Finalize and commit
+                  Save the record
                 </Button>
               </DisabledReason>
             ) : (
               <Button onClick={confirm} disabled={pending}>
                 <GitCommitHorizontal aria-hidden />
-                Finalize and commit
+                Save the record
               </Button>
             )}
           </AlertDialogFooter>

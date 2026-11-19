@@ -1,4 +1,5 @@
 import type { Audience, AudienceSummary, CountRow, ExportViolation, FinalizeIssue } from "@/server/audit-reports";
+import type { PushPlan, SavedRecord } from "@/server/audit-reports/record";
 
 /**
  * Words for the Report tab (pages/audit-report.md), kept pure so they are
@@ -132,7 +133,7 @@ export function finalizeBlock(input: { state: string; issues: readonly FinalizeI
   const proposed = input.issues.find((i) => i.code === "proposed");
   if (proposed) return { reason: undecidedText(proposed.count), link: "findings" };
   if (input.state === "running" || input.state === "draft") return { reason: input.state === "draft" ? "Start the audit and review its findings first." : "Wait for the reviews to finish.", link: null };
-  if (input.state === "cancelled") return { reason: "The audit was cancelled, so it can't be finalized.", link: null };
+  if (input.state === "cancelled") return { reason: "The audit was cancelled, so its record can't be saved.", link: null };
   if (!input.hasRepository) return { reason: "The history repository isn't set up for this space.", link: "settings" };
   return null;
 }
@@ -164,7 +165,7 @@ export function unapprovedExportBody(count: number): string {
   return `Check ${it} against the tables before you share this file. You can export anyway, or approve or edit the text first.`;
 }
 
-/** Why a finalize commit stays on this machine, as Home says it; null when the repository pushes to a remote. */
+/** Why the saved record stays on this machine, as Home says it; null when the repository pushes to a remote. */
 export function localRecordText(repository: string, local: "no-remote" | "push-off" | null): string | null {
   if (local === "no-remote") return `${repository} has no remote, so this audit record stays on this machine until a remote is set. Add one so the history is also kept off this machine.`;
   if (local === "push-off") return `Copying to the remote (git push) is off for ${repository}, so this audit record stays on this machine until it is turned on.`;
@@ -175,3 +176,30 @@ export function localRecordText(repository: string, local: "no-remote" | "push-o
 export function goToSection(title: string): string {
   return `Go to ${title}`;
 }
+
+/** Where the commit goes, in one line: "Pushes to <remote>", or why it stays on this machine. */
+export function pushPlanText(push: PushPlan): { tone: "success" | "warning"; text: string } {
+  if (push.kind === "pushes") return { tone: "success", text: `Pushes to ${push.remote}` };
+  return { tone: "warning", text: push.reason === "no-remote" ? "Local only: this repository has no remote" : "Local only: pushing is off for this repository" };
+}
+
+/**
+ * What happened to the commit, after the save: pushed, a failed push, or why it stayed on this machine.
+ * `plan` (the repository as it is now) fills in a save made before the push result was kept.
+ */
+export function savedPushText(push: SavedRecord["push"], plan: PushPlan | null): { tone: "success" | "warning" | "destructive" | "neutral"; text: string } {
+  if (!push) {
+    return plan ? { tone: "neutral", text: `The push result wasn't kept for this save. ${pushPlanText(plan).text}.` } : { tone: "neutral", text: "The push result wasn't kept for this save." };
+  }
+  if (push.pushed) return { tone: "success", text: `Pushed${push.remote ? ` to ${push.remote}` : " to the remote"}` };
+  if (push.error) return { tone: "destructive", text: `Saved here, but the push${push.remote ? ` to ${push.remote}` : ""} failed: ${push.error} The next push carries it.` };
+  return { tone: "warning", text: push.remote ? "Not pushed: pushing was off for this repository" : "Local only: this repository has no remote" };
+}
+
+/** "new" or "changed", as a file's label in the facts. */
+export function fileStatusText(status: "new" | "changed"): string {
+  return status === "new" ? "new" : "replaces the file that is there";
+}
+
+/** The first 7 characters of a commit. */
+export const shortCommit = (commit: string): string => commit.slice(0, 7);

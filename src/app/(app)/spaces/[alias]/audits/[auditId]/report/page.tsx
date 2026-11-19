@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { BuildReportButton } from "@/components/audit-reports/build-button";
 import { CountTableBody, FindingsTableBody, IncidentListBody, MetricsTableBody } from "@/components/audit-reports/computed-sections";
 import { ExportCard, type LastExport } from "@/components/audit-reports/export-card";
-import { FinalizeCard, type FinalizeIssueLink } from "@/components/audit-reports/finalize-card";
+import { SaveRecordCard, type RecordCardRecord, type RecordIssueLink } from "@/components/audit-reports/save-record-card";
 import { ReportProvider } from "@/components/audit-reports/report-context";
 import { HideToggle, NarrativeSection } from "@/components/audit-reports/section-actions";
 import { ReportSectionCard } from "@/components/audit-reports/section-card";
@@ -13,6 +13,8 @@ import { Callout } from "@/components/common/callout";
 import { Time } from "@/components/common/time";
 import { SafeMarkdown } from "@/components/safe-markdown";
 import { getAnalyzer } from "@/server/analyzers/registry";
+import { displayNames } from "@/server/drafts/loaders";
+import type { RecordInfo } from "@/server/audit-reports/record";
 import { decodeParam } from "@/server/assets/guard";
 import { loadReportPage, noReportModelReason, REPORT_PERMISSIONS, unapprovedNarratives, type Audience, type ExportRecord, type ReportPage, type ReportSectionView } from "@/server/audit-reports";
 import { can, requireUserOrRedirect } from "@/server/auth/dal";
@@ -21,7 +23,7 @@ import { approveNarrativeAction, buildReportAction, draftNarrativeAction, finali
 
 /**
  * The Report tab of an audit (pages/audit-report.md: the report, the HTML export
- * and the finalize dialog). It renders inside the audit layout, which owns the
+ * and the "Save the audit record" card). It renders inside the audit layout, which owns the
  * top bar, the audit header and the tabs; this page adds the report's
  * callouts, the section cards and the Export and Finalize cards.
  */
@@ -111,6 +113,30 @@ function sectionMeta(s: ReportSectionView, page: ReportPage, kind: KindLabel | u
   }
 }
 
+/** The record's facts for the card: the times as server-rendered elements, the names as text. */
+function recordForCard(info: RecordInfo, nameOf: (email: string) => string): RecordCardRecord | null {
+  const { plan, saved } = info;
+  if (!plan) return null;
+  return {
+    repository: plan.repository,
+    branch: plan.branch,
+    folder: plan.folder,
+    push: plan.push,
+    files: plan.files,
+    saved: saved
+      ? {
+          commit: saved.commit,
+          branch: saved.branch,
+          folder: saved.folder,
+          files: saved.files,
+          push: saved.push,
+          when: saved.at ? <Time value={saved.at} format="datetime" /> : "earlier",
+          by: saved.by ? nameOf(saved.by) : null,
+        }
+      : null,
+  };
+}
+
 function lastExport(r: ExportRecord | null): LastExport | null {
   if (!r) return null;
   return { refused: r.result === "denied", errors: r.errorCount ?? r.ruleIds.length, when: <Time value={r.at} format="datetime" />, actor: r.actor, failed: r.result === "error", fileName: r.fileName };
@@ -141,7 +167,7 @@ export default async function AuditReportPage({ params }: PageProps<"/spaces/[al
   const callout = !built ? (
     <Callout tone="info" title="The report isn't built yet" action={canEdit ? <BuildReportButton rebuild={false} /> : undefined}>
       {canEdit
-        ? "Build it to see the sections, draft the narrative, export it and finalize the audit. The tables count accepted findings only."
+        ? "Build it to see the sections, draft the narrative, export it and save the audit record. The tables count accepted findings only."
         : "Someone who can run audits builds it once the findings are reviewed."}
     </Callout>
   ) : view.stale && !view.readOnly ? (
@@ -232,13 +258,14 @@ export default async function AuditReportPage({ params }: PageProps<"/spaces/[al
   // Only the shareable export warns about model text nobody approved.
   const unapproved = { shareable: unapprovedNarratives(view, "shareable"), internal: [] };
 
-  const otherIssues: FinalizeIssueLink[] = view.finalize.issues
+  const otherIssues: RecordIssueLink[] = view.finalize.issues
     .filter((i) => i.code !== "proposed" && i.code !== "finalized" && i.code !== "cancelled")
     .map((i) =>
       i.code === "unapproved-narrative"
         ? { message: i.message, href: null, linkLabel: null, sections: i.sections ?? [] }
         : { message: i.message, href: investigationsHref(space.alias, view.audit.id), linkLabel: "Open the investigations" },
     );
+  const names = await displayNames(page.record.saved?.by ? [page.record.saved.by] : []);
   const reportSections = view.sections.filter((s) => !s.hidden && !(s.content.type === "narrative" && !s.content.text)).length;
 
   return (
@@ -251,17 +278,17 @@ export default async function AuditReportPage({ params }: PageProps<"/spaces/[al
               <p className="max-w-[90ch] text-[13px] text-muted-foreground">{builtFromText(view.counts.acceptedByKind, page.kinds, view.counts.findings.proposed)}</p>
               {sections}
             </div>
-            <aside aria-label="Export and finalize" className="grid content-start gap-4 lg:grid-cols-2 xl:grid-cols-1">
+            <aside aria-label="Export and save the audit record" className="grid content-start gap-4 lg:grid-cols-2 xl:grid-cols-1">
               <ExportCard help={help} sections={counts} last={last} lastOk={lastOk} unapproved={unapproved} excerptChars={page.excerptChars} />
-              {canEdit ? (
-                <FinalizeCard
+              {canEdit || page.record.saved ? (
+                <SaveRecordCard
                   auditName={view.audit.name}
-                  repository={page.repository}
+                  record={recordForCard(page.record, names)}
                   repositorySettingsHref={canRepos ? "/settings" : null}
                   journalCount={page.journalCount}
                   acceptedCount={accepted}
                   reportSections={reportSections}
-                  block={finalizeBlock({ state: view.audit.state, issues: view.finalize.issues, hasRepository: page.repository !== null })}
+                  block={canEdit ? finalizeBlock({ state: view.audit.state, issues: view.finalize.issues, hasRepository: page.repository !== null }) : { reason: "The record is saved.", link: null }}
                   findingsHref={toFindings}
                   settingsHref={canManage ? `/spaces/${encodeURIComponent(space.alias)}/settings` : null}
                   issues={otherIssues}
