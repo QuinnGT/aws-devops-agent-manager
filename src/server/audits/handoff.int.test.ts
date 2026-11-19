@@ -15,6 +15,7 @@ import { getAppPolicy } from "@/server/policy";
 import { getSpaceById, type Space } from "@/server/spaces/queries";
 import { BENCHMARK_AUDIT_DIR, BENCHMARK_JOURNALS_DIR } from "../../../test/helpers/fixtures";
 import { truncateAll } from "../../../test/helpers/db";
+import { AuditReportError, requestDraftNarrative } from "@/server/audit-reports";
 import { AuditRequestError } from "./errors";
 import { uploadGroundTruth } from "./evidence";
 import { reviewFinding } from "./finding-review";
@@ -399,5 +400,12 @@ describe("hand-off audit over three benchmark journals", () => {
     await expect(exportReviewFiles(actor, space.id, auditId)).rejects.toMatchObject({ code: "state", message: expect.stringContaining("The audit is finalized") });
     await expect(importReviews(actor, space.id, auditId, [{ fileName: "review.json", bytes: Buffer.from("{}") }], { reviewer: LABEL })).rejects.toMatchObject({ code: "state" });
     await db().update(audits).set({ state: "reviewing" }).where(eq(audits.id, auditId));
+  });
+
+  it("does not queue a narrative draft for a report that has no model, and says to write it", async () => {
+    const draft = requestDraftNarrative({ spaceId: space.id, auditId, sectionIds: ["summary"], replacePersonText: false }, actor);
+    await expect(draft).rejects.toBeInstanceOf(AuditReportError);
+    await expect(draft).rejects.toMatchObject({ message: expect.stringContaining("Write each narrative section yourself with Edit") });
+    expect(h.queued.filter((q) => q.queue === "audit-reports.draft-narrative")).toHaveLength(0);
   });
 });

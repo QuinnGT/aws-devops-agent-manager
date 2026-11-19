@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { getAppPolicy } from "@/server/policy";
 import { permissionsForRole } from "@/server/auth/roles";
 import { REPORT_PERMISSIONS } from "./index";
-import { NO_REPORT_MODEL_REASON, reportModelOf } from "./model";
+import { NO_REPORT_MODEL_REASON, noReportModelReason, reportModelOf } from "./model";
 import { audienceSummaries, sectionDraftInfo, type DraftEvent, type ReportJobRun } from "./page";
 import { DRAFT_NARRATIVE_QUEUE, FINALIZE_QUEUE } from "./jobs";
 import { auditRecord, benchmarkProfile, diagnosis, fix, item, viewInput } from "./test-support";
@@ -39,6 +39,22 @@ describe("reportModelOf", () => {
   it("says when no model resolves", () => {
     expect(reportModelOf(snap(), settings(null), null)).toEqual({ id: null, source: null, sourceLabel: null });
     expect(NO_REPORT_MODEL_REASON).toContain("Space settings");
+  });
+});
+
+describe("the report model of an audit whose reviews use no Bedrock model", () => {
+  const snap = (report?: string) => ({ review: { ...benchmarkProfile().review, runner: "handoff" as const, modelId: undefined }, report: { ...benchmarkProfile().report, modelId: report } });
+  const settings = { inference: { mode: "space" as const, region: null, reviewModelId: "space-review", reportModelId: null } };
+
+  it("has no report model unless one was chosen on the draft, and says what to do", () => {
+    expect(reportModelOf(snap(), settings, null).id).toBeNull();
+    expect(reportModelOf(snap("chosen"), settings, null)).toMatchObject({ id: "chosen", source: "audit" });
+    expect(noReportModelReason("ai-sdk")).toBe(NO_REPORT_MODEL_REASON);
+    for (const runner of ["handoff", "devops-agent-chat"]) {
+      const text = noReportModelReason(runner);
+      expect(text).toContain("Write each narrative section yourself with Edit");
+      expect(text).not.toContain("\u2014");
+    }
   });
 });
 
