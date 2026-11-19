@@ -12,6 +12,8 @@ import {
   joinNames,
   localRecordText,
   pushPlanText,
+  recordFileHolds,
+  remoteHelp,
   savedPushText,
   fileStatusText,
   shortCommit,
@@ -146,8 +148,10 @@ describe("model text that needs a person's check", () => {
   });
 
   it("says when the finalize commit stays on this machine, as Home does", () => {
-    expect(localRecordText("demo-history", "no-remote")).toBe("demo-history has no remote, so this audit record stays on this machine until a remote is set. Add one so the history is also kept off this machine.");
-    expect(localRecordText("demo-history", "push-off")).toContain("stays on this machine until it is turned on");
+    expect(localRecordText("demo-history", "no-remote")).toBe(
+      "demo-history has no remote (a copy of the repository on a server such as GitHub), so this audit record stays on this machine until one is set. Add one so the history is also kept off this machine.",
+    );
+    expect(localRecordText("demo-history", "push-off")).toBe("Copying to the remote is off for demo-history, so this audit record stays on this machine until it is turned on.");
     expect(localRecordText("demo-history", null)).toBeNull();
   });
 
@@ -183,5 +187,31 @@ describe("where the saved record went", () => {
     expect(fileStatusText("new")).toBe("new");
     expect(fileStatusText("changed")).toBe("replaces the file that is there");
     expect(shortCommit("5e1c2a90cafe0000")).toBe("5e1c2a9");
+  });
+});
+
+describe("plain words for the saved files", () => {
+  it("explains a fingerprint instead of naming a hash", () => {
+    const text = recordFileHolds("audit.json", { journalCount: 3, acceptedCount: 4, reportSections: 8 });
+    expect(text).toContain("a fingerprint of each of the 3 journals so a later change to a journal can be detected");
+    expect(text).not.toMatch(/sha/i);
+    expect(recordFileHolds("audit.json", { journalCount: 1, acceptedCount: 0, reportSections: 0 })).toContain("a fingerprint of the 1 journal so");
+  });
+
+  it("says what the other files hold, with the counts of this audit", () => {
+    expect(recordFileHolds("findings.json", { journalCount: 3, acceptedCount: 1, reportSections: 8 })).toBe("the 1 accepted finding with their citations");
+    expect(recordFileHolds("findings.json", { journalCount: 3, acceptedCount: 4, reportSections: 8 })).toBe("the 4 accepted findings with their citations");
+    expect(recordFileHolds("report.md", { journalCount: 3, acceptedCount: 4, reportSections: 1 })).toBe("the report as text, 1 section");
+  });
+
+  it("says what copying to the remote means for each repository", () => {
+    expect(remoteHelp({ kind: "pushes", remote: "git@github.com:acme/history.git" })).toBe("The saved commit is copied to the remote when you save.");
+    expect(remoteHelp({ kind: "local", reason: "no-remote", remote: null })).toContain("A remote is a copy of the repository on a server");
+    expect(remoteHelp({ kind: "local", reason: "push-off", remote: "x" })).toBe("Copying to the remote is off for this repository, so the record stays on this machine.");
+  });
+
+  it("uses no em or en dashes", () => {
+    const all = [recordFileHolds("audit.json", { journalCount: 2, acceptedCount: 1, reportSections: 3 }), remoteHelp({ kind: "local", reason: "no-remote", remote: null })].join(" ");
+    expect(all).not.toMatch(/[\u2013\u2014]/);
   });
 });

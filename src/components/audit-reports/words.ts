@@ -167,8 +167,8 @@ export function unapprovedExportBody(count: number): string {
 
 /** Why the saved record stays on this machine, as Home says it; null when the repository pushes to a remote. */
 export function localRecordText(repository: string, local: "no-remote" | "push-off" | null): string | null {
-  if (local === "no-remote") return `${repository} has no remote, so this audit record stays on this machine until a remote is set. Add one so the history is also kept off this machine.`;
-  if (local === "push-off") return `Copying to the remote (git push) is off for ${repository}, so this audit record stays on this machine until it is turned on.`;
+  if (local === "no-remote") return `${repository} has no remote (a copy of the repository on a server such as GitHub), so this audit record stays on this machine until one is set. Add one so the history is also kept off this machine.`;
+  if (local === "push-off") return `Copying to the remote is off for ${repository}, so this audit record stays on this machine until it is turned on.`;
   return null;
 }
 
@@ -203,3 +203,26 @@ export function fileStatusText(status: "new" | "changed"): string {
 
 /** The first 7 characters of a commit. */
 export const shortCommit = (commit: string): string => commit.slice(0, 7);
+
+/** What each saved file holds, in words a person who never saw the file can read, with the counts from this audit. */
+export function recordFileHolds(name: "audit.json" | "findings.json" | "report.md", c: { journalCount: number; acceptedCount: number; reportSections: number }): string {
+  const s = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+  if (name === "audit.json") {
+    return `the audit's settings, a fingerprint of ${c.journalCount === 1 ? "the 1 journal" : `each of the ${c.journalCount} journals`} so a later change to a journal can be detected, and the analyzer and model versions`;
+  }
+  if (name === "findings.json") return `the ${s(c.acceptedCount, "accepted finding", "accepted findings")} with their citations`;
+  return `the report as text, ${s(c.reportSections, "section", "sections")}`;
+}
+
+/** What the repository, the branch, the folder and the commit are, a few words each, to follow their exact names. */
+export const REPOSITORY_HELP = "the space's history repository";
+export const BRANCH_HELP = "the line of history the record is added to";
+export const FOLDER_HELP = "inside that repository";
+export const COMMIT_HELP = "the saved snapshot; press it to copy the full ID";
+
+/** What copying to the remote means for this repository, or why nothing is copied. */
+export function remoteHelp(plan: PushPlan): string {
+  if (plan.kind === "pushes") return "The saved commit is copied to the remote when you save.";
+  if (plan.reason === "no-remote") return "A remote is a copy of the repository on a server, such as GitHub. Without one, the record stays on this machine until one is added.";
+  return "Copying to the remote is off for this repository, so the record stays on this machine.";
+}

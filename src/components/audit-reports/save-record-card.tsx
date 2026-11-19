@@ -20,10 +20,11 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import type { PushPlan, RecordFile } from "@/server/audit-reports/record";
 import { CopyCommit } from "./copy-commit";
 import { useReport } from "./report-context";
-import { fileStatusText, goToSection, localRecordText, pushPlanText, savedPushText, sectionAnchor, type FinalizeBlock } from "./words";
+import { BRANCH_HELP, COMMIT_HELP, FOLDER_HELP, REPOSITORY_HELP, fileStatusText, goToSection, localRecordText, pushPlanText, recordFileHolds, remoteHelp, savedPushText, sectionAnchor, type FinalizeBlock } from "./words";
 
 export interface RecordIssueLink {
   message: string;
@@ -71,6 +72,12 @@ export interface SaveRecordCardProps {
   issues: RecordIssueLink[];
   /** The report was built before the latest finding changes: a warning, not a block */
   stale: ReactNode | null;
+  /** Accepted package fixes in no revision: a warning in the dialog, not a block (a person may decide a fix won't be made) */
+  openFixes: { id: string; title: string; incident: string | null }[];
+  /** The Findings tab filtered to those fixes */
+  openFixesHref: string;
+  /** Accepted package fixes that are in a revision whose plan isn't applied yet */
+  queuedFixes: number;
   actor: string;
   /** A save job already queued or running */
   runId: string | null;
@@ -80,42 +87,44 @@ export interface SaveRecordCardProps {
 
 const mono = "font-mono text-xs";
 
-/** What each file holds, with the counts from this audit. */
-function holds(name: RecordFile["name"], p: Pick<SaveRecordCardProps, "journalCount" | "acceptedCount" | "reportSections">): string {
-  const s = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
-  if (name === "audit.json") return `profile, ${s(p.journalCount, "journal SHA-256", "journal SHA-256s")}, analyzer and model versions`;
-  if (name === "findings.json") return `${s(p.acceptedCount, "accepted finding", "accepted findings")} with their citations`;
-  return `the report, ${s(p.reportSections, "section", "sections")}`;
-}
-
+/** "1 accepted package fix", "3 accepted package fixes". */
+const plainCount = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 /**
  * The facts of the save as a definition list: the repository and branch, the
  * folder, each file with whether it is new or replaces one, and where the
- * commit goes. The same list before and after saving; after, it is what
- * happened, not what will.
+ * commit goes. Each exact name carries a few words that say what it is. The
+ * same list before and after saving; after, it is what happened, not what will.
  */
-function Facts({ p, files, repository, branch, folder, push }: { p: SaveRecordCardProps; files: RecordFile[]; repository: string; branch: string; folder: string; push: ReactNode }) {
+function Facts({ p, files, repository, branch, folder, push, pushHelp }: { p: SaveRecordCardProps; files: RecordFile[]; repository: string; branch: string; folder: string; push: ReactNode; pushHelp: string | null }) {
   return (
-    <dl className="grid grid-cols-[5.5rem_minmax(0,1fr)] gap-x-3 gap-y-1.5 text-[13px]">
+    <dl className="grid grid-cols-[5.5rem_minmax(0,1fr)] gap-x-3 gap-y-2 text-[13px]">
       <dt className="text-muted-foreground">Repository</dt>
       <dd className="[overflow-wrap:anywhere]">
-        <span className="font-semibold">{repository}</span>, branch <span className={mono}>{branch}</span>
+        <span className="font-semibold">{repository}</span> <span className="text-xs text-muted-foreground">({REPOSITORY_HELP})</span>
+        <span className="block">
+          on branch <span className={mono}>{branch}</span> <span className="text-xs text-muted-foreground">({BRANCH_HELP})</span>
+        </span>
       </dd>
       <dt className="text-muted-foreground">Folder</dt>
-      <dd className={`${mono} [overflow-wrap:anywhere]`}>{folder}</dd>
+      <dd className="[overflow-wrap:anywhere]">
+        <span className={mono}>{folder}</span> <span className="text-xs text-muted-foreground">({FOLDER_HELP})</span>
+      </dd>
       <dt className="text-muted-foreground">Files</dt>
       <dd>
-        <ul className="space-y-0.5">
+        <ul className="space-y-1">
           {files.map((f) => (
             <li key={f.name}>
               <span className={mono}>{f.name}</span> <span className="text-muted-foreground">({fileStatusText(f.status)})</span>
-              <span className="block text-xs text-muted-foreground">{holds(f.name, p)}</span>
+              <span className="block text-xs text-muted-foreground">{recordFileHolds(f.name, p)}</span>
             </li>
           ))}
         </ul>
       </dd>
-      <dt className="text-muted-foreground">Push</dt>
-      <dd>{push}</dd>
+      <dt className="text-muted-foreground">Copied to</dt>
+      <dd>
+        {push}
+        {pushHelp ? <span className="mt-1 block text-xs text-muted-foreground">{pushHelp}</span> : null}
+      </dd>
     </dl>
   );
 }
@@ -184,7 +193,7 @@ export function SaveRecordCard(p: SaveRecordCardProps) {
             <dl className="grid grid-cols-[5.5rem_minmax(0,1fr)] gap-x-3 gap-y-1.5">
               <dt className="text-muted-foreground">Commit</dt>
               <dd>
-                <CopyCommit commit={saved.commit} />
+                <CopyCommit commit={saved.commit} /> <span className="text-xs text-muted-foreground">({COMMIT_HELP})</span>
               </dd>
             </dl>
             <Facts
@@ -194,25 +203,13 @@ export function SaveRecordCard(p: SaveRecordCardProps) {
               branch={saved.branch}
               folder={saved.folder}
               push={pushAfter ? <StatusBadge tone={pushAfter.tone} label={pushAfter.text} className="h-auto max-w-full whitespace-normal py-0.5 text-left" /> : null}
+              pushHelp={saved.push && !saved.push.pushed && !saved.push.error ? remoteHelp(rec.push.kind === "pushes" ? { kind: "local", reason: "push-off", remote: rec.push.remote } : rec.push) : null}
             />
             <p className="text-xs text-muted-foreground">Findings and the report can&apos;t change. The journals stay in this app&apos;s database.</p>
           </>
         ) : (
           <>
             <p>Saves what this audit found, as files in the space&apos;s history repository. Nothing in the Agent Space changes.</p>
-            {rec ? (
-              <Facts
-                p={p}
-                files={rec.files}
-                repository={rec.repository}
-                branch={rec.branch}
-                folder={rec.folder}
-                push={pushNow ? <StatusBadge tone={pushNow.tone} label={pushNow.text} className="h-auto max-w-full whitespace-normal py-0.5 text-left" /> : null}
-              />
-            ) : (
-              <p className="text-muted-foreground">The history repository isn&apos;t set up for this space, so there is nowhere to save the record yet.</p>
-            )}
-            <p className="text-xs text-muted-foreground">Findings and the report can&apos;t change after this. The journals stay in this app&apos;s database.</p>
             {p.lastFailed && !runId ? (
               <Callout tone="destructive" title="The last attempt to save the record failed">
                 {p.lastFailed}
@@ -248,6 +245,20 @@ export function SaveRecordCard(p: SaveRecordCardProps) {
                 Save the audit record
               </Button>
             )}
+            {rec ? (
+              <Facts
+                p={p}
+                files={rec.files}
+                repository={rec.repository}
+                branch={rec.branch}
+                folder={rec.folder}
+                push={pushNow ? <StatusBadge tone={pushNow.tone} label={pushNow.text} className="h-auto max-w-full whitespace-normal py-0.5 text-left" /> : null}
+                pushHelp={remoteHelp(rec.push)}
+              />
+            ) : (
+              <p className="text-muted-foreground">The history repository isn&apos;t set up for this space, so there is nowhere to save the record yet.</p>
+            )}
+            <p className="text-xs text-muted-foreground">Findings and the report can&apos;t change after this. The journals stay in this app&apos;s database.</p>
           </>
         )}
       </div>
@@ -279,9 +290,32 @@ export function SaveRecordCard(p: SaveRecordCardProps) {
               branch={rec.branch}
               folder={rec.folder}
               push={pushNow ? <StatusBadge tone={pushNow.tone} label={pushNow.text} className="h-auto max-w-full whitespace-normal py-0.5 text-left" /> : null}
+              pushHelp={remoteHelp(rec.push)}
             />
           ) : null}
-          <p className="text-xs text-muted-foreground">Commit by {p.actor}.</p>
+          <p className="text-xs text-muted-foreground">The commit is recorded as made by {p.actor}.</p>
+          {p.openFixes.length ? (
+            <Callout tone="warning" title={`${plainCount(p.openFixes.length, "accepted package fix", "accepted package fixes")} ${p.openFixes.length === 1 ? "is" : "are"} in no revision`}>
+              <span className="block">You can still save the record: a person may decide a fix won&apos;t be made. A fix in no revision won&apos;t reach the agent, and the record says it was accepted.</span>
+              <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                {p.openFixes.slice(0, 5).map((f) => (
+                  <li key={f.id} className="line-clamp-2 [overflow-wrap:anywhere]">
+                    {f.incident ? <span className="font-mono text-xs">{f.incident}: </span> : null}
+                    {f.title}
+                  </li>
+                ))}
+              </ul>
+              {p.openFixes.length > 5 ? <span className="mt-0.5 block text-xs text-muted-foreground">and {p.openFixes.length - 5} more</span> : null}
+              <Link href={p.openFixesHref} className={cn(buttonVariants({ variant: "outline", size: "sm" }), "mt-2")}>
+                Add {p.openFixes.length === 1 ? "it" : "them"} to a revision
+              </Link>
+            </Callout>
+          ) : null}
+          {p.queuedFixes ? (
+            <p className="text-xs text-muted-foreground">
+              {plainCount(p.queuedFixes, "accepted package fix", "accepted package fixes")} {p.queuedFixes === 1 ? "is" : "are"} queued in a revision and not applied yet. Saving the record doesn&apos;t change that.
+            </p>
+          ) : null}
           {p.issues.length ? (
             <Callout tone="destructive" title="The record can't be saved yet">
               <ul className="list-disc space-y-1 pl-4">
@@ -316,18 +350,13 @@ export function SaveRecordCard(p: SaveRecordCardProps) {
             </Callout>
           ) : null}
           {localText ? (
-            <Callout
-              tone="warning"
-              title="The record stays on this machine"
-              action={
-                p.repositorySettingsHref ? (
-                  <Link href={p.repositorySettingsHref} className={buttonVariants({ variant: "outline", size: "sm" })}>
-                    Repository settings
-                  </Link>
-                ) : null
-              }
-            >
+            <Callout tone="warning" title="The record stays on this machine">
               {localText}
+              {p.repositorySettingsHref ? (
+                <Link href={p.repositorySettingsHref} className={cn(buttonVariants({ variant: "outline", size: "sm" }), "mt-2 flex w-fit")}>
+                  Repository settings
+                </Link>
+              ) : null}
             </Callout>
           ) : null}
           {p.stale ? (

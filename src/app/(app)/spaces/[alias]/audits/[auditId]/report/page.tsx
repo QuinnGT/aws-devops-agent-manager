@@ -4,6 +4,9 @@ import type { ReactNode } from "react";
 import { BuildReportButton } from "@/components/audit-reports/build-button";
 import { CountTableBody, FindingsTableBody, IncidentListBody, MetricsTableBody } from "@/components/audit-reports/computed-sections";
 import { ExportCard, type LastExport } from "@/components/audit-reports/export-card";
+import { fixContext } from "@/components/audits/detail-data";
+import { findingListQuery } from "@/components/audits/list-params";
+import { queuedRevisions } from "@/components/audits/revision-choice";
 import { SaveRecordCard, type RecordCardRecord, type RecordIssueLink } from "@/components/audit-reports/save-record-card";
 import { ReportProvider } from "@/components/audit-reports/report-context";
 import { HideToggle, NarrativeSection } from "@/components/audit-reports/section-actions";
@@ -113,6 +116,11 @@ function sectionMeta(s: ReportSectionView, page: ReportPage, kind: KindLabel | u
   }
 }
 
+/** Accepted package fixes of the audit that sit in a revision whose plan isn't applied yet. */
+function queuedFixCount(fix: Awaited<ReturnType<typeof fixContext>>): number {
+  return fix ? queuedRevisions(fix).reduce((n, q) => n + q.fixes, 0) : 0;
+}
+
 /** The record's facts for the card: the times as server-rendered elements, the names as text. */
 function recordForCard(info: RecordInfo, nameOf: (email: string) => string): RecordCardRecord | null {
   const { plan, saved } = info;
@@ -148,14 +156,17 @@ export default async function AuditReportPage({ params }: PageProps<"/spaces/[al
   const space = await getSpaceByAlias(decodeParam(alias));
   if (!space || !(await can(user, REPORT_PERMISSIONS.read, space.id))) notFound();
   const auditId = decodeParam(rawAuditId);
-  const [page, canRun, canManage, canRepos] = await Promise.all([
+  const [page, canRun, canManage, canBuild, canRepos] = await Promise.all([
     loadReportPage(space, auditId),
     can(user, REPORT_PERMISSIONS.edit, space.id),
     can(user, "spaces.manage", space.id),
+    can(user, "revisions.build", space.id),
     // History repositories are app settings (as on Home)
     can(user, "spaces.manage", null),
   ]);
   if (!page) notFound();
+  // Accepted package fixes in no revision, or queued in one: the save dialog says so.
+  const fix = await fixContext(space.id, page.view.audit.id, canBuild);
 
   const { view } = page;
   const canEdit = canRun && !view.readOnly;
@@ -278,8 +289,11 @@ export default async function AuditReportPage({ params }: PageProps<"/spaces/[al
               <p className="max-w-[90ch] text-[13px] text-muted-foreground">{builtFromText(view.counts.acceptedByKind, page.kinds, view.counts.findings.proposed)}</p>
               {sections}
             </div>
-            <aside aria-label="Export and save the audit record" className="grid content-start gap-4 lg:grid-cols-2 xl:grid-cols-1">
-              <ExportCard help={help} sections={counts} last={last} lastOk={lastOk} unapproved={unapproved} excerptChars={page.excerptChars} />
+            {/* The record card comes first and the column follows the page, so Save is in view at 1440 by 900; room is left below for toasts. */}
+            <aside
+              aria-label="Save the audit record and export"
+              className="grid content-start gap-4 lg:grid-cols-2 xl:sticky xl:top-[4.5rem] xl:max-h-[calc(100dvh-10.5rem)] xl:grid-cols-1 xl:self-start xl:overflow-y-auto xl:px-1 xl:py-1 xl:-mx-1"
+            >
               {canEdit || page.record.saved ? (
                 <SaveRecordCard
                   auditName={view.audit.name}
@@ -299,11 +313,15 @@ export default async function AuditReportPage({ params }: PageProps<"/spaces/[al
                       </>
                     ) : null
                   }
+                  openFixes={(fix?.progress.open ?? []).map((id) => ({ id, title: fix?.fixes.find((f) => f.id === id)?.title ?? "", incident: fix?.fixes.find((f) => f.id === id)?.incidentId ?? null }))}
+                  openFixesHref={`${investigationsHref(space.alias, view.audit.id)}/findings${findingListQuery({ state: "accepted", fix: "open" })}`}
+                  queuedFixes={queuedFixCount(fix)}
                   actor={user.email}
                   runId={page.finalizeRunId}
                   lastFailed={page.finalizeFailed?.error ?? null}
                 />
               ) : null}
+              <ExportCard help={help} sections={counts} last={last} lastOk={lastOk} unapproved={unapproved} excerptChars={page.excerptChars} />
             </aside>
           </div>
         ) : null}
