@@ -81,3 +81,24 @@ export function AuditItemSkeleton() {
     </Busy>
   );
 }
+
+/** Findings tab content (the layout's header stays): a filter bar, the list and the detail side by side. */
+export function AuditFindingsSkeleton() {
+  return (
+    <div className="space-y-4" aria-busy="true">
+      <span className="sr-only" role="status">
+        Loading
+      </span>
+      <Skeleton className="h-12 rounded-xl" aria-hidden />
+      <div className="grid gap-4 lg:grid-cols-[minmax(320px,400px)_minmax(0,1fr)]" aria-hidden>
+        <div className="space-y-px overflow-hidden rounded-xl border">
+          <Skeleton className="h-12 w-full rounded-none" />
+          {Array.from({ length: 6 }, (_, i) => (
+            <Skeleton key={i} className="h-16 w-full rounded-none opacity-70" />
+          ))}
+        </div>
+        <Skeleton className="h-96 rounded-xl" />
+      </div>
+    </div>
+  );
+}

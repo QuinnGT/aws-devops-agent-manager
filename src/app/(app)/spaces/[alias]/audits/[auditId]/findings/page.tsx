@@ -1,219 +1,269 @@
-import { Check, TriangleAlert } from "lucide-react";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { Fragment } from "react";
 import { AuditFilters } from "@/components/audits/audit-filters";
-import { auditDetail, getAuditCached } from "@/components/audits/detail-data";
-import { AcceptIncidentButton, FindingRowActions } from "@/components/audits/finding-buttons";
+import { RecordSummary } from "@/components/audit-reports/record-summary";
+import { auditDetail, fixContext, getAuditCached } from "@/components/audits/detail-data";
+import { FindingsWorkspace, type DetailData, type ListGroup, type ListRow } from "@/components/audits/findings-workspace";
 import { AUDIT_PAGE, defaultFindingState, findingListQuery, parseFindingListParams } from "@/components/audits/list-params";
 import { auditsBase, loadAuditsPage } from "@/components/audits/page-guard";
 import { decideFindingsNote } from "@/components/audits/role-text";
-import { EDITED_BADGE, FINDING_STATE_BADGE, findingCitationText, plural } from "@/components/audits/words";
+import { kindPosition, plural } from "@/components/audits/words";
 import { EmptyState } from "@/components/common/empty-state";
 import { RoleNote } from "@/components/common/role-note";
-import { StatusBadge } from "@/components/common/status-badge";
+import { formatTime } from "@/components/common/time-format";
+import { getViewerZone } from "@/components/common/viewer-zone";
 import { AutoRefresh } from "@/components/plans/auto-refresh";
 import { buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { cn } from "@/lib/utils";
+import { loadRecordInfo } from "@/server/audit-reports/record";
+import { loadFindingDetail } from "@/server/audits/finding-detail";
 import { loadFindingsQueue, type QueueRow } from "@/server/audits/loaders";
+import { nextStepFor } from "@/server/audits/next-step";
+import { loadedPolicyForSpace } from "@/server/audits/profiles";
 import { profileOf } from "@/server/audits/store";
+import { displayNames } from "@/server/drafts/loaders";
 import { getAppPolicy } from "@/server/policy";
 
-/** Audit detail, Findings tab (pages/audit-detail.md, "Findings tab"). */
+/**
+ * Audit detail, Findings tab (pages/audit-detail.md, "Findings tab"): a list
+ * grouped by incident and the selected finding side by side, each scrolling
+ * on its own like the plan page. `?finding=<id>` selects a finding: the
+ * revision page links here.
+ */
 export default async function FindingsPage({ params, searchParams }: PageProps<"/spaces/[alias]/audits/[auditId]/findings">) {
   const { alias, auditId } = await params;
-  const { space, viewer, role } = await loadAuditsPage(alias);
+  const { space, perms, viewer, role } = await loadAuditsPage(alias);
   const audit = await getAuditCached(space.id, auditId);
   if (!audit) notFound();
   const base = `${auditsBase(space.alias)}/${audit.id}`;
   if (audit.state === "draft") redirect(base);
   const profile = profileOf(audit);
   const p = parseFindingListParams(await searchParams);
-  const state = p.state || defaultFindingState(audit.state);
-  const [queue, detail] = await Promise.all([
-    loadFindingsQueue(space, audit.id, { kind: p.kind || null, state: state === "all" ? null : state, limit: 500 }, viewer),
+  // A link to one finding shows every state, so the finding is in the list whatever its state.
+  const state = p.state || (p.finding ? "all" : defaultFindingState(audit.state));
+  const canBuild = perms.has("revisions.build");
+  const [queue, detail, fix, loaded] = await Promise.all([
+    loadFindingsQueue(space, audit.id, { limit: 500 }, viewer),
     auditDetail(space.id, audit.id, viewer),
+    fixContext(space.id, audit.id, canBuild),
+    loadedPolicyForSpace(space.id),
   ]);
-  if (!queue || !detail) notFound();
+  if (!queue || !detail || !fix) notFound();
 
   const primary = detail.profile.primaryField?.field ?? null;
-  const modeField = primary;
   const q = p.q.toLowerCase();
   const tagOf = (r: QueueRow, field: string) => r.tags.find((t) => t.field === field);
-  const rows = queue.rows.filter(
-    (r) =>
-      (!p.mode || (modeField ? tagOf(r, modeField)?.value === p.mode : r.tags.some((t) => t.value === p.mode))) &&
-      (!p.owner || tagOf(r, "owner")?.value === p.owner) &&
-      (!q || r.title.toLowerCase().includes(q) || r.tags.some((t) => t.label.toLowerCase().includes(q)) || (r.incidentId ?? "").toLowerCase().includes(q)),
-  );
-  const groups = new Map<string, QueueRow[]>();
-  for (const r of rows) groups.set(r.itemId, [...(groups.get(r.itemId) ?? []), r]);
-  const ordered = [...groups.entries()].sort(([, a], [, b]) => (a[0]!.incidentId ?? a[0]!.taskId).localeCompare(b[0]!.incidentId ?? b[0]!.taskId, undefined, { numeric: true }));
+  const matches = (r: QueueRow) =>
+    (!p.kind || r.kind === p.kind) &&
+    (state === "all" || r.state === state) &&
+    (!p.mode || (primary ? tagOf(r, primary)?.value === p.mode : r.tags.some((t) => t.value === p.mode))) &&
+    (!p.owner || tagOf(r, "owner")?.value === p.owner) &&
+    (!p.fix || (p.fix === "package" ? fix.natures.get(r.id)?.kind === "package" : fix.progress.open.includes(r.id))) &&
+    (!q || r.title.toLowerCase().includes(q) || r.tags.some((t) => t.label.toLowerCase().includes(q)) || (r.incidentId ?? "").toLowerCase().includes(q));
+  const all = queue.rows;
+  const rows = all.filter(matches);
+
+  // Findings grouped by incident, in the order the list shows them.
+  const groupByIncident = (rs: QueueRow[]) => {
+    const byItem = new Map<string, QueueRow[]>();
+    for (const r of rs) byItem.set(r.itemId, [...(byItem.get(r.itemId) ?? []), r]);
+    return [...byItem.entries()].sort(([, a], [, b]) => (a[0]!.incidentId ?? a[0]!.taskId).localeCompare(b[0]!.incidentId ?? b[0]!.taskId, undefined, { numeric: true }));
+  };
+
+  // The selection: the finding in the address, else the first one the list shows. A selected finding the filters leave out stays in the list.
+  const selectedRow = (p.finding ? all.find((r) => r.id === p.finding) : undefined) ?? groupByIncident(rows)[0]?.[1][0];
+  const selectedId = selectedRow?.id ?? null;
+  const hiddenByFilters = !!selectedRow && !rows.some((r) => r.id === selectedRow.id);
+  const listed = hiddenByFilters ? all.filter((r) => matches(r) || r.id === selectedRow.id) : rows;
+
+  const hrefFor = (id: string) => `${base}/findings${findingListQuery({ ...p, state, finding: id })}`;
+  const pinHref = selectedId && !p.finding ? hrefFor(selectedId) : null;
+
+  // A page of the groups.
+  const ordered = groupByIncident(listed);
   let budget = p.rows;
   const shownGroups: [string, QueueRow[]][] = [];
   for (const [k, rs] of ordered) {
-    if (budget <= 0) break;
-    shownGroups.push([k, rs.slice(0, budget)]);
+    if (budget <= 0 && !rs.some((r) => r.id === selectedId)) continue;
+    shownGroups.push([k, budget >= rs.length ? rs : rs.filter((r, i) => i < Math.max(budget, 0) || r.id === selectedId)]);
     budget -= rs.length;
   }
-  const shownRows = shownGroups.reduce((n, [, rs]) => n + rs.length, 0);
+  const shownCount = shownGroups.reduce((n, [, rs]) => n + rs.length, 0);
+  const proposedOf = (itemId: string) => all.filter((r) => r.itemId === itemId && r.state === "proposed");
+  const groups: ListGroup[] = shownGroups.map(([itemId, rs]) => {
+    const first = rs[0]!;
+    const proposed = proposedOf(itemId);
+    return {
+      itemId,
+      incident: first.incidentId ?? first.taskId,
+      itemHref: `${base}/items/${itemId}`,
+      proposed: proposed.length,
+      flagged: proposed.filter((r) => r.citations.open > 0).length,
+      rows: rs.map(
+        (r): ListRow => ({
+          id: r.id,
+          href: hrefFor(r.id),
+          kindLabel: r.kindLabel,
+          tag: ((primary && tagOf(r, primary)) || tagOf(r, "owner") || r.tags[0])?.label ?? null,
+          state: r.state,
+          edited: r.edited,
+          title: r.title,
+          flagged: r.citations.open > 0,
+        }),
+      ),
+    };
+  });
+  const order = shownGroups.flatMap(([, rs]) => rs.map((r) => ({ id: r.id, href: hrefFor(r.id), proposed: r.state === "proposed" })));
 
-  const canAct = queue.actions.review;
-  const allCounts = detail.findingCounts.reduce((c, k) => ({ accepted: c.accepted + k.counts.accepted, proposed: c.proposed + k.counts.proposed, rejected: c.rejected + k.counts.rejected, total: c.total + k.counts.total }), { accepted: 0, proposed: 0, rejected: 0, total: 0 });
-  // The proposed findings of every incident, for the bulk buttons (the whole group, not only the filtered rows).
-  const proposedQueue = canAct ? await loadFindingsQueue(space, audit.id, { state: "proposed", limit: 500 }, viewer) : null;
-  const proposedBy = new Map<string, QueueRow[]>();
-  for (const r of proposedQueue?.rows ?? []) proposedBy.set(r.itemId, [...(proposedBy.get(r.itemId) ?? []), r]);
-  const proposedTotal = proposedQueue?.rows.length ?? allCounts.proposed;
-  const filtered = !!(p.kind || p.state || p.mode || p.owner || p.q);
+  // The selected finding, whole.
+  const found = selectedId ? await loadFindingDetail(space, audit.id, selectedId, viewer) : null;
+  let detailData: DetailData | null = null;
+  if (found) {
+    const f = found.finding;
+    const ex = profile.findings.find((x) => x.kind === f.kind);
+    const zone = await getViewerZone();
+    const name = await displayNames([...(f.reviewedBy ? [f.reviewedBy] : []), ...f.citations.flatMap((c) => (c.checked ? [c.checked.by] : []))]);
+    const nature = fix.natures.get(f.id) ?? null;
+    const links = fix.links ? (fix.links.get(f.id) ?? []) : null;
+    detailData = {
+      id: f.id,
+      itemId: f.itemId,
+      incident: f.incidentId ?? found.taskId,
+      itemHref: `${base}/items/${f.itemId}#finding-${f.id}`,
+      position: kindPosition(f.kindLabel, found.sibling.index, found.sibling.count),
+      ownerLine: nature && nature.kind !== "recorded" ? `Owner: ${nature.ownerLabel}` : null,
+      title: f.fullTitle,
+      state: f.state,
+      edited: f.edited,
+      hidden: [...(ex?.cardHidden ?? []), ...f.fields.filter((x) => typeof x.value === "string" && x.value.trim() === f.fullTitle.trim()).map((x) => x.key)],
+      fields: f.fields.map((x) => ({ key: x.key, label: x.label, value: x.value, valueLabel: x.valueLabel, editable: x.editable, choices: x.choices, multiple: x.multiple, changed: x.changed })),
+      citations: f.citations.map((c) => ({
+        record: c.record,
+        quote: c.quote,
+        field: c.field,
+        supports: c.supports,
+        ok: c.ok,
+        problem: c.problem,
+        checked: c.checked ? { by: name(c.checked.by), at: formatTime(new Date(c.checked.at), "datetime", zone), note: c.checked.note } : null,
+      })),
+      totalRecords: found.totalRecords,
+      reviewNote: f.reviewNote,
+      decidedBy: f.reviewedBy ? `${name(f.reviewedBy)}${f.reviewedAt ? `, ${formatTime(f.reviewedAt, "datetime", zone)}` : ""}` : null,
+      canAct: f.actions.accept.enabled || f.actions.reject.enabled || f.actions.reopen.enabled,
+      canEdit: f.actions.edit.enabled,
+      canCheck: f.actions.accept.enabled || f.actions.reject.enabled || f.actions.reopen.enabled,
+      next: nextStepFor({
+        state: f.state,
+        nature: nature ?? { kind: "recorded" },
+        canDecide: f.actions.accept.enabled,
+        canBuild,
+        links,
+        reviewNote: f.reviewNote,
+      }),
+    };
+  }
+
+  const counts = detail.findingCounts.reduce((c, k) => ({ accepted: c.accepted + k.counts.accepted, proposed: c.proposed + k.counts.proposed, rejected: c.rejected + k.counts.rejected, total: c.total + k.counts.total }), { accepted: 0, proposed: 0, rejected: 0, total: 0 });
+  const proposedTotal = all.filter((r) => r.state === "proposed").length;
+  const proposedIncidents = new Set(all.filter((r) => r.state === "proposed").map((r) => r.itemId)).size;
+  const filtered = !!(p.kind || p.state || p.mode || p.owner || p.fix || p.q);
+  const hasPackageOwners = profile.fixOwners.some((o) => o.changesPackage);
 
   const kindOptions = [{ value: "", label: "All" }, ...queue.kinds.map((k) => ({ value: k.kind, label: k.label }))];
-  const stateOptions = [
-    ...queue.states.map((s) => ({ value: s.state, label: s.label })),
-    { value: "all", label: "All" },
-  ];
+  const stateOptions = [...queue.states.map((s) => ({ value: s.state, label: s.label })), { value: "all", label: "All" }];
   const modeOptions = [{ value: "", label: "All" }, ...profile.failureModes.map((m) => ({ value: m.id, label: m.label }))];
   const ownerOptions = [{ value: "", label: "All" }, ...profile.fixOwners.map((o) => ({ value: o.id, label: o.label }))];
+  const fixOptions = [
+    { value: "", label: "All" },
+    { value: "package", label: "Package fixes" },
+    { value: "open", label: "Accepted, not in a revision" },
+  ];
+
+  const clearHref = `${base}/findings${findingListQuery({ state: "all" })}`;
+  const empty =
+    counts.total === 0 ? (
+      <EmptyState title="No findings yet">Findings appear as each review finishes.</EmptyState>
+    ) : state === "proposed" && !p.kind && !p.mode && !p.owner && !p.fix && !p.q && counts.proposed === 0 ? (
+      <EmptyState
+        title="Every finding has a decision"
+        action={
+          <Link href={`${base}/report`} className={buttonVariants({ variant: "outline", size: "sm" })}>
+            Open the report
+          </Link>
+        }
+      >
+        {counts.accepted} accepted and {counts.rejected} rejected.
+        {fix.progress.open.length ? ` ${plural(fix.progress.open.length, "accepted package fix", "accepted package fixes")} ${fix.progress.open.length === 1 ? "isn't" : "aren't"} in a revision yet.` : ""} Build the report next.
+      </EmptyState>
+    ) : (
+      <EmptyState
+        title="No findings match these filters"
+        action={
+          <Link href={clearHref} className={buttonVariants({ variant: "outline", size: "sm" })}>
+            Clear filters
+          </Link>
+        }
+      >
+        {filtered ? "Clear the filters to see every finding." : "Show every state to see the decided findings."}
+      </EmptyState>
+    );
+
+  const record = await loadRecordInfo(space, audit, loaded.policy.historyLayout);
+  const bulkRevision = canBuild && fix.progress.open.length ? fix.progress.open.map((id) => ({ id, title: fix.fixes.find((f) => f.id === id)?.title ?? "" })) : null;
 
   return (
     <>
       <AutoRefresh active={audit.state === "running"} seconds={10} />
       <RoleNote text={decideFindingsNote(getAppPolicy().policy, role)} alias={space.alias} />
-      <Card className="gap-0 py-0" role="region" aria-label="Findings">
+      <Card className="gap-0 py-0" role="region" aria-label="Filter findings">
         <AuditFilters
           label="Filter findings"
           qLabel="Filter by text"
-          values={{ kind: p.kind, state, mode: p.mode, owner: p.owner, q: p.q }}
-          defaults={{ kind: "", state: defaultFindingState(audit.state), mode: "", owner: "" }}
+          values={{ kind: p.kind, state, mode: p.mode, owner: p.owner, fix: p.fix, q: p.q }}
+          defaults={{ kind: "", state: defaultFindingState(audit.state), mode: "", owner: "", fix: "" }}
           menus={[
             { key: "kind", name: "Kind", value: p.kind, icon: true, options: kindOptions },
             { key: "state", name: "State", value: state, options: stateOptions },
             ...(profile.failureModes.length ? [{ key: "mode", name: "Failure mode", value: p.mode, options: modeOptions }] : []),
             ...(profile.fixOwners.length ? [{ key: "owner", name: "Fix owner", value: p.owner, options: ownerOptions }] : []),
+            ...(hasPackageOwners ? [{ key: "fix", name: "Next step", value: p.fix, options: fixOptions }] : []),
           ]}
         />
-        {rows.length === 0 ? (
-          allCounts.total === 0 ? (
-            <EmptyState title="No findings yet">Findings appear as each review finishes.</EmptyState>
-          ) : state === "proposed" && !p.kind && !p.mode && !p.owner && !p.q && allCounts.proposed === 0 ? (
-            <EmptyState
-              title="Every finding has a decision"
-              action={
-                <Link href={`${base}/report`} className={buttonVariants({ variant: "outline", size: "sm" })}>
-                  Open the report
-                </Link>
-              }
-            >
-              {allCounts.accepted} accepted and {allCounts.rejected} rejected. Build the report next.
-            </EmptyState>
-          ) : (
-            <EmptyState
-              title="No findings match these filters"
-              action={
-                <Link href={`${base}/findings${findingListQuery({ state: "all" })}`} className={buttonVariants({ variant: "outline", size: "sm" })}>
-                  Clear filters
-                </Link>
-              }
-            >
-              {filtered ? "Clear the filters to see every finding." : "Show every state to see the decided findings."}
-            </EmptyState>
-          )
-        ) : (
-          <Table>
-            <TableHeader className="bg-muted/50">
-              <TableRow className="hover:bg-transparent">
-                <TableHead className="pl-4 text-[13px] text-muted-foreground">Finding</TableHead>
-                <TableHead className="text-[13px] text-muted-foreground">Failure mode or owner</TableHead>
-                <TableHead className="text-[13px] text-muted-foreground">Citations</TableHead>
-                <TableHead className={cn("text-[13px] text-muted-foreground", !canAct && "pr-4")}>State</TableHead>
-                {canAct ? (
-                  <TableHead className="pr-4 text-right text-[13px] text-muted-foreground">
-                    <span className="sr-only">Actions</span>
-                  </TableHead>
-                ) : null}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {shownGroups.map(([itemId, rs]) => {
-                const first = rs[0]!;
-                const incident = first.incidentId ?? first.taskId;
-                const proposed = proposedBy.get(itemId) ?? rs.filter((r) => r.state === "proposed");
-                const flagged = proposed.filter((r) => r.citations.open > 0).length;
-                return (
-                  <Fragment key={itemId}>
-                    <TableRow className="bg-muted/40 hover:bg-muted/40">
-                      <TableCell colSpan={canAct ? 4 : 4} className="py-2 pl-4 whitespace-normal">
-                        <Link href={`${base}/items/${itemId}`} className="inline-flex min-h-6 items-center rounded-sm font-mono text-xs font-semibold underline-offset-4 hover:underline">
-                          {incident}
-                        </Link>
-                        <span className="ml-3 text-xs text-muted-foreground">
-                          {plural(proposed.length, "proposed", "proposed")}
-                          {flagged ? ` · ${flagged} with a failed citation` : ""}
-                        </span>
-                      </TableCell>
-                      {canAct ? (
-                        <TableCell className="py-1.5 pr-4 text-right">
-                          <AcceptIncidentButton alias={space.alias} auditId={audit.id} itemId={itemId} incident={incident} eligible={proposed.length - flagged} flagged={flagged} />
-                        </TableCell>
-                      ) : null}
-                    </TableRow>
-                    {rs.map((r) => {
-                      const ct = findingCitationText(r.citations);
-                      const tag = (primary && tagOf(r, primary)) || tagOf(r, "owner") || r.tags[0];
-                      return (
-                        <TableRow key={r.id} className="align-top">
-                          <TableCell className="py-2.5 pl-4 whitespace-normal">
-                            <p className="max-w-[72ch] font-semibold">{r.title}</p>
-                            <p className="text-xs text-muted-foreground">{r.kindLabel}</p>
-                          </TableCell>
-                          <TableCell className="whitespace-normal">{tag?.label ?? ""}</TableCell>
-                          <TableCell>
-                            <span className={cn("flex items-center gap-1", ct.tone === "success" ? "text-success-fg" : ct.tone === "warning" ? "text-warning-fg" : "text-muted-foreground")}>
-                              {ct.tone === "success" ? <Check className="size-3.5" aria-hidden /> : ct.tone === "warning" ? <TriangleAlert className="size-3.5" aria-hidden /> : null}
-                              {ct.label}
-                            </span>
-                          </TableCell>
-                          <TableCell className={cn(!canAct && "pr-4")}>
-                            <span className="flex flex-wrap gap-1">
-                              <StatusBadge {...FINDING_STATE_BADGE[r.state]} />
-                              {r.edited ? <StatusBadge {...EDITED_BADGE} /> : null}
-                            </span>
-                          </TableCell>
-                          {canAct ? (
-                            <TableCell className="py-1.5 pr-4 text-right">
-                              {r.state !== "proposed" ? null : r.citations.open > 0 ? (
-                                <Link href={`${base}/items/${r.itemId}#finding-${r.id}`} className={buttonVariants({ variant: "ghost", size: "sm" })}>
-                                  Review
-                                </Link>
-                              ) : (
-                                <FindingRowActions alias={space.alias} findingId={r.id} title={r.title} />
-                              )}
-                            </TableCell>
-                          ) : null}
-                        </TableRow>
-                      );
-                    })}
-                  </Fragment>
-                );
-              })}
-            </TableBody>
-          </Table>
-        )}
-        {rows.length ? (
-          <div className="flex flex-wrap items-center justify-between gap-2 border-t px-4 py-2 text-xs text-muted-foreground">
-            <span>
-              {plural(proposedTotal, "proposed finding")} in {plural(proposedBy.size || new Set(queue.rows.filter((r) => r.state === "proposed").map((r) => r.itemId)).size, "incident")}. Bulk accept leaves out findings with a failed citation nobody has checked.
-            </span>
-            {rows.length > shownRows ? (
-              <Link href={`${base}/findings${findingListQuery({ ...p, rows: p.rows + AUDIT_PAGE })}`} scroll={false} className={buttonVariants({ variant: "ghost", size: "sm" })}>
-                Show {rows.length - shownRows} more
-              </Link>
-            ) : null}
-          </div>
-        ) : null}
       </Card>
+      {groups.length === 0 && !detailData ? (
+        <Card className="py-0">{empty}</Card>
+      ) : (
+        <FindingsWorkspace
+          alias={space.alias}
+          auditId={audit.id}
+          groups={groups}
+          order={order}
+          selectedId={selectedId}
+          pinHref={pinHref}
+          detail={detailData}
+          hiddenByFilters={hiddenByFilters}
+          bulkRevision={bulkRevision}
+          revisions={{
+            options: fix.options.map((o) => ({ id: o.id, name: o.name, state: o.state, toAddress: o.toAddress, linked: o.linked, updatedAt: o.updatedAt.toISOString() })),
+            nameRule: loaded.policy.revisions.name,
+          }}
+          canDecide={queue.actions.review}
+          empty={empty}
+          footer={
+            <span className="flex flex-wrap items-center justify-between gap-2">
+              <span>
+                {plural(proposedTotal, "proposed finding")} in {plural(proposedIncidents, "incident")}. Bulk accept leaves out findings with a failed citation nobody has checked.
+              </span>
+              {listed.length > shownCount ? (
+                <Link href={`${base}/findings${findingListQuery({ ...p, state, rows: p.rows + AUDIT_PAGE })}`} scroll={false} className={buttonVariants({ variant: "ghost", size: "sm" })}>
+                  Show {listed.length - shownCount} more
+                </Link>
+              ) : null}
+            </span>
+          }
+        />
+      )}
+      <RecordSummary alias={space.alias} auditId={audit.id} info={record} />
     </>
   );
 }
