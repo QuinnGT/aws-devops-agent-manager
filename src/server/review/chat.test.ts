@@ -160,7 +160,7 @@ describe("runChatReview", () => {
     expect(r.modelCalls[0]!.modelId).toBe(`devops-agent/${tier}`);
   });
 
-  it("sends no tier, and reports the service default, when policy offers no tier option", () => {
+  it("takes the tier from the policy option, and none when the policy cannot be read", () => {
     expect(chatModelTier("fast", [])).toBeNull();
     expect(chatModelTier("fast", getAppPolicy().dirs)).toBe("fast");
     expect(chatModelTier(undefined, getAppPolicy().dirs)).toBe("smart");
