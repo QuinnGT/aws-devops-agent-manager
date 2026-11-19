@@ -11,9 +11,11 @@ import {
   type StopCondition,
   type ToolSet,
 } from "ai";
+import type { DevOpsAgentClient } from "@aws-sdk/client-devops-agent";
 import type { CitationCheck, ModelCallRecord, ReviewRunInput, ReviewRunResult, RunReview } from "@/server/audits/contract";
 import { bedrockModel } from "@/server/ai/bedrock";
 import { checkCitations } from "./citations";
+import { runChatReview } from "./chat";
 import { prepareReview, ReviewSetupError, type PreparedReview } from "./prompt";
 import { reviewSettings, type ReviewSettings } from "./settings";
 import { reviewTools } from "./tools";
@@ -41,6 +43,7 @@ import { validateOutput } from "./validate";
  * A second runner (the Claude Agent SDK) would be another value
  * of profile.review.runner, dispatched in runReview below, returning the same
  * ReviewRunResult; prepareReview, checkCitations and validateOutput are shared.
+ * The "devops-agent-chat" runner (chat.ts) is dispatched that way.
  */
 
 export { checkCitations } from "./citations";
@@ -50,6 +53,8 @@ export { reviewSettings } from "./settings";
 export interface ReviewDeps {
   /** A language model to use instead of Bedrock (tests) */
   model?: unknown;
+  /** A DevOps Agent client to use instead of the space's write client, for the chat runner (tests) */
+  client?: DevOpsAgentClient;
 }
 
 const MAX_ERROR_CHARS = 600;
@@ -166,6 +171,8 @@ async function isCancelled(input: ReviewRunInput): Promise<boolean> {
 }
 
 export const runReview: RunReview = async (input, deps?: ReviewDeps) => {
+  // A DevOps Agent chat in the space writes the review (chat.ts); everything below is the Bedrock runner.
+  if (input.profile.review.runner === "devops-agent-chat") return runChatReview(input, { client: deps?.client });
   const started = Date.now();
   const s = reviewSettings(input.profile);
   const tally: Tally = { steps: 0, finished: 0, inputTokens: null, outputTokens: null };
