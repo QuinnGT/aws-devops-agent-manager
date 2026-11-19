@@ -1,10 +1,12 @@
 import { z } from "zod";
+import { snapshotProfile } from "@/server/audits/profiles";
 import type { Actor } from "@/server/aws/clients";
 import { enqueue } from "@/server/jobs/enqueue";
 import { defineJob, type JobDefinition } from "@/server/jobs/registry";
 import { getSpaceById } from "@/server/spaces/queries";
 import { AuditReportError } from "./errors";
 import { finalizeAuditHandler, finalizeAuditInput, prepareFinalizeAudit } from "./finalize";
+import { noReportModelReason } from "./model";
 import { getAuditInSpace } from "./queries";
 import { draftNarrativeHandler, draftNarrativeInput } from "./narrative";
 
@@ -45,6 +47,9 @@ export async function requestDraftNarrative(input: z.input<typeof draftNarrative
   const audit = await getAuditInSpace(space.id, parsed.auditId);
   if (!audit) throw new AuditReportError("Audit not found.", "not-found");
   if (audit.state === "finalized") throw new AuditReportError("This audit is finalized, so its report can't be changed.", "read-only");
+  // An audit whose reviews use no Bedrock model has none for its report unless one was chosen on the draft; say so now, not in a failed job.
+  const snapshot = snapshotProfile(audit.profileSnapshot);
+  if (!snapshot.report.modelId && !snapshot.review.modelId) throw new AuditReportError(noReportModelReason(snapshot.review.runner), "invalid");
   return { runId: await enqueue(draftNarrativeJob, parsed, { actor, spaceId: space.id }) };
 }
 

@@ -69,8 +69,8 @@ export const FINDING_STATE_BADGE: Record<FindingState, StatusSpec> = {
 
 export const EDITED_BADGE: StatusSpec = { tone: "neutral", icon: SquarePen, label: "Edited" };
 
-/** The Review column of the Investigations tab. */
-export function itemReviewBadge(state: AuditItemState): StatusSpec {
+/** The Review column of the Investigations tab. `waitingLabel` words a waiting item ("Waiting for a review file" in a hand-off audit). */
+export function itemReviewBadge(state: AuditItemState, waitingLabel?: string | null): StatusSpec {
   switch (state) {
     case "reviewed":
       return { tone: "success", icon: Check, label: "Reviewed" };
@@ -81,8 +81,25 @@ export function itemReviewBadge(state: AuditItemState): StatusSpec {
     case "skipped":
       return { tone: "neutral", icon: CircleMinus, label: "Skipped" };
     default:
-      return { tone: "neutral", icon: Clock, label: "Waiting" };
+      return { tone: "neutral", icon: Clock, label: waitingLabel ?? "Waiting" };
   }
+}
+
+/** Extra rows on the Start card for a reviewer that is not a Bedrock model. */
+export function reviewerFacts(runner: string): [string, string][] {
+  if (runner === "handoff") return [["Review files", "You download them after the analyzers run, run them with an agent your company has approved, and import each review. The app makes no model call."]];
+  return [];
+}
+
+/** The help line under the Start button. */
+export function startHelp(runner: string): string {
+  if (runner === "handoff") return "Analyzers run first. Then you download the review files, run them with your agent and import each review. Nothing counts until you accept it.";
+  return "Analyzers run first, then the reviews. Each review reads only its own investigation's records, and nothing counts until you accept it.";
+}
+
+/** "Reviewed by Claude Code, Opus 5.5, from a review file" for a hand-off review; the model ID for a model review. */
+export function reviewedBy(runner: string, modelId: string): string {
+  return runner === "handoff" ? `${modelId}, from a review file` : modelId;
 }
 
 export const plural = (n: number, one: string, other = `${one}s`) => `${n} ${n === 1 ? one : other}`;

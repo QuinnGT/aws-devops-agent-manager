@@ -27,9 +27,12 @@ Self-hosting is ready when all of these are true:
 
 ## Being explored
 
-Ideas that are not decided. They may change shape or be dropped.
+Ideas that are not decided. They may change shape or be dropped. Nothing is being explored right now.
 
-- **Audit reviews by a coding agent on your own computer.** Today an audit sends each investigation to a model in Amazon Bedrock: the app runs the review with the brief and the output schema of the audit profile (`policy/audit-profiles/`), then checks the result against the schema and checks every quote against the journal record it cites. The idea is to let a coding agent the engineer already uses, for example the Kiro CLI or Claude Code, do the review step instead. The app would hand it the same inputs (the brief, the condensed trace, the journal records, the ground truth and the output schema), read back the review, and run the same checks, so findings look the same whichever way they were made. Teams without Bedrock model access, or with an agent tool their company has already approved, could then run audits too. Open questions: how the app hands the inputs over and reads the result back (a folder per incident, or a local tool server the agent calls), how to keep the agent read-only and limited to that one investigation, as the Bedrock review is today, and how to record which agent and model wrote each review.
+## Built from earlier ideas
+
+- **Audit reviews by a coding agent on your own computer.** An audit can use the **Review files** reviewer: the app writes a folder for each investigation, you run it with an agent your company has approved (the Kiro CLI or Claude Code, for example), and you import the reviews. The same schema check and citation check apply, and each review records who or what wrote it ([Concepts](concepts.md#audits), [Audit without Bedrock](getting-started.md#audit-without-bedrock)).
+- **The DevOps Agent chat reviewer.** An audit can also attach the review files to a chat in an Agent Space and read the review from the reply.
 
 ## Ideas and requests
 

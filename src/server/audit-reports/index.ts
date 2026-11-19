@@ -34,7 +34,7 @@ export type { ExportViolation } from "./gate";
 export { finalizeAuditInput, prepareFinalizeAudit, type FinalizeAuditResult } from "./finalize";
 export { requestDraftNarrative, requestFinalizeAudit } from "./jobs";
 export { loadAuditReport } from "./loader";
-export { NO_REPORT_MODEL_REASON, reportModelOf, type ReportModel } from "./model";
+export { NO_REPORT_MODEL_REASON, noReportModelReason, reportModelOf, type ReportModel } from "./model";
 export { loadReportPage, type AudienceSummary, type ReportPage, type SectionDraftInfo } from "./page";
 export { draftNarrativeInput } from "./narrative";
 export { titleList, unapprovedNarratives } from "./view";

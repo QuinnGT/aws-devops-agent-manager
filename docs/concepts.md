@@ -100,19 +100,22 @@ A **journal** is the record of one investigation: its messages, tool calls, tool
 
 ## Audits
 
-An **audit** reviews a set of investigations, with a model, and turns what it finds into changes you can trace.
+An **audit** reviews a set of investigations and turns what it finds into changes you can trace. A reviewer writes each review: a model in Amazon Bedrock, a coding agent you run yourself on review files, or a chat in the Agent Space.
 
-1. **New audit.** Choose a profile and the investigations. The profile "Benchmark against ground truth" compares each run with a confirmed root cause and a scorecard that you upload. "Before and after a revision" compares two groups of runs and needs no ground truth. Choose the review model here, or set a space default in Space settings. No model is built in.
+1. **New audit.** Choose a profile, the investigations and the reviewer. The profile "Benchmark against ground truth" compares each run with a confirmed root cause and a scorecard that you upload. "Before and after a revision" compares two groups of runs and needs no ground truth. The reviewers on offer, and their options, are policy ([Policy](policy.md#reviewers-and-review-files)). For the Amazon Bedrock reviewer, choose the review model here, or set a space default in Space settings. No model is built in.
 2. **Analyze.** The analyzers run on each investigation.
-3. **Review.** A model reads the prompt, the analyzer results and the ground truth, and uses tools that read only that investigation's records, up to the profile's step limit. It returns a structured result: for the benchmark profile, one **Diagnosis** (primary failure mode, whether the cause was within reach, near miss, scorecard fairness) and a list of **Fix** findings, each with an owner.
-4. **Citation check.** Every record the review cites (`R3`, with a quote) is checked against the journal. A quote that is not in that record is flagged.
+3. **Review.** The reviewer reads the prompt, the analyzer results, the ground truth and the journal's records, and returns a structured result: for the benchmark profile, one **Diagnosis** (primary failure mode, whether the cause was within reach, near miss, scorecard fairness) and a list of **Fix** findings, each with an owner. How the reviewer reads the records depends on the kind:
+   - **Amazon Bedrock model.** The app sends the investigation to the model, which uses tools that read only that investigation's records, up to the profile's step limit.
+   - **Review files.** The app writes a folder for each investigation (the reviewer's instructions, the brief, every record, the output schema, a manifest and a README). You run the folders with an agent your company has approved, such as the Kiro CLI or Claude Code, which writes a `review.json` beside them. You import the reviews as a zip of the folders, or one `review.json` on an investigation's page, and type who or what wrote them. The app needs no model access for this. The files hold journal text from your Agent Space, so a person with the Viewer role can download them, and each download and import is written to the audit log. A review made from an older version of the journal, or for another audit, is refused with the reason.
+   - **DevOps Agent chat.** The app attaches the same review files to a chat in an Agent Space and reads the review from the reply.
+4. **Citation check.** Every record the review cites (`R3`, with a quote) is checked against the journal, whichever reviewer wrote it. A quote that is not in that record is flagged. An imported review must also match the output schema before it is stored.
 5. **Findings.** Each finding starts as Proposed. A person accepts or rejects it, and can edit its fields. Every change records who made it.
 6. **Report.** The report has a summary, counts by failure mode and fix owner, the fixes, a list of incidents and the run metrics. The summary is drafted by a model and a person edits it. Each section is marked shareable or internal, and the report downloads as HTML for either audience. An export runs the output rules over its text first and is refused when a rule at error level matches.
 7. **Finalize.** When every finding has a decision, "Finalize" commits `audit.json`, `findings.json` and `report.md` to the history repository under `audits/<alias>/<audit>`.
 
 The audit states are Draft, Running, Reviewing findings, Finalized and Cancelled. The profiles, prompts and schemas are policy files. See [Policy](policy.md).
 
-Journal text and ground-truth documents are untrusted input to the model, and nothing the model returns is run, fetched or used as a path. See [Security](security.md).
+Journal text and ground-truth documents are untrusted input to the reviewer, and nothing a reviewer returns is run, fetched or used as a path. A zip of reviews is read with the same checks as any zip the app takes: no absolute paths, no `..`, no symbolic links, and size limits from policy. See [Security](security.md).
 
 ## Revisions
 

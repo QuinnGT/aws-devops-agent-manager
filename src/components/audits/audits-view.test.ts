@@ -27,6 +27,9 @@ import {
   kindPosition,
   parseIncidentIds,
   profileNeeds,
+  reviewedBy,
+  reviewerFacts,
+  startHelp,
   uniqueProblems,
   unmatchedText,
 } from "./words";
@@ -279,6 +282,60 @@ describe("readiness", () => {
     expect(at("no-credentials")).toBe("This app has no AWS credentials for this space, so it can't reach AWS. Ask an Admin to check the connection in Space settings.");
     expect(at("no-credentials", true)).toBe("This app has no AWS credentials for this space, so it can't reach AWS. An Admin sets the connection in Space settings.");
     for (const k of [null, "access-denied", "throttled", "network", "expired", "timeout", "other"] as const) expect(at(k)).toBeNull();
+  });
+});
+
+describe("readiness for a reviewer that is not a Bedrock model", () => {
+  const input: ReadinessInput = {
+    name: "Hand-off run",
+    investigations: 3,
+    missingJournalIds: 0,
+    missingByInput: [],
+    ready: 3,
+    cohorts: [],
+    analyzers: { count: 4, words: "run metrics, condensed trace, memory reads and output rules" },
+    reviewModelId: null,
+    connectionFailed: true,
+    bedrock: { kind: "no-credentials", region: "us-west-2", detail: null },
+    reviewer: { runner: "handoff", label: "Review files" },
+  };
+
+  it("needs no review model, no Bedrock check and no AWS connection for review files", () => {
+    expect(startBlockedReason(input)).toBeNull();
+    const rows = readinessRows(input);
+    expect(rows.some((r) => r.text.startsWith("Amazon Bedrock"))).toBe(false);
+    expect(rows).toContainEqual({ tone: "success", text: "Reviews by Review files", detail: "The app calls no model and needs no access to Amazon Bedrock." });
+    expect(startLabel(3, "handoff")).toBe("Start audit with 3 review files");
+    expect(startLabel(1, "handoff")).toBe("Start audit with 1 review file");
+  });
+
+  it("still checks the AWS connection for another runner, but not the model or Bedrock", () => {
+    const chat = { ...input, reviewer: { runner: "devops-agent-chat", label: "DevOps Agent chat" } };
+    expect(startBlockedReason(chat)).toBe(CONNECTION_FAILED_REASON);
+    expect(startBlockedReason({ ...chat, connectionFailed: false })).toBeNull();
+    expect(readinessRows(chat).find((r) => r.text.startsWith("Reviews by"))).toEqual({ tone: "success", text: "Reviews by DevOps Agent chat", detail: null });
+  });
+
+  it("keeps every Bedrock check when the reviewer is the Bedrock model, or none is given", () => {
+    const bedrock = { ...input, reviewer: { runner: "ai-sdk", label: "Amazon Bedrock model" } };
+    expect(startBlockedReason(bedrock)).toBe(NO_REVIEW_MODEL_REASON);
+    expect(startBlockedReason({ ...bedrock, reviewModelId: "m" })).toContain("no AWS credentials");
+    expect(readinessRows(bedrock).some((r) => r.text.startsWith("Amazon Bedrock"))).toBe(true);
+    expect(readinessRows(bedrock).some((r) => r.text.startsWith("Reviews by"))).toBe(false);
+    expect(startBlockedReason({ ...input, reviewer: undefined })).toBe(NO_REVIEW_MODEL_REASON);
+  });
+
+  it("words the Start card and a waiting item for review files", () => {
+    expect(itemReviewBadge("pending", "Waiting for a review file")).toMatchObject({ tone: "neutral", label: "Waiting for a review file" });
+    expect(itemReviewBadge("pending").label).toBe("Waiting");
+    expect(itemReviewBadge("reviewed", "Waiting for a review file").label).toBe("Reviewed");
+    expect(reviewerFacts("handoff")[0]![0]).toBe("Review files");
+    expect(reviewerFacts("handoff")[0]![1]).toMatch(/approved/);
+    expect(reviewerFacts("ai-sdk")).toEqual([]);
+    expect(startHelp("handoff")).toMatch(/download the review files/);
+    expect(startHelp("ai-sdk")).toMatch(/Each review reads only its own investigation/);
+    expect(reviewedBy("handoff", "Claude Code, Opus 5.5")).toBe("Claude Code, Opus 5.5, from a review file");
+    expect(reviewedBy("ai-sdk", "us.model")).toBe("us.model");
   });
 });
 

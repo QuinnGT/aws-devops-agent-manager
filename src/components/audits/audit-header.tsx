@@ -9,6 +9,7 @@ import { StatusBadge } from "@/components/common/status-badge";
 import { Time } from "@/components/common/time";
 import { buttonVariants } from "@/components/ui/button";
 import type { AuditDetailView } from "@/server/audits/loaders";
+import type { ReviewerView } from "@/server/audits/reviewers";
 import type { ActorAt, AuditModelView } from "@/server/audits/ui";
 import { CancelAuditButton, RerunFailedButton, RerunItemButton } from "./audit-buttons";
 import { FailureDetails } from "./failure-details";
@@ -22,6 +23,8 @@ export interface AuditHeaderData {
   alias: string;
   detail: AuditDetailView;
   models: { review: AuditModelView; report: AuditModelView };
+  /** Who writes the reviews, with the policy's labels */
+  reviewer: ReviewerView;
   events: { started: ActorAt | null; cancelled: ActorAt | null };
   usage: { inputTokens: number; calls?: number };
   analyzers: { count: number; words: string };
@@ -177,6 +180,13 @@ export function AuditHeader({ data, tab }: { data: AuditHeaderData; tab: AuditTa
       <span>{label}: none chosen</span>
     );
 
+  const reviewerMeta = (r: ReviewerView) => (
+    <span>
+      Reviewer: {r.label}
+      {r.options.length ? <span> ({r.options.map((o) => `${o.label.toLowerCase()} ${o.valueLabel.toLowerCase()}`).join(", ")})</span> : null}
+    </span>
+  );
+
   return (
     <div className="space-y-4">
       <PageHeader
@@ -195,7 +205,7 @@ export function AuditHeader({ data, tab }: { data: AuditHeaderData; tab: AuditTa
               Created <Time value={a.createdAt} format="datetime" /> by {nameOf(a.createdBy)}
             </span>
           ),
-          modelMeta("Model", models.review),
+          data.reviewer.runner === "ai-sdk" ? modelMeta("Model", models.review) : reviewerMeta(data.reviewer),
           models.report.id && models.report.id !== models.review.id ? modelMeta("Report model", models.report) : null,
         ]}
         actions={actions}
@@ -220,7 +230,7 @@ export function AuditHeader({ data, tab }: { data: AuditHeaderData; tab: AuditTa
           detail={
             <>
               {progress.failed ? <span className="text-destructive-fg">{progress.failed} · </span> : null}
-              {detail.profile.reviewConcurrency} at a time
+              {data.reviewer.runner === "handoff" ? `${detail.progress.waitingForReview} waiting for a review file` : `${detail.profile.reviewConcurrency} at a time`}
             </>
           }
         />
@@ -237,11 +247,15 @@ export function AuditHeader({ data, tab }: { data: AuditHeaderData; tab: AuditTa
         <dl className="mt-1 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5">
           <dt>Analyzers</dt>
           <dd>{data.analyzers.words.charAt(0).toUpperCase() + data.analyzers.words.slice(1)}</dd>
-          <dt>Model input</dt>
-          <dd>
-            {compactNumber(data.usage.inputTokens)} input tokens
-            {data.usage.calls ? ` in ${plural(data.usage.calls, "review call")}` : ""}
-          </dd>
+          {data.reviewer.runner === "ai-sdk" || data.usage.calls ? (
+            <>
+              <dt>Model input</dt>
+              <dd>
+                {compactNumber(data.usage.inputTokens)} input tokens
+                {data.usage.calls ? ` in ${plural(data.usage.calls, "review call")}` : ""}
+              </dd>
+            </>
+          ) : null}
         </dl>
       </details>
       {callouts.slice(0, 3)}

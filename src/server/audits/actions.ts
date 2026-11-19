@@ -1,5 +1,6 @@
 import type { Permission } from "@/server/policy";
 import {
+  HANDOFF_RERUN_REASON,
   auditStateReason,
   canCancelAudit,
   canDeleteAudit,
@@ -9,6 +10,7 @@ import {
   canStartAudit,
   findingActionReason,
   nextFindingState,
+  AUDIT_STATE_LABELS,
   type AuditItemState,
   type AuditState,
   type FindingAction,
@@ -43,6 +45,26 @@ function gate(roleOk: boolean, roleReason: string, stateOk: boolean, stateReason
   return { enabled: true, disabledReason: null };
 }
 
+/** Download review files and import reviews, for a hand-off audit. */
+export interface ReviewFileActions {
+  /** The audit takes review files: a hand-off audit that is running or in review */
+  visible: boolean;
+  download: ActionState;
+  import: ActionState;
+}
+
+const DOWNLOAD_ROLE = "Your role can't export journals in this space, and review files hold journal text.";
+
+export function reviewFileActions(state: AuditState, runner: string, eligible: number, viewer: AuditViewer): ReviewFileActions {
+  const inReview = state === "running" || state === "reviewing";
+  const stateReason = `The audit is ${AUDIT_STATE_LABELS[state].toLowerCase()}; review files are for an audit that is running or in review.`;
+  return {
+    visible: runner === "handoff" && inReview,
+    download: gate(has(viewer, "journals.export"), DOWNLOAD_ROLE, inReview && eligible > 0, inReview ? "No investigation has finished its analyzers yet." : stateReason),
+    import: gate(has(viewer, "audits.run"), RUN_ROLE, inReview && eligible > 0, inReview ? "No investigation has finished its analyzers yet." : stateReason),
+  };
+}
+
 export interface AuditActions {
   start: ActionState;
   /** Start and skip the items that are not ready */
@@ -51,9 +73,15 @@ export interface AuditActions {
   delete: ActionState;
   editSelection: ActionState;
   uploadGroundTruth: ActionState;
+  reviewFiles: ReviewFileActions;
 }
 
-export function auditActions(state: AuditState, readiness: { total: number; ready: number } | null, viewer: AuditViewer): AuditActions {
+export function auditActions(
+  state: AuditState,
+  readiness: { total: number; ready: number } | null,
+  viewer: AuditViewer,
+  review: { runner: string; filesEligible: number } = { runner: "ai-sdk", filesEligible: 0 },
+): AuditActions {
   const run = has(viewer, "audits.run");
   const allReady = !!readiness && readiness.total > 0 && readiness.ready === readiness.total;
   const someReady = !!readiness && readiness.ready > 0;
@@ -71,22 +99,27 @@ export function auditActions(state: AuditState, readiness: { total: number; read
     delete: gate(run, RUN_ROLE, canDeleteAudit(state), auditStateReason("delete", state)),
     editSelection: gate(run, RUN_ROLE, canEditSelection(state), auditStateReason("edit", state)),
     uploadGroundTruth: gate(run, RUN_ROLE, state !== "finalized", "The audit is finalized."),
+    reviewFiles: reviewFileActions(state, review.runner, review.filesEligible, viewer),
   };
 }
 
 export interface ItemActions {
   rerun: ActionState;
   acceptAll: ActionState;
+  /** Review files for this investigation (a hand-off audit) */
+  reviewFiles: ReviewFileActions;
 }
 
-export function itemActions(audit: AuditState, item: AuditItemState, proposed: number, viewer: AuditViewer): ItemActions {
+export function itemActions(audit: AuditState, item: AuditItemState, proposed: number, viewer: AuditViewer, review: { runner: string; eligible: boolean } = { runner: "ai-sdk", eligible: false }): ItemActions {
+  const handoff = review.runner === "handoff";
   return {
     rerun: gate(
       has(viewer, "audits.run"),
       RUN_ROLE,
-      canRerunItem(audit, item),
-      audit === "running" || audit === "reviewing" ? "The review of this investigation is not finished." : auditStateReason("rerun", audit),
+      canRerunItem(audit, item) && !handoff,
+      handoff ? HANDOFF_RERUN_REASON : audit === "running" || audit === "reviewing" ? "The review of this investigation is not finished." : auditStateReason("rerun", audit),
     ),
+    reviewFiles: reviewFileActions(audit, review.runner, review.eligible ? 1 : 0, viewer),
     acceptAll: gate(
       has(viewer, "findings.review"),
       REVIEW_ROLE,
