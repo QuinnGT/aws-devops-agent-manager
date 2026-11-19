@@ -89,6 +89,29 @@ const reviewConfig = z.object({
   recordAccessPrompt: policyPath.optional(),
   /** Reviews written from files: hand-off and chat */
   files: filesReviewConfig.optional(),
+  /** Reviews run as a DevOps Agent chat in the space (runner "devops-agent-chat") */
+  chat: z
+    .object({
+      /** Message sent to the chat: the reviewer system prompt, the output schema and the reply rules ({{placeholders}} filled by the app) */
+      messageTemplate: policyPath.optional(),
+      /** Message sent in the same chat when the first reply is not a JSON object */
+      repairPrompt: policyPath.optional(),
+      /** Longest message the chat accepts, in characters (the service refuses more) */
+      messageCharsCap: z.number().int().positive().optional(),
+      /** Largest total size of the attached review files, in bytes; a larger review fails before any call */
+      attachmentBytesCap: z.number().int().positive().optional(),
+      /**
+       * Start of the file name of each attached review file. The sync leaves attachments with this
+       * start out of history (sync.yaml ignoredAttachmentPrefixes), so keep the two in step.
+       */
+      attachmentPrefix: z
+        .string()
+        .regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,39}$/)
+        .optional(),
+      /** Seconds between checks whether the audit was cancelled while the chat answers */
+      cancelCheckSeconds: z.number().min(0).optional(),
+    })
+    .optional(),
   /**
    * Optional fallback only. The review model is chosen in the app (the audit, then the
    * space default in Space settings); see src/server/ai/models.ts. The shipped policy sets none.
