@@ -26,7 +26,7 @@ The existing `diff(from, to, path)`, `log({ ref })` and `resolveCommit` are used
 
 ## Configuration
 
-`policy/revisions.yaml`: name rule (pattern, length, case rule), package name template, committer, create (sync first, commit message, base labels, the first save of a revision from an import), save (unlinked rule, message and reason lengths, caps on findings, files and bytes), trailer names, the change record (path, title, heading, intro, markers, column names, caps), plan title and reason templates, release name and note templates, `export.requirePassingBuild`, `pushBranches`, page caps.
+`policy/revisions.yaml`: name rule (pattern, length, case rule), package name template, committer, create (sync first, commit message, base labels, the first save of a revision from an import), save (unlinked rule, message and reason lengths, caps on findings, files and bytes), `toAddress.maxFindings` (the most findings on one revision's to-address list), trailer names, the change record (path, title, heading, intro, markers, column names, caps), plan title and reason templates, release name and note templates, `export.requirePassingBuild`, `pushBranches`, page caps.
 
 ## Lifecycle
 
@@ -37,8 +37,9 @@ The existing `diff(from, to, path)`, `log({ ref })` and `resolveCommit` are used
 | Plan | `createPlanFromRevision(space, revisionId, actor, { reason?, title? })` | web | `plans.create` |
 | Export | `exportRevision(space, revisionId, actor)`, `revisionDownloadHeaders(result)` | web (Route Handler) | `audits.read` (a read, like exporting a release) |
 | Abandon | `abandonRevision(space, revisionId, actor, { note? })` | web | `revisions.build` |
+| Send findings | `addFindingsToRevision(space, { revisionId, findingIds }, actor)`, `createRevisionForFindings(space, { name, findingIds, note? }, actor)`, `removeFindingFromRevision(space, { revisionId, findingId }, actor)` | web (called by the audit page's actions and the revision page) | `revisions.build` |
 | Release after apply | `tagReleaseAfterApply` (plan-applied hook) | worker | (the applier's apply) |
-| Pages | `loadRevisionList`, `loadRevisionDetail`, `loadLinkableFindings` | web | `audits.read` |
+| Pages | `loadRevisionList`, `loadRevisionDetail`, `loadLinkableFindings`, `loadRevisionPage`, `loadSaveFindings` | web | `audits.read` |
 
 `REVISION_PERMISSIONS` names them. Refusals throw `RevisionError` with a `code`, a plain message, `fieldErrors` for forms and the blocking `results`.
 
@@ -63,6 +64,28 @@ The job applies the edits, regenerates the change record, runs `checkPackage` (s
 
 **Linking.** Every finding must be returned by `listLinkableFindings(spaceId, { ids })`: accepted, its extractor marked `linkable` in the profile the audit ran with, and of the same space. **A save without a finding link needs a reason** (`save.unlinked: reason`, at least `reasonMinChars`): some changes have no finding behind them (restoring a file, a README, a rename the asset rules ask for), and refusing them would push people to link an unrelated finding and make the change record cite the wrong evidence. The reason goes into the change record and a trailer. `refuse` and `allow` are the other settings.
 
+### Findings sent from an audit
+
+Accepted package fixes (an audit profile's fix owners with `changesPackage`) go from an audit to a revision, so the fixes an audit accepted lead to the place where package changes are made. The audit page and the revision page call `findings.ts`; the audit-side contract is its exported shapes (`RevisionOption`, `FindingRevisionLink`) and the four functions below. The callers hold `revisions.build` for the space.
+
+A revision keeps a **to-address list**: `revisions.to_address_finding_ids`, a JSON array of finding IDs in the order they were added (empty by default). The list holds findings that no save has linked yet.
+
+| Function | What it does |
+|---|---|
+| `listRevisionOptions(space)` | Revisions in state `open` or `creating`, newest first, each with the findings on its list that are accepted now (`toAddress`) and the distinct findings its saves linked (`linked`) |
+| `addFindingsToRevision(space, { revisionId, findingIds }, actor)` | Puts findings on an open or creating revision's list. A finding already on the list or already linked by a save is counted in `alreadyThere`, not added. Returns `{ revisionId, added, alreadyThere }` |
+| `createRevisionForFindings(space, { name, findingIds, note? }, actor)` | Creates a revision from the live space with the list set, through `prepareCreateRevision` (so the name rules and the create job are the same as New revision). Returns `{ revisionId, runId, branch }` |
+| `removeFindingFromRevision(space, { revisionId, findingId }, actor)` | Takes one finding off the list; `removed` is false when it was not on it. The page's Remove action |
+| `findingRevisionLinks(spaceId, findingIds)` | For each finding, the revisions it went to (every state), newest first: `kind` `linked` when a save of the revision linked it, else `to-address`; with the revision's plan ID and state and the release name once the release exists |
+
+**Refusals** are `RevisionError`: `finding-not-linkable` when a finding is not accepted, its extractor is not marked `linkable` in the profile its audit ran with, or it is of another space (checked with `listLinkableFindings(spaceId, { ids })`, so a finding whose item was reviewed again keeps its accepted decision and can be sent); `not-open` when the revision is applied, abandoned or failed; `not-found` for a revision of another space; `too-large` past `toAddress.maxFindings`; `bad-request` for an empty or invalid request. One refused finding refuses the whole request.
+
+**A save takes linked findings off the list** in the same transaction that records the change row and the new head (`save.ts`, with the revision row locked), so the list and the saves never disagree and a retried save job changes nothing twice. Adding and removing lock the same row, so requests that overlap keep every finding.
+
+**A finding reopened or rejected on its audit stays on the list.** Dropping it would need a hook in the audit's review code and would lose a decision that can be reversed, so the pages read its state instead: it shows as "no longer accepted" with the reason, is left out of the counts (`toAddress` in the list, options and the card's header), is not offered or ticked in the save dialog (saving refuses a link to it), and counts again when it is accepted again. A person can remove it.
+
+Audit events: `revision.findings.add` (the findings added and how many were already there; nothing is recorded when nothing was added), `revision.findings.remove`, `revision.create-for-findings` (name, branch, finding IDs, run ID; the worker's `revision.create` follows when the job ends).
+
 ### Change record
 
 **Written into the package on every save**, at `changelog.path` (default `reference/CHANGELOG.md`, a non-asset path in the instruction folder layouts), so the exported package and the plan's package carry it, and the detail page shows the same text (`renderChangelogSection` on demand). The revision's section sits between markers that name the revision, at the top under the title line, above the hand-written history, so a save replaces only that section and earlier revisions' sections stay. Shape, after `reference/CHANGELOG.md`: `## <name>, <Month D, YYYY>`, a `Source: <base>.` line, then a table with one row per change: change message, files, audit, incident, finding title, and evidence (the finding's checked record citations, `R<n> "<quote>"`, marked when the citation check did not confirm them). Finding text is untrusted model output a person accepted: each cell is one line, with `|`, `<` and `>` escaped.
@@ -81,14 +104,16 @@ The package at the branch head, zipped under one top folder (`zipPackage`, deter
 
 ## Loaders
 
-- `loadRevisionList(space, { limit?, offset? })`: name, base, state, linked finding count, change count, last build (and whether it is for the head), plan link and state, release link and whether it exists.
+- `loadRevisionList(space, { limit?, offset? })`: name, base, state, linked finding count, to-address count (findings on the list that are accepted now), change count, last build (and whether it is for the head), plan link and state, release link and whether it exists.
 - `loadRevisionDetail(space, idOrName, viewer?, { path?, diffPath? })`: the list fields plus branch, package folder, commits, the file tree at the head (with file roles from the layout and the files the last save's build wrote), one file's content (text, binary or too large), linked findings with their current state, the build result, the change record preview, the diff against the base (first branch commit to head: changed paths, and the unified diff of the package or one file, capped), the changes newest first, and `actions.{save,createPlan,export,abandon}` with the reason each is unavailable (`missingRoleReason` for a missing permission).
 - `loadLinkableFindings(space, { auditId? })`: the save form's finding picker.
+- `loadRevisionPage(space, idOrName, viewer?, { path? })` (views.ts): the detail plus what the page adds. For findings it returns `toAddress` (each finding on the list with its full title, kind, owner and audit in the profile's words, links to the audit and to the finding on the audit page, and why it is not accepted when it is not) and `sourceAudits` (the audits the to-address and linked findings come from, each once). The audit stores a finding's title clipped at about 300 characters; the card continues it from the finding's own text values (`fullTitle`).
+- `loadSaveFindings(space, linkedBefore, { toAddress? })`: the save dialog's picker. The to-address findings come first in the order they were added, also when their item was reviewed again since; each is marked `toAddress` and the dialog ticks them (up to `save.maxFindings`).
 
 ## Audit log
 
-`revision.create` (worker; ok or error), `revision.save` (worker; ok or error), `revision.plan`, `revision.export` (ok, or error when refused), `revision.abandon`, `revision.release` (worker; ok or error).
+`revision.create` (worker; ok or error), `revision.save` (worker; ok or error), `revision.plan`, `revision.export` (ok, or error when refused), `revision.abandon`, `revision.release` (worker; ok or error), `revision.findings.add`, `revision.findings.remove`, `revision.create-for-findings`.
 
 ## Tests
 
-Unit: `names.test.ts`, `changelog.test.ts`, `plan-input.test.ts`, `states.test.ts`, `branch-git.test.ts` (the HistoryRepo branch methods on a real local repository), Integration: `revisions.int.test.ts` against `TEST_DATABASE_URL` with a local history repository under a temporary `DAM_DATA_DIR` (jobs run directly; `enqueue` is mocked).
+Unit: `names.test.ts`, `changelog.test.ts`, `plan-input.test.ts`, `states.test.ts`, `to-address.test.ts`, `views.test.ts`, `branch-git.test.ts` (the HistoryRepo branch methods on a real local repository), Integration: `revisions.int.test.ts` and `findings.int.test.ts` (sending findings: refusals, duplicates, saves taking findings off the list, reopened and rejected findings, overlapping requests, the page loaders) against `TEST_DATABASE_URL` with a local history repository under a temporary `DAM_DATA_DIR` (jobs run directly; `enqueue` is mocked).
