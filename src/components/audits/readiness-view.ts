@@ -37,7 +37,12 @@ export interface ReadinessInput {
   bedrock?: BedrockReadiness | null;
   /** The reader is an Admin of the space (for the next step in the no-credentials sentence) */
   canManageSpace?: boolean;
+  /** Who writes the reviews. Only the Bedrock runner (the default) needs a model and Bedrock; review files need neither the space's AWS connection. */
+  reviewer?: { runner: string; label: string };
 }
+
+const usesBedrock = (r: Pick<ReadinessInput, "reviewer">) => !r.reviewer || r.reviewer.runner === "ai-sdk";
+const needsAwsConnection = (r: Pick<ReadinessInput, "reviewer">) => r.reviewer?.runner !== "handoff";
 
 export interface ReadinessRow {
   tone: "success" | "warning" | "destructive";
@@ -83,7 +88,14 @@ export function readinessRows(r: ReadinessInput): ReadinessRow[] {
       });
     }
   }
-  if (r.bedrock) rows.push(bedrockRow(r.bedrock, !!r.canManageSpace));
+  if (r.bedrock && usesBedrock(r)) rows.push(bedrockRow(r.bedrock, !!r.canManageSpace));
+  if (r.reviewer && !usesBedrock(r)) {
+    rows.push({
+      tone: "success",
+      text: `Reviews by ${r.reviewer.label}`,
+      detail: r.reviewer.runner === "handoff" ? "The app calls no model and needs no access to Amazon Bedrock." : null,
+    });
+  }
   rows.push({ tone: "success", text: `${plural(r.analyzers.count, "analyzer")} run first`, detail: `${r.analyzers.words.charAt(0).toUpperCase()}${r.analyzers.words.slice(1)}` });
   return rows;
 }
@@ -95,14 +107,14 @@ export function startBlockedReason(r: ReadinessInput): string | null {
   if (r.ready === 0 && r.missingByInput.some((m) => m.items > 0)) return "Every investigation is missing ground truth. Upload it first.";
   const empty = r.cohorts.find((c) => c.items === 0);
   if (empty) return `${empty.label} has no investigations.`;
-  if (!r.reviewModelId) return NO_REVIEW_MODEL_REASON;
-  if (r.bedrock?.kind === "no-credentials") return noCredentialsText(!!r.canManageSpace);
-  if (r.connectionFailed) return CONNECTION_FAILED_REASON;
+  if (usesBedrock(r) && !r.reviewModelId) return NO_REVIEW_MODEL_REASON;
+  if (usesBedrock(r) && r.bedrock?.kind === "no-credentials") return noCredentialsText(!!r.canManageSpace);
+  if (needsAwsConnection(r) && r.connectionFailed) return CONNECTION_FAILED_REASON;
   return null;
 }
 
 /** The Start reason when the space's last connection check failed; the page adds the next step after it. */
 export const CONNECTION_FAILED_REASON = "The space's AWS connection failed its last check.";
 
-/** "Start audit with 20 reviews". */
-export const startLabel = (reviews: number) => `Start audit with ${plural(reviews, "review")}`;
+/** "Start audit with 20 reviews", or "Start audit with 20 review files" for a hand-off audit. */
+export const startLabel = (reviews: number, runner = "ai-sdk") => `Start audit with ${plural(reviews, runner === "handoff" ? "review file" : "review")}`;

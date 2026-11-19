@@ -27,6 +27,8 @@ const NO_ACCESS = "You don't have permission to do this in this space.";
 const alias = z.string().trim().min(1).max(200);
 const uuid = z.string().uuid();
 const modelId = z.string().trim().max(300).nullish();
+/** The reviewer choice; the service checks it against policy. */
+const reviewer = { runner: z.string().trim().max(50).nullish(), runnerOptions: z.record(z.string().max(100), z.string().max(100)).nullish() };
 
 type Fail = Extract<AuditActionResult, { ok: false }>;
 
@@ -64,6 +66,7 @@ const createInput = z.object({
   selections: z.array(selectionSchema).min(1, "Choose at least one investigation.").max(20),
   reviewModelId: modelId,
   reportModelId: modelId,
+  ...reviewer,
 });
 
 export async function createAuditAction(spaceAlias: string, input: z.input<typeof createInput>): Promise<AuditActionResult<{ auditId: string; items: number }>> {
@@ -71,7 +74,7 @@ export async function createAuditAction(spaceAlias: string, input: z.input<typeo
     const { space, actor } = await authorize(spaceAlias, "audits.run");
     const req = createInput.parse(input);
     if (!req.name.trim()) return { ok: false, message: "Enter a name.", fieldErrors: { name: "Enter a name." } };
-    const r = await createAudit(actor, space.id, { ...req, reviewModelId: req.reviewModelId || null, reportModelId: req.reportModelId || null });
+    const r = await createAudit(actor, space.id, { ...req, reviewModelId: req.reviewModelId || null, reportModelId: req.reportModelId || null, runner: req.runner || null });
     revalidatePath(base(space.alias));
     return { ok: true, ...r };
   } catch (err) {
@@ -79,9 +82,9 @@ export async function createAuditAction(spaceAlias: string, input: z.input<typeo
   }
 }
 
-const draftInput = z.object({ name: z.string().max(200), reviewModelId: modelId, reportModelId: modelId });
+const draftInput = z.object({ name: z.string().max(200), reviewModelId: modelId, reportModelId: modelId, ...reviewer });
 
-/** "Save draft" on a saved draft: its name and its models. */
+/** "Save draft" on a saved draft: its name, reviewer and models. */
 export async function saveDraftAction(spaceAlias: string, auditId: string, input: z.input<typeof draftInput>): Promise<AuditActionResult> {
   try {
     const { space, actor } = await authorize(spaceAlias, "audits.run");
@@ -89,7 +92,7 @@ export async function saveDraftAction(spaceAlias: string, auditId: string, input
     const req = draftInput.parse(input);
     if (!req.name.trim()) return { ok: false, message: "Enter a name.", fieldErrors: { name: "Enter a name." } };
     await updateAuditDraft(actor, space.id, id, { name: req.name });
-    await setAuditModels(actor, space.id, id, { reviewModelId: req.reviewModelId ?? "", reportModelId: req.reportModelId ?? "" });
+    await setAuditModels(actor, space.id, id, { reviewModelId: req.reviewModelId ?? "", reportModelId: req.reportModelId ?? "", runner: req.runner, runnerOptions: req.runnerOptions });
     revalidatePath(`${base(space.alias)}/${id}`);
     return { ok: true };
   } catch (err) {

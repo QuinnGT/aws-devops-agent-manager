@@ -5,6 +5,8 @@ import type { AuditViewer } from "@/server/audits/actions";
 import { checkBedrock } from "@/server/audits/bedrock-check";
 import { reviewFailureKind } from "@/server/audits/failure";
 import { loadAuditDetail } from "@/server/audits/loaders";
+import { loadedPolicyForSpace } from "@/server/audits/profiles";
+import { reviewerView } from "@/server/audits/reviewers";
 import { getAudit, profileOf } from "@/server/audits/store";
 import { auditEventTimes, auditModels, auditUsage } from "@/server/audits/ui";
 import { displayNames } from "@/server/drafts/loaders";
@@ -38,11 +40,12 @@ export const auditHeaderData = cache(async (space: Space, perms: Set<Permission>
   const detail = await auditDetail(space.id, auditId, { permissions: perms });
   if (!detail) return null;
   const profile = profileOf(audit);
-  const [models, events, usage, repo] = await Promise.all([
+  const [models, events, usage, repo, loaded] = await Promise.all([
     auditModels(audit),
     auditEventTimes(audit.id, ["audit.start", "audit.cancel"]),
     auditUsage(audit.id),
     audit.state === "finalized" ? getHistoryRepoForSpace(space) : Promise.resolve(null),
+    loadedPolicyForSpace(space.id),
   ]);
   const accessFailed = detail.items.some((i) => i.state === "failed" && ["no-credentials", "expired"].includes(reviewFailureKind(i.stateReason)));
   const accessWorksNow = accessFailed && perms.has("audits.run") ? (await checkBedrock(space, { email: actorEmail })).kind === null : false;
@@ -59,6 +62,7 @@ export const auditHeaderData = cache(async (space: Space, perms: Set<Permission>
     alias: space.alias,
     detail,
     models,
+    reviewer: reviewerView(loaded.policy, profile.review),
     events: { started: events["audit.start"] ?? null, cancelled: events["audit.cancel"] ?? null },
     usage,
     analyzers: { count: profile.analyzers.length, words: analyzerWords(profile.analyzers, labels) },

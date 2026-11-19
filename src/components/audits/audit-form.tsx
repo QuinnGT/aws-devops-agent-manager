@@ -21,7 +21,7 @@ import { GroundTruthCard, type EvidenceRowView, type GroundTruthInput } from "./
 import { InvestigationPicker, type ClientSelection, type PickerState } from "./investigation-picker";
 import type { ModelCatalog } from "@/server/ai/models";
 import { CONNECTION_FAILED_REASON, readinessRows, startBlockedReason, startLabel, type BedrockReadiness, type ReadinessInput } from "./readiness-view";
-import { plural } from "./words";
+import { plural, reviewerFacts, startHelp } from "./words";
 
 export interface ProfileFormOption {
   id: string;
@@ -38,6 +38,16 @@ export interface ProfileFormOption {
   /** What an empty model field resolves to for this profile */
   defaultReview: { id: string | null; sourceLabel: string | null };
   defaultReport: { id: string | null; sourceLabel: string | null };
+  /** The reviewer a new audit of this profile starts with: the profile's runner when the policy offers it */
+  defaultRunner: string;
+}
+
+/** A reviewer the policy offers (policy.audits.reviewers), with its options. Every label and default is the policy's. */
+export interface ReviewerFormOption {
+  id: string;
+  label: string;
+  description: string;
+  options: { id: string; label: string; description: string; default: string; values: { id: string; label: string; description: string }[] }[];
 }
 
 export interface DraftFormView {
@@ -47,6 +57,9 @@ export interface DraftFormView {
   /** The audit's own choices (empty when it uses the default) */
   reviewModelId: string;
   reportModelId: string;
+  /** The reviewer and its option values stored in the draft */
+  runner: string;
+  runnerOptions: Record<string, string>;
   /** The model the draft would run with now */
   reviewModel: string | null;
   items: (EvidenceRowView & { title: string | null; cohort: string | null; cohortLabel: string | null; journalPresent: boolean; ready: boolean })[];
@@ -56,6 +69,8 @@ export interface DraftFormView {
 export interface AuditFormProps {
   alias: string;
   profiles: ProfileFormOption[];
+  /** The reviewers the policy offers; empty when it lists none, and the profile's runner is used */
+  reviewers: ReviewerFormOption[];
   draft: DraftFormView | null;
   statuses: string[];
   releases: { name: string; at: string; atText: string }[];
@@ -93,6 +108,17 @@ export function AuditForm(props: AuditFormProps) {
   const [addCohort, setAddCohort] = useState(profile.cohorts[0]?.id ?? "");
   const [showAllCohort, setShowAllCohort] = useState(false);
   const [models, setModels] = useState({ review: draft?.reviewModelId ?? "", report: draft?.reportModelId ?? "" });
+  const reviewerOf = (rid: string) => props.reviewers.find((r) => r.id === rid) ?? null;
+  const startValues = (rid: string): Record<string, string> => Object.fromEntries((reviewerOf(rid)?.options ?? []).map((o) => [o.id, o.default]));
+  const [runner, setRunner] = useState(draft?.runner ?? profile.defaultRunner);
+  const [runnerOptions, setRunnerOptions] = useState<Record<string, string>>({ ...startValues(draft?.runner ?? profile.defaultRunner), ...(draft?.runnerOptions ?? {}) });
+  const reviewer = reviewerOf(runner);
+  const reviewerName = reviewer?.label ?? runner;
+  const usesBedrock = runner === "ai-sdk";
+  const pickRunner = (rid: string) => {
+    setRunner(rid);
+    setRunnerOptions(startValues(rid));
+  };
   const [nameError, setNameError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, startBusy] = useTransition();
@@ -105,6 +131,8 @@ export function AuditForm(props: AuditFormProps) {
     const v = (n: string) => ((box?.querySelector(`[name="${n}"]`) as HTMLInputElement | null)?.value ?? "").trim();
     return { review: v("reviewModelId"), report: v("reportModelId") };
   };
+  /** The reviewer fields sent with a save; left out when the policy offers no choice, so the profile's runner stands. */
+  const reviewerFields = () => (props.reviewers.length ? { runner, runnerOptions: Object.fromEntries((reviewer?.options ?? []).map((o) => [o.id, runnerOptions[o.id] ?? o.default])) } : {});
 
   // ------------------------------------------------ cohorts (new audit)
   const splitAt = useMemo(() => {
@@ -143,6 +171,7 @@ export function AuditForm(props: AuditFormProps) {
         connectionFailed: props.connectionFailed,
         bedrock: props.bedrock,
         canManageSpace: props.canManageSpace,
+        reviewer: { runner, label: reviewerName },
       }
     : {
         name,
@@ -156,6 +185,7 @@ export function AuditForm(props: AuditFormProps) {
         connectionFailed: props.connectionFailed,
         bedrock: props.bedrock,
         canManageSpace: props.canManageSpace,
+        reviewer: { runner, label: reviewerName },
       };
   const rows = readinessRows(readinessInput);
   const blocked = startBlockedReason(readinessInput);
@@ -174,7 +204,7 @@ export function AuditForm(props: AuditFormProps) {
       return null;
     }
     const m = readModels();
-    const r = await createAuditAction(alias, { name, profileId, selections: selections as never, reviewModelId: m.review || null, reportModelId: m.report || null });
+    const r = await createAuditAction(alias, { name, profileId, selections: selections as never, reviewModelId: usesBedrock ? m.review || null : null, reportModelId: m.report || null, ...reviewerFields() });
     if (!r.ok) {
       if (r.fieldErrors.name) setNameError(r.fieldErrors.name);
       setError(r.message);
@@ -190,7 +220,7 @@ export function AuditForm(props: AuditFormProps) {
       return false;
     }
     const m = readModels();
-    const r = await saveDraftAction(alias, draft.id, { name, reviewModelId: m.review, reportModelId: m.report });
+    const r = await saveDraftAction(alias, draft.id, { name, reviewModelId: usesBedrock ? m.review : "", reportModelId: m.report, ...reviewerFields() });
     if (!r.ok) {
       if (r.fieldErrors.name) setNameError(r.fieldErrors.name);
       setError(r.message);
@@ -266,18 +296,30 @@ export function AuditForm(props: AuditFormProps) {
 
   // ------------------------------------------------ render
   const reviewInherit = profile.defaultReview.id ? `Space default: ${profile.defaultReview.id}` : "No default is set";
-  const reportInherit = profile.defaultReport.id ? `${profile.defaultReport.sourceLabel ?? "Default"}: ${profile.defaultReport.id}` : "Same as the review model";
+  const reportInherit = profile.defaultReport.id
+    ? `${profile.defaultReport.sourceLabel ?? "Default"}: ${profile.defaultReport.id}`
+    : usesBedrock
+      ? "Same as the review model"
+      : "None: write the narrative yourself";
   const evidenceRows: EvidenceRowView[] = draft ? draft.items : [];
-  const facts: Fact[] = [
-    ["Reviews", `${reviews}, one per investigation, ${profile.concurrency} at a time${skipping > 0 ? `. ${plural(skipping, "investigation")} not ready ${skipping === 1 ? "is" : "are"} skipped` : ""}`],
-    ["Model", currentModel ? <span className="font-mono text-xs break-all">{currentModel}</span> : <span className="text-muted-foreground">None chosen</span>],
-    ["Step limit", `${profile.stepLimit} per review`],
-    ["Runs in", props.runsIn],
-  ];
+  const skippedText = skipping > 0 ? `. ${plural(skipping, "investigation")} not ready ${skipping === 1 ? "is" : "are"} skipped` : "";
+  const optionText = (reviewer?.options ?? []).map((o) => `${o.label}: ${o.values.find((v) => v.id === (runnerOptions[o.id] ?? o.default))?.label ?? runnerOptions[o.id] ?? o.default}`);
+  const facts: Fact[] = usesBedrock
+    ? [
+        ["Reviews", `${reviews}, one per investigation, ${profile.concurrency} at a time${skippedText}`],
+        ["Model", currentModel ? <span className="font-mono text-xs break-all">{currentModel}</span> : <span className="text-muted-foreground">None chosen</span>],
+        ["Step limit", `${profile.stepLimit} per review`],
+        ["Runs in", props.runsIn],
+      ]
+    : [
+        ["Reviews", `${reviews}, one per investigation${skippedText}`],
+        ["Reviewer", [reviewerName, ...optionText].join(", ")],
+        ...reviewerFacts(runner),
+      ];
   const startButton = (
     <Button type="button" className="w-full" onClick={onStart} disabled={busy}>
       <Play aria-hidden />
-      {startLabel(reviews)}
+      {startLabel(reviews, runner)}
     </Button>
   );
 
@@ -374,6 +416,7 @@ export function AuditForm(props: AuditFormProps) {
                           setAddCohort(p.cohorts[0]?.id ?? "");
                           setMoves({});
                           setModels({ review: "", report: "" });
+                          pickRunner(p.defaultRunner);
                         }}
                         className="mt-0.5 size-5 shrink-0 accent-foreground focus-visible:outline-none"
                       />
@@ -387,44 +430,99 @@ export function AuditForm(props: AuditFormProps) {
                 })}
                 {draft ? <p className="text-xs text-muted-foreground">The profile is fixed once the draft is saved. Discard the draft to use another profile.</p> : null}
               </fieldset>
+              {props.reviewers.length ? (
+                <fieldset className="space-y-2">
+                  <legend className="mb-1.5 text-sm font-medium">Reviewer</legend>
+                  {props.reviewers.map((r) => {
+                    const on = r.id === runner;
+                    return (
+                      <div key={r.id} className={cn("rounded-lg border", on && "border-2 border-foreground")}>
+                        <label className={cn("flex cursor-pointer items-start gap-3 px-3 py-2.5 has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-ring", on && "px-[11px] py-[9px]")}>
+                          <input
+                            type="radio"
+                            name="reviewer"
+                            value={r.id}
+                            checked={on}
+                            onChange={() => pickRunner(r.id)}
+                            className="mt-0.5 size-5 shrink-0 accent-foreground focus-visible:outline-none"
+                          />
+                          <span className="min-w-0 text-[13px]">
+                            <span className="block text-sm font-semibold">{r.label}</span>
+                            <span className="block max-w-[72ch] text-muted-foreground">{r.description}</span>
+                          </span>
+                        </label>
+                        {on && r.options.length ? (
+                          <div className="space-y-3 border-t px-3 py-3 pl-11">
+                            {r.options.map((o) => (
+                              <fieldset key={o.id} className="space-y-1">
+                                <legend className="text-[13px] font-medium">{o.label}</legend>
+                                {o.description ? <p className="text-xs text-muted-foreground">{o.description}</p> : null}
+                                {o.values.map((v) => (
+                                  <label key={v.id} className="flex cursor-pointer items-start gap-2.5 py-0.5 has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-ring">
+                                    <input
+                                      type="radio"
+                                      name={`reviewer-${r.id}-${o.id}`}
+                                      value={v.id}
+                                      checked={(runnerOptions[o.id] ?? o.default) === v.id}
+                                      onChange={() => setRunnerOptions((x) => ({ ...x, [o.id]: v.id }))}
+                                      className="mt-0.5 size-5 shrink-0 accent-foreground focus-visible:outline-none"
+                                    />
+                                    <span className="min-w-0 text-[13px]">
+                                      <span className="block font-medium">{v.label}</span>
+                                      {v.description ? <span className="block max-w-[64ch] text-muted-foreground">{v.description}</span> : null}
+                                    </span>
+                                  </label>
+                                ))}
+                              </fieldset>
+                            ))}
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </fieldset>
+              ) : null}
               <div ref={modelsRef} className="space-y-1.5">
-                <Label htmlFor="reviewModelId">Review model</Label>
-                <ModelPicker
-                  key={`review-${profile.id}`}
-                  name="reviewModelId"
-                  id="reviewModelId"
-                  spaceAlias={alias}
-                  defaultValue={draft?.reviewModelId ?? ""}
-                  inheritLabel={reviewInherit}
-                  aria-describedby="review-model-help"
-                  catalog={props.catalog}
-                  onChange={(v) => setModels((m) => ({ ...m, review: v }))}
-                />
-                <p id="review-model-help" className="text-xs text-muted-foreground">
-                  {profile.defaultReview.id ? (
-                    props.canManageSpace ? (
+                {/* Hidden, not removed, for a reviewer without a model: the typed value stays if the choice changes back. */}
+                <div hidden={!usesBedrock} className="space-y-1.5">
+                  <Label htmlFor="reviewModelId">Review model</Label>
+                  <ModelPicker
+                    key={`review-${profile.id}`}
+                    name="reviewModelId"
+                    id="reviewModelId"
+                    spaceAlias={alias}
+                    defaultValue={draft?.reviewModelId ?? ""}
+                    inheritLabel={reviewInherit}
+                    aria-describedby="review-model-help"
+                    catalog={props.catalog}
+                    onChange={(v) => setModels((m) => ({ ...m, review: v }))}
+                  />
+                  <p id="review-model-help" className="text-xs text-muted-foreground">
+                    {profile.defaultReview.id ? (
+                      props.canManageSpace ? (
+                        <>
+                          Leave it empty to use the space default, set in{" "}
+                          <Link className="font-medium underline underline-offset-4" href={`/spaces/${encodeURIComponent(alias)}/settings#inference`}>
+                            Space settings
+                          </Link>
+                          .
+                        </>
+                      ) : (
+                        "Leave it empty to use the space default. An Admin sets it in Space settings."
+                      )
+                    ) : props.canManageSpace ? (
                       <>
-                        Leave it empty to use the space default, set in{" "}
-                        <Link className="font-medium underline underline-offset-4" href={`/spaces/${encodeURIComponent(alias)}/settings#inference`}>
+                        No default is set. Choose a model here, or set a default in{" "}
+                        <Link className="font-medium underline underline-offset-4" href={`/spaces/${encodeURIComponent(alias)}/settings`}>
                           Space settings
                         </Link>
                         .
                       </>
                     ) : (
-                      "Leave it empty to use the space default. An Admin sets it in Space settings."
-                    )
-                  ) : props.canManageSpace ? (
-                    <>
-                      No default is set. Choose a model here, or set a default in{" "}
-                      <Link className="font-medium underline underline-offset-4" href={`/spaces/${encodeURIComponent(alias)}/settings`}>
-                        Space settings
-                      </Link>
-                      .
-                    </>
-                  ) : (
-                    "No default is set. Choose a model here, or ask an Admin to set a default in Space settings."
-                  )}
-                </p>
+                      "No default is set. Choose a model here, or ask an Admin to set a default in Space settings."
+                    )}
+                  </p>
+                </div>
                 <Collapsible>
                   <CollapsibleTrigger className="group mt-1 inline-flex min-h-6 items-center gap-1 rounded-sm text-[13px] font-medium">
                     <ChevronRight className="size-4 transition-transform group-data-[state=open]:rotate-90" aria-hidden />
@@ -444,7 +542,9 @@ export function AuditForm(props: AuditFormProps) {
                       onChange={(v) => setModels((m) => ({ ...m, report: v }))}
                     />
                     <p id="report-model-help" className="text-xs text-muted-foreground">
-                      Drafts the report&apos;s narrative sections. Leave it empty to use the default.
+                      {usesBedrock
+                        ? "Drafts the report's narrative sections. Leave it empty to use the default."
+                        : "Drafts the report's narrative sections with a model in Amazon Bedrock. Leave it empty to write them yourself."}
                     </p>
                   </CollapsibleContent>
                 </Collapsible>
@@ -656,7 +756,7 @@ export function AuditForm(props: AuditFormProps) {
               ) : (
                 startButton
               )}
-              <p className="text-xs text-muted-foreground">Analyzers run first, then the reviews. Each review reads only its own investigation&apos;s records, and nothing counts until you accept it.</p>
+              <p className="text-xs text-muted-foreground">{startHelp(runner)}</p>
             </div>
           </section>
         </div>
