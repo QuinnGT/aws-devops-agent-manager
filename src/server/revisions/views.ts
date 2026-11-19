@@ -183,6 +183,28 @@ export function capDiffLines(files: FileDiff[], maxLines: number): FileDiff[] {
   });
 }
 
+/** The longest title the to-address card shows. */
+const MAX_FULL_TITLE_CHARS = 2000;
+
+/**
+ * A finding's title as the audit stored it is clipped with "..." at about 300
+ * characters. When one of the finding's text values continues the clipped
+ * title, this is the full text (the incident prefix of the title kept);
+ * otherwise the title as it is.
+ */
+export function fullTitle(title: string, incidentId: string | null, values: Record<string, unknown>): string {
+  if (!title.endsWith("...")) return title;
+  const prefix = incidentId && title.startsWith(`${incidentId}: `) ? `${incidentId}: ` : "";
+  const head = title.slice(prefix.length, -3).trimEnd();
+  if (!head) return title;
+  for (const v of Object.values(values)) {
+    if (typeof v !== "string") continue;
+    const t = v.replace(/\s+/g, " ").trim();
+    if (t.length > head.length && t.startsWith(head)) return `${prefix}${t.length > MAX_FULL_TITLE_CHARS ? `${t.slice(0, MAX_FULL_TITLE_CHARS - 3).trimEnd()}...` : t}`;
+  }
+  return title;
+}
+
 /** The finding on its audit's page (the audit page selects the finding named in `finding`). */
 export function findingHref(alias: string, auditId: string, findingId: string): string {
   return `/spaces/${encodeURIComponent(alias)}/audits/${encodeURIComponent(auditId)}/findings?finding=${encodeURIComponent(findingId)}`;
@@ -264,7 +286,7 @@ export interface ResultLink {
 /** A finding on the revision's to-address list, as the "To address" card shows it. */
 export interface ToAddressView {
   id: string;
-  /** The finding's full title */
+  /** The finding's full title: the audit clips its stored title at about 300 characters, and this continues it from the finding's values */
   title: string;
   incidentId: string | null;
   kind: string;
@@ -514,7 +536,7 @@ export function toAddressViews(alias: string, ids: readonly string[], rows: read
     }
     return {
       id,
-      title: f.title,
+      title: fullTitle(f.title, f.incidentId, f.values),
       incidentId: f.incidentId,
       kind: f.kind,
       kindLabel: kindLabelsByAudit.get(`${f.auditId}:${f.kind}`) ?? sentence(f.kind),

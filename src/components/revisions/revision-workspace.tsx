@@ -361,7 +361,7 @@ export function RevisionWorkspace(p: RevisionWorkspaceProps) {
             Findings from{" "}
             {p.sourceAudits.map((a, i) => (
               <Fragment key={a.id}>
-                {i > 0 ? ", " : null}
+                {i > 0 ? "; " : null}
                 <Link href={a.href} className="underline underline-offset-4 hover:text-foreground">
                   {a.name}
                 </Link>
@@ -571,7 +571,11 @@ export function RevisionWorkspace(p: RevisionWorkspaceProps) {
 
   const rail = (
     <div className="grid content-start gap-4 sm:grid-cols-2 min-[900px]:col-span-2 xl:col-span-1 xl:grid-cols-1">
-      {p.showToAddress ? <ToAddressCard items={p.toAddress} canRemove={p.canRemoveToAddress} removeAction={p.removeToAddressAction} auditsHref={p.auditsHref} /> : null}
+      {p.showToAddress ? (
+        <div className="sm:col-span-2 xl:col-span-1">
+          <ToAddressCard items={p.toAddress} canRemove={p.canRemoveToAddress} removeAction={p.removeToAddressAction} auditsHref={p.auditsHref} />
+        </div>
+      ) : null}
       <Card className="gap-0 py-0" role="region" aria-labelledby="rev-build-h">
         <div className="flex min-h-12 items-center justify-between gap-3 border-b px-4 py-2">
           <h2 id="rev-build-h" className="text-sm font-semibold">

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { getLayout } from "@/server/packages/layout";
 import { getAppPolicy } from "@/server/policy";
-import { auditHref, capDiffLines, citedRecords, diffTotals, errorsByFile, fileDiffOf, findingHref, isGeneratedFile, notAcceptedReason, packageFolders, rebuiltLine, resultFile, sourceAuditsOf, splitBuiltFiles, toAddressViews } from "./views";
+import { auditHref, capDiffLines, citedRecords, diffTotals, errorsByFile, fileDiffOf, findingHref, fullTitle, isGeneratedFile, notAcceptedReason, packageFolders, rebuiltLine, resultFile, sourceAuditsOf, splitBuiltFiles, toAddressViews } from "./views";
 
 const policy = getAppPolicy().policy;
 const v23 = getLayout(policy, "instruction-folders-shared");
@@ -157,5 +157,32 @@ describe("to-address words and links", () => {
     expect(views[2]).toMatchObject({ title: "Title f1", kindLabel: "Fix", owner: "Instruction and skill package", href: "/spaces/prod/audits/a1/findings?finding=f1", auditHref: "/spaces/prod/audits/a1", notAcceptedReason: null });
     expect(views[0]).toMatchObject({ owner: null, ownerLabel: null, notAcceptedReason: expect.stringContaining("Reopened") });
     expect(views[1]).toMatchObject({ href: null, auditHref: null, auditId: "", notAcceptedReason: "This finding is no longer in the space." });
+  });
+});
+
+describe("full title of a clipped finding", () => {
+  const fix = "Revise the skills cache-path-check and change-window-search. Step 4 of cache-path-check calls the cache healthy when status and latency match the previous day. Require evicted_keys before the cache is ruled out, and say which keys were read.";
+  const clipped = `${fix.slice(0, 80)}...`;
+
+  it("continues a clipped title from the value that starts the same way", () => {
+    expect(fullTitle(clipped, "INCIDENT-1", { owner: "instructions", fix })).toBe(fix);
+    // Line breaks in the value read as one space, as the title does.
+    expect(fullTitle(clipped, null, { fix: fix.replace(/\. /g, ".\n") })).toBe(fix);
+    // The incident prefix of a title built as "{incidentId}: {one_line}" stays.
+    expect(fullTitle(`INCIDENT-1: ${clipped}`, "INCIDENT-1", { one_line: fix })).toBe(`INCIDENT-1: ${fix}`);
+  });
+
+  it("leaves a title that is not clipped, or that no value continues, as it is", () => {
+    expect(fullTitle("Short title", null, { fix: "Short title and more" })).toBe("Short title");
+    expect(fullTitle(clipped, null, { fix: "Something else entirely" })).toBe(clipped);
+    expect(fullTitle(clipped, null, { fix: clipped.slice(0, -3) })).toBe(clipped);
+    expect(fullTitle("...", null, { fix })).toBe("...");
+  });
+
+  it("caps what a very long value adds", () => {
+    const long = `${fix} ${"x".repeat(5000)}`;
+    const out = fullTitle(clipped, null, { fix: long });
+    expect(out.length).toBe(2000);
+    expect(out.endsWith("...")).toBe(true);
   });
 });
