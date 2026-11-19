@@ -56,7 +56,7 @@
       "additionalProperties": false,
       "required": ["incident_created", "agent_start_utc", "first_summary_utc", "ran_while_incident_minutes_old", "decisive_evidence_existed_at_run_time", "note"],
       "properties": {
-        "incident_created": { "type": ["string", "null"], "maxLength": 100 },
+        "incident_created": { "type": ["string", "null"], "maxLength": 200, "description": "The creation time as the trigger prompt gives it, with its time zone and the UTC time, for example \"2026-10-26 10:42 PT (17:42 UTC)\". When the prompt names no zone, say which zone you assumed in a few words; put any longer explanation in note." },
         "agent_start_utc": { "type": ["string", "null"], "maxLength": 40 },
         "first_summary_utc": { "type": ["string", "null"], "maxLength": 40 },
         "ran_while_incident_minutes_old": { "type": ["boolean", "null"] },
