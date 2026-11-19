@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronLeft, ChevronRight, ExternalLink, TriangleAlert } from "lucide-react";
+import { ChevronLeft, ChevronRight, ExternalLink, TriangleAlert, X } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { buttonVariants, Button } from "@/components/ui/button";
@@ -45,6 +45,7 @@ export function RecordCard({
   failedQuote = null,
   checkedNote = null,
   onOpen,
+  onClose,
   headingId,
   zone = UTC_ZONE,
 }: {
@@ -59,6 +60,8 @@ export function RecordCard({
   /** "Checked by <name>: <note>" when a reviewer has checked this record's failed citation */
   checkedNote?: string | null;
   onOpen: (n: number) => void;
+  /** Shows a Close button for a card that is only there while a citation is open */
+  onClose?: () => void;
   headingId: string;
 }) {
   const n = state.status === "ok" ? state.data.n : state.status === "idle" ? null : state.n;
@@ -71,17 +74,25 @@ export function RecordCard({
         <h2 id={headingId} className="text-sm font-semibold">
           {n ? `Journal record R${n}` : "Journal record"}
         </h2>
-        {state.status === "ok" ? (
-          <div className="flex items-center gap-3 text-xs text-muted-foreground">
-            <span>
-              {typeWords(state.data.recordType)} · <time dateTime={state.data.createdAt}>{formatTime(state.data.createdAt, "datetime", zone)}</time>
-            </span>
-            <Link href={state.data.href} className={buttonVariants({ variant: "ghost", size: "sm" })}>
-              Open in journal
-              <ExternalLink aria-hidden />
-            </Link>
-          </div>
-        ) : null}
+        <div className="flex items-center gap-3 text-xs text-muted-foreground">
+          {state.status === "ok" ? (
+            <>
+              <span>
+                {typeWords(state.data.recordType)} · <time dateTime={state.data.createdAt}>{formatTime(state.data.createdAt, "datetime", zone)}</time>
+              </span>
+              <Link href={state.data.href} className={buttonVariants({ variant: "ghost", size: "sm" })}>
+                Open in journal
+                <ExternalLink aria-hidden />
+              </Link>
+            </>
+          ) : null}
+          {onClose ? (
+            <Button type="button" variant="ghost" size="sm" onClick={onClose}>
+              <X aria-hidden />
+              Close
+            </Button>
+          ) : null}
+        </div>
       </div>
       <div className="px-4 py-3" aria-live="polite">
         {state.status === "idle" ? <p className="text-[13px] text-muted-foreground">Choose a citation to read its record here.</p> : null}

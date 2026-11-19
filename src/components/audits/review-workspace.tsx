@@ -2,7 +2,7 @@
 
 import { Check, ChevronDown, CircleCheck, Keyboard, TriangleAlert } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { forwardRef, useCallback, useId, useMemo, useRef, useState, useSyncExternalStore, useTransition, type ReactNode } from "react";
+import { forwardRef, useCallback, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore, useTransition, type ReactNode } from "react";
 import { toast } from "sonner";
 import { acceptAllAction, checkCitationAction, findingAction } from "@/app/(app)/spaces/[alias]/audits/actions";
 import { StatusBadge } from "@/components/common/status-badge";
@@ -18,6 +18,7 @@ import { CitationChip, FieldValue } from "./finding-fields";
 import { NextStepPanel } from "./next-step-panel";
 import { cardRows, citationsByField, isCitationList, quotesFor, type CardField, type CitationRef } from "./finding-view";
 import { RecordCard, type RecordData, type RecordState } from "./record-card";
+import { reveal } from "./reveal";
 import { isTextTarget, moveFocus, SHORTCUT_KEYS, shortcutFor, type ShortcutAction } from "./shortcuts";
 import type { ViewerZone } from "@/components/common/time-format";
 import { useSingleKeys } from "./use-single-keys";
@@ -83,11 +84,11 @@ export interface ReviewWorkspaceProps {
 function useWide(): boolean {
   return useSyncExternalStore(
     (cb) => {
-      const m = window.matchMedia("(min-width: 1024px)");
+      const m = window.matchMedia("(min-width: 1280px)");
       m.addEventListener("change", cb);
       return () => m.removeEventListener("change", cb);
     },
-    () => window.matchMedia("(min-width: 1024px)").matches,
+    () => window.matchMedia("(min-width: 1280px)").matches,
     () => true,
   );
 }
@@ -126,10 +127,17 @@ export function ReviewWorkspace(props: ReviewWorkspaceProps) {
   const [record, setRecord] = useState<RecordState>(initialState);
   const [opened, setOpened] = useState<{ citation: CitationRef | null; fieldLabel: string | null }>({ citation: props.initial.citation, fieldLabel: props.initial.fieldLabel });
   const allCitations = useMemo(() => findings.flatMap((f) => f.citations), [findings]);
+  // Counts the opens made by a click or a key, so the viewer is scrolled into view each time (not for the one shown on load).
+  const [opens, setOpens] = useState(0);
+  const recordBox = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (opens > 0 && wide) reveal(recordBox.current);
+  }, [opens, record.status, wide]);
 
   const openRecord = useCallback(
     async (n: number, from: { citation: CitationRef | null; fieldLabel: string | null } = { citation: null, fieldLabel: null }) => {
       setOpened(from);
+      setOpens((v) => v + 1);
       if (!wide) setSheetOpen(true);
       setRecord({ status: "loading", n });
       try {
@@ -318,7 +326,9 @@ export function ReviewWorkspace(props: ReviewWorkspaceProps) {
               <p className="max-w-[72ch] px-4 py-3 text-[13px] whitespace-pre-wrap [overflow-wrap:anywhere]">{props.finalAnswer.text}</p>
             </section>
           ) : null}
-          {recordCard("inline")}
+          <div ref={recordBox} className="scroll-mt-20">
+            {recordCard("inline")}
+          </div>
           {reviewable ? (
             <section aria-labelledby={`${ids}-kb`} className="rounded-xl border bg-card">
               <div className="flex min-h-12 flex-wrap items-center justify-between gap-2 border-b px-4 py-2">
@@ -456,8 +466,18 @@ const FindingCard = forwardRef<
             <span key={`${c.record}-${c.field}`} className="inline-flex max-w-full flex-wrap items-start gap-x-1.5">
               <CitationChip n={c.record} pressed={p.openN === c.record} failed={!c.ok} checked={!!c.checked} reason={citationChipReason(c, p.totalRecords)} onClick={() => p.onOpenCitation(c, label)} />
               {!c.ok && !c.checked && f.canCheck && !(checking?.row === label && checking.record === c.record) ? (
-                <Button type="button" size="sm" variant="ghost" className="h-6 px-1.5 text-xs" onClick={() => setChecking({ row: label, record: c.record })}>
-                  I checked the record
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-xs"
+                  onClick={() => {
+                    setChecking({ row: label, record: c.record });
+                    // The note says what the reviewer found in the record, so the viewer shows that record.
+                    if (p.openN !== c.record) p.onOpenCitation(c, label);
+                  }}
+                >
+                  <Check aria-hidden />I checked the record
                 </Button>
               ) : null}
             </span>

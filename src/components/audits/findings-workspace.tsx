@@ -20,6 +20,7 @@ import { CitationChip, FieldValue } from "./finding-fields";
 import { cardRows, evidenceRows, isCitationList, quotesFor, type CardField, type CitationRef } from "./finding-view";
 import { NextStepPanel } from "./next-step-panel";
 import { RecordCard, type RecordData, type RecordState } from "./record-card";
+import { reveal } from "./reveal";
 import { isTextTarget, moveFocus, SHORTCUT_KEYS, shortcutFor, type ShortcutAction } from "./shortcuts";
 import type { ViewerZone } from "@/components/common/time-format";
 import { useSingleKeys } from "./use-single-keys";
@@ -106,6 +107,15 @@ export interface FindingsWorkspaceProps {
 
 type Mode = { id: string | null; kind: "view" | "edit" | "reject" };
 
+/** What opened the record: the evidence row it sits under, and the field it came from. */
+type Opened = { citation: CitationRef | null; fieldLabel: string | null };
+
+/** The record viewer's state for one finding. `seq` changes on every open, so the same record opened twice is scrolled into view twice. */
+type OpenRecord = { id: string; state: RecordState; opened: Opened; seq: number };
+
+/** The key of an evidence row: one per record and quote. */
+const rowKey = (c: { record: number; quote: string | null }) => `${c.record}-${c.quote ?? ""}`;
+
 /** Height of a group header in the list, which sticks to its top edge. */
 const STICKY_HEADER = 36;
 
@@ -130,7 +140,8 @@ export function FindingsWorkspace(p: FindingsWorkspaceProps) {
   // State that belongs to one finding resets when another is selected: kept with the ID it was made for.
   const [mode, setMode] = useState<Mode>({ id: null, kind: "view" });
   const [err, setErr] = useState<{ id: string; message: string } | null>(null);
-  const [record, setRecord] = useState<{ id: string; state: RecordState; opened: { citation: CitationRef | null; fieldLabel: string | null } } | null>(null);
+  const [record, setRecord] = useState<OpenRecord | null>(null);
+  const opens = useRef(0);
   const [checking, setChecking] = useState<{ id: string; record: number } | null>(null);
   const kind = mode.id === d?.id ? mode.kind : "view";
   const error = err && err.id === d?.id ? err.message : null;
@@ -168,10 +179,11 @@ export function FindingsWorkspace(p: FindingsWorkspaceProps) {
   };
 
   const openRecord = useCallback(
-    async (n: number, from: { citation: CitationRef | null; fieldLabel: string | null }) => {
+    async (n: number, from: Opened) => {
       if (!d) return;
       const forId = d.id;
-      setRecord({ id: forId, state: { status: "loading", n }, opened: from });
+      const seq = ++opens.current;
+      setRecord({ id: forId, state: { status: "loading", n }, opened: from, seq });
       let state: RecordState;
       try {
         const res = await fetch(`/api/spaces/${encodeURIComponent(p.alias)}/audits/${p.auditId}/items/${d.itemId}/records/${n}`, { cache: "no-store" });
@@ -182,7 +194,7 @@ export function FindingsWorkspace(p: FindingsWorkspaceProps) {
       } catch {
         state = { status: "error", n, message: "The record could not be loaded. Try again." };
       }
-      setRecord({ id: forId, state, opened: from });
+      setRecord({ id: forId, state, opened: from, seq });
     },
     [d, p.alias, p.auditId],
   );
@@ -204,7 +216,9 @@ export function FindingsWorkspace(p: FindingsWorkspaceProps) {
     }
     if (!d) return;
     if (action === "open") {
-      const c = evidenceRows(d.citations)[0];
+      // The first citation that failed and nobody checked, else the first one.
+      const rows = evidenceRows(d.citations);
+      const c = rows.find((x) => !x.ok && !x.checked) ?? rows[0];
       if (c) {
         e.preventDefault();
         void openRecord(c.record, { citation: c, fieldLabel: null });
@@ -247,6 +261,7 @@ export function FindingsWorkspace(p: FindingsWorkspaceProps) {
           onMode={(k) => setMode({ id: d.id, kind: k })}
           onAct={act}
           onOpenRecord={openRecord}
+          onCloseRecord={() => setRecord(null)}
           onCheckOpen={(r) => setChecking({ id: d.id, record: r })}
           onCheckClose={() => setChecking(null)}
           onChecked={async (r, note) => {
@@ -361,18 +376,19 @@ interface DetailProps {
   busy: boolean;
   singleKeys: boolean;
   setSingleKeys: (on: boolean) => void;
-  rec: { id: string; state: RecordState; opened: { citation: CitationRef | null; fieldLabel: string | null } } | null;
+  rec: OpenRecord | null;
   checkingRecord: number | null;
   ids: string;
   onMode: (k: Mode["kind"]) => void;
   onAct: (input: Parameters<typeof findingAction>[2], done?: string) => void;
-  onOpenRecord: (n: number, from: { citation: CitationRef | null; fieldLabel: string | null }) => Promise<void>;
+  onOpenRecord: (n: number, from: Opened) => Promise<void>;
+  onCloseRecord: () => void;
   onCheckOpen: (record: number) => void;
   onCheckClose: () => void;
   onChecked: (record: number, note: string) => Promise<string | null>;
 }
 
-function DetailPane({ p, d, kind, error, busy, singleKeys, setSingleKeys, rec, checkingRecord, ids, onMode, onAct, onOpenRecord, onCheckOpen, onCheckClose, onChecked }: DetailProps) {
+function DetailPane({ p, d, kind, error, busy, singleKeys, setSingleKeys, rec, checkingRecord, ids, onMode, onAct, onOpenRecord, onCloseRecord, onCheckOpen, onCheckClose, onChecked }: DetailProps) {
   // A field that is a list of citations (a fix's evidence) is the Evidence section below, not a row.
   const rows = useMemo(() => cardRows(d.fields, d.hidden).filter((r) => !isCitationList(r.field)), [d.fields, d.hidden]);
   const evidence = useMemo(() => evidenceRows(d.citations), [d.citations]);
@@ -383,14 +399,45 @@ function DetailPane({ p, d, kind, error, busy, singleKeys, setSingleKeys, rec, c
   const failedForOpen = openN ? (d.citations.find((c) => c.record === openN && !c.ok && !c.checked) ?? d.citations.find((c) => c.record === openN && !c.ok)) : undefined;
   const headingId = `${ids}-title`;
 
+  // The record opens under the evidence row that was clicked, and stays there while its neighbours are read.
+  const open = rec && rec.state.status !== "idle" ? rec : null;
+  const anchor = open ? evidence.findIndex((c) => (open.opened.citation ? rowKey(c) === rowKey(open.opened.citation) : c.record === openN)) : -1;
+  const recordBox = useRef<HTMLDivElement>(null);
+  const seq = rec?.seq;
+  const status = rec?.state.status;
+  // Bring the record into view on every open, and again when its text arrives and the card grows.
+  useEffect(() => {
+    if (seq !== undefined) reveal(recordBox.current);
+  }, [seq, status]);
+
+  const recordCard = open ? (
+    <div ref={recordBox} className="scroll-mt-2 pt-1">
+      <RecordCard
+        headingId={`${ids}-record`}
+        zone={p.zone}
+        state={open.state}
+        fieldLabel={open.opened.fieldLabel}
+        quotes={openN && !failedForOpen ? quotesFor(d.citations, openN) : []}
+        failedReason={failedForOpen && failedForOpen.problem === "quote-not-found" ? citationChipReason({ ...failedForOpen, checked: null }, d.totalRecords) : null}
+        failedQuote={failedForOpen && failedForOpen.problem === "quote-not-found" ? failedForOpen.quote : null}
+        checkedNote={failedForOpen?.checked ? citationChipReason(failedForOpen, d.totalRecords) : null}
+        onOpen={(n) => void onOpenRecord(n, open.opened)}
+        onClose={() => {
+          onCloseRecord();
+          if (anchor >= 0) document.getElementById(`${ids}-chip-${anchor}`)?.focus();
+        }}
+      />
+    </div>
+  ) : null;
+
   return (
     <Card className="gap-0 overflow-hidden py-0 max-lg:max-h-[85vh] lg:min-h-0" role="region" aria-labelledby={headingId}>
       <div className="flex min-h-12 shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b px-4 py-2">
-        <p className="min-w-0 text-xs font-medium tracking-wide text-muted-foreground uppercase [overflow-wrap:anywhere]">
-          <Link href={d.itemHref} className="rounded-sm font-mono normal-case underline-offset-4 hover:text-foreground hover:underline">
+        <p className="min-w-0 text-[13px] text-muted-foreground [overflow-wrap:anywhere]">
+          <span className="font-medium text-foreground">{d.position}</span> for{" "}
+          <Link href={d.itemHref} className="rounded-sm font-mono text-foreground underline underline-offset-4 hover:no-underline">
             {d.incident}
           </Link>
-          {` · ${d.position}`}
           {d.ownerLine ? ` · ${d.ownerLine}` : ""}
         </p>
         {kind === "view" ? (
@@ -454,48 +501,58 @@ function DetailPane({ p, d, kind, error, busy, singleKeys, setSingleKeys, rec, c
             </span>
           </h3>
           {evidence.length ? (
-            <ul className="space-y-2.5">
-              {evidence.map((c) => {
-                const res = citationResult(c, d.totalRecords);
-                const key = `${c.record}-${c.quote ?? ""}`;
-                return (
-                  <li key={key} className="space-y-1">
-                    <div className="flex items-start gap-2">
-                      <CitationChip n={c.record} pressed={openN === c.record} failed={!c.ok} checked={!!c.checked} onClick={() => void onOpenRecord(c.record, { citation: c, fieldLabel: null })} />
-                      {c.quote ? <blockquote className="min-w-0 border-l-2 border-info pl-2.5 text-[13px] text-muted-foreground [overflow-wrap:anywhere]">&ldquo;{c.quote}&rdquo;</blockquote> : <span className="text-[13px] text-muted-foreground">No text quoted</span>}
-                    </div>
-                    <p className={cn("flex items-start gap-1.5 pl-1 text-xs", res.tone === "success" ? "text-success-fg" : "text-warning-fg")}>
-                      {res.tone === "success" ? <CircleCheck className="mt-px size-3.5 shrink-0" aria-hidden /> : <TriangleAlert className="mt-px size-3.5 shrink-0" aria-hidden />}
-                      <span className="[overflow-wrap:anywhere]">{res.text}</span>
-                      {!c.ok && !c.checked && d.canCheck && checkingRecord !== c.record ? (
-                        <Button type="button" size="sm" variant="ghost" className="-my-1 h-6 px-1.5 text-xs" onClick={() => onCheckOpen(c.record)}>
-                          I checked the record
-                        </Button>
-                      ) : null}
-                    </p>
-                    {checkingRecord === c.record && !c.ok && !c.checked ? <CheckForm record={c.record} busy={busy} onCancel={onCheckClose} onSave={(note) => onChecked(c.record, note)} /> : null}
-                  </li>
-                );
-              })}
-            </ul>
+            <>
+              <p className="max-w-[80ch] text-xs text-muted-foreground">
+                R{evidence[0]!.record} is record {evidence[0]!.record} of this investigation&apos;s journal. Press a record number to read it here, under its row.
+              </p>
+              <ul className="space-y-2.5">
+                {evidence.map((c, i) => {
+                  const res = citationResult(c, d.totalRecords);
+                  const key = rowKey(c);
+                  return (
+                    <li key={key} className="space-y-1">
+                      <div className="flex items-start gap-2">
+                        <CitationChip
+                          id={`${ids}-chip-${i}`}
+                          n={c.record}
+                          pressed={openN === c.record}
+                          failed={!c.ok}
+                          checked={!!c.checked}
+                          onClick={() => void onOpenRecord(c.record, { citation: c, fieldLabel: null })}
+                        />
+                        {c.quote ? <blockquote className="min-w-0 border-l-2 border-info pl-2.5 text-[13px] text-muted-foreground [overflow-wrap:anywhere]">&ldquo;{c.quote}&rdquo;</blockquote> : <span className="text-[13px] text-muted-foreground">No text quoted</span>}
+                      </div>
+                      <p className={cn("flex flex-wrap items-start gap-x-1.5 gap-y-1 pl-1 text-xs", res.tone === "success" ? "text-success-fg" : "text-warning-fg")}>
+                        {res.tone === "success" ? <CircleCheck className="mt-px size-3.5 shrink-0" aria-hidden /> : <TriangleAlert className="mt-px size-3.5 shrink-0" aria-hidden />}
+                        <span className="min-w-0 [overflow-wrap:anywhere]">{res.text}</span>
+                        {!c.ok && !c.checked && d.canCheck && checkingRecord !== c.record ? (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="-my-0.5 h-7 text-xs"
+                            onClick={() => {
+                              onCheckOpen(c.record);
+                              // The note says what the reviewer found in the record, so the record is shown next to it.
+                              if (openN !== c.record) void onOpenRecord(c.record, { citation: c, fieldLabel: null });
+                            }}
+                          >
+                            <Check aria-hidden />I checked the record
+                          </Button>
+                        ) : null}
+                      </p>
+                      {checkingRecord === c.record && !c.ok && !c.checked ? <CheckForm record={c.record} busy={busy} onCancel={onCheckClose} onSave={(note) => onChecked(c.record, note)} /> : null}
+                      {i === anchor ? recordCard : null}
+                    </li>
+                  );
+                })}
+              </ul>
+              {anchor < 0 ? recordCard : null}
+            </>
           ) : (
             <p className="text-[13px] text-muted-foreground">This finding cites no journal records.</p>
           )}
         </section>
-
-        {rec && rec.state.status !== "idle" ? (
-          <RecordCard
-            headingId={`${ids}-record`}
-            zone={p.zone}
-            state={rec.state}
-            fieldLabel={rec.opened.fieldLabel}
-            quotes={openN && !failedForOpen ? quotesFor(d.citations, openN) : []}
-            failedReason={failedForOpen && failedForOpen.problem === "quote-not-found" ? citationChipReason({ ...failedForOpen, checked: null }, d.totalRecords) : null}
-            failedQuote={failedForOpen && failedForOpen.problem === "quote-not-found" ? failedForOpen.quote : null}
-            checkedNote={failedForOpen?.checked ? citationChipReason(failedForOpen, d.totalRecords) : null}
-            onOpen={(n) => void onOpenRecord(n, { citation: null, fieldLabel: null })}
-          />
-        ) : null}
 
         <NextStepPanel alias={p.alias} step={d.next} finding={{ id: d.id, title: d.title }} options={p.revisions.options} nameRule={p.revisions.nameRule} />
 

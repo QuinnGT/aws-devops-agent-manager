@@ -7,20 +7,22 @@ import type { CardField } from "./finding-view";
 
 /** The citation chip and a field's value, shared by the incident page's finding cards and the Findings tab's detail. */
 
-export function CitationChip({ n, pressed, onClick, failed, checked, reason }: { n: number; pressed: boolean; onClick: () => void; failed?: boolean; checked?: boolean; reason?: string | null }) {
+export function CitationChip({ n, pressed, onClick, failed, checked, reason, id: buttonId }: { n: number; pressed: boolean; onClick: () => void; failed?: boolean; checked?: boolean; reason?: string | null; id?: string }) {
   const id = useId();
   return (
     <span className="inline-flex max-w-full items-start gap-1.5">
       <button
+        id={buttonId}
         type="button"
         aria-pressed={pressed}
         aria-describedby={reason ? id : undefined}
         aria-label={`Open record R${n}`}
+        title={`Read journal record R${n}`}
         onClick={onClick}
         className={cn(
-          "inline-flex h-6 min-w-6 shrink-0 items-center gap-1 rounded-md border px-1.5 font-mono text-xs tabular-nums transition-colors",
-          failed && !checked ? "border-warning/45 bg-warning/12 text-warning-fg" : "bg-background hover:bg-muted",
-          pressed && (!failed || checked) && "border-primary bg-primary text-primary-foreground hover:bg-primary",
+          "inline-flex h-6 min-w-6 shrink-0 cursor-pointer items-center gap-1 rounded-md border px-1.5 font-mono text-xs tabular-nums transition-colors",
+          failed && !checked ? "border-warning/45 bg-warning/12 text-warning-fg hover:bg-warning/20" : "border-info/45 bg-info/8 text-info-fg underline decoration-info/50 underline-offset-2 hover:bg-info/15",
+          pressed && (!failed || checked) && "border-primary bg-primary text-primary-foreground no-underline hover:bg-primary",
           pressed && failed && !checked && "ring-2 ring-warning",
         )}
       >
