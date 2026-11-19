@@ -2,7 +2,7 @@
 
 import { GitBranch } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useId, useState, useTransition, type ReactNode } from "react";
+import { useId, useRef, useState, useTransition, type ReactNode } from "react";
 import { toast } from "sonner";
 import { addToRevisionAction } from "@/app/(app)/spaces/[alias]/audits/actions";
 import { Button } from "@/components/ui/button";
@@ -55,6 +55,8 @@ export function AddToRevisionDialog(p: AddToRevisionDialogProps) {
   const [note, setNote] = useState("");
   const [error, setError] = useState<{ message: string; field?: string } | null>(null);
   const [busy, start] = useTransition();
+  // The button that opened the dialog gets focus back when it closes (the dialog has no trigger of its own).
+  const opener = useRef<HTMLElement | null>(null);
 
   const one = p.findings.length === 1;
   const creating = choice === NEW;
@@ -92,11 +94,20 @@ export function AddToRevisionDialog(p: AddToRevisionDialogProps) {
   return (
     <>
       {p.trigger(() => {
+        opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
         setError(null);
         setOpen(true);
       }, busy)}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-lg">
+        <DialogContent
+          className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-lg"
+          onCloseAutoFocus={(e) => {
+            if (opener.current?.isConnected) {
+              e.preventDefault();
+              opener.current.focus();
+            }
+          }}
+        >
           <DialogHeader>
             <DialogTitle>{one ? (p.acceptFirst ? "Accept this fix and add it to a revision" : "Add this fix to a revision") : `Add ${p.findings.length} package fixes to a revision`}</DialogTitle>
             <DialogDescription>
