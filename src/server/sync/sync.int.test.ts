@@ -19,7 +19,7 @@ import { lastGoodSyncAt } from "./last-good";
 import { getSyncStatus, listAssetChanges, listAssetIndex } from "./queries";
 import { dueSpaces, enqueueDueSyncs } from "./schedule";
 import { patchSyncState } from "./state";
-import { FakeSpace, fixtureSpace, skillZipFixture, TEST_SPACE_ID, versionMarker } from "./testing/fake-space";
+import { type FakeAsset, FakeSpace, fixtureSpace, skillZipFixture, TEST_SPACE_ID, versionMarker } from "./testing/fake-space";
 
 vi.mock("@/server/attribution", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/server/attribution")>();
@@ -484,5 +484,47 @@ describe("sync.tick scheduling", () => {
     expect(out).toHaveLength(2);
     expect((await dueSpaces(new Date("2026-11-11T12:20:00.000Z"))).map((d) => d.alias)).toEqual([]);
     expect((await dueSpaces(new Date("2026-11-11T12:21:00.000Z"))).map((d) => d.alias)).toEqual(["daily-space"]);
+  });
+});
+
+describe("review attachments", () => {
+  const SPACE = "0f0e0d0c-0b0a-4908-8706-0504030201aa";
+  const T = "2026-11-05T10:00:00.000Z";
+  const attachment = (assetId: string, filename: string, text: string): FakeAsset => ({
+    assetId,
+    assetType: "attachment",
+    versions: [{ version: 1, createdAt: T, updatedAt: T, metadata: { filename, extension: "md", size: text.length }, files: [{ path: filename, text, mimeType: "text/markdown" }] }],
+  });
+  let fake: FakeSpace;
+  let spaceId: string;
+  let repo: HistoryRepo;
+
+  beforeAll(async () => {
+    fakeAttribution();
+    fake = new FakeSpace(SPACE);
+    fake.add(attachment("att-notes", "notes.md", "# notes\n"));
+    fake.add(attachment("att-review-records", "dam-review-INCIDENT-1-0a1b2c3d-records.md", "## R1 MESSAGE 2026-11-05 10:00:00\n"));
+    fake.install();
+    const created = await createSpace("review-space", "review-history", SPACE);
+    spaceId = created.space.id;
+    repo = created.repo;
+  });
+
+  afterAll(() => fake.restore());
+
+  it("leaves a chat review's temporary attachment out of history, the index and the version reads", async () => {
+    const r = await syncSpace(spaceId, { actor, now: () => new Date("2026-11-06T00:00:00.000Z") });
+    expect(r).toMatchObject({ status: "succeeded", listed: 1, commits: 1, changes: 1 });
+    expect((await listAssetIndex(spaceId)).map((x) => x.assetId)).toEqual(["att-notes"]);
+    expect(await changesFor(spaceId, "att-review-records")).toEqual([]);
+    expect(fake.callsOf("ListAssetVersions").map((c) => c.input.assetId)).toEqual(["att-notes"]);
+    expect((await repo.log({ maxCount: 10 })).map((e) => e.message)).toEqual(["Add attachment att-notes (version 1)"]);
+  });
+
+  it("does not record the attachment's deletion, and a reconcile after it is gone changes nothing", async () => {
+    fake.remove("att-review-records");
+    const r = await syncSpace(spaceId, { actor, now: () => new Date("2026-11-06T01:00:00.000Z") }, { mode: "reconcile" });
+    expect(r).toMatchObject({ status: "succeeded", listed: 1, commits: 0, deleted: 0 });
+    expect((await repo.log({ maxCount: 10 })).map((e) => e.message)).toEqual(["Add attachment att-notes (version 1)"]);
   });
 });

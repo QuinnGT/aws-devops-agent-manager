@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyCommitPolicy, assignKinds, type CandidateChange, detectChanges, orderChanges, resolveStorePolicy } from "./changes";
+import { applyCommitPolicy, assignKinds, type CandidateChange, detectChanges, isIgnoredAttachment, orderChanges, resolveStorePolicy } from "./changes";
 
 const asset = { assetId: "ki-1", assetType: "memory" };
 const v = (version: number, updatedAt: string, createdAt = "2026-08-13T18:37:05.000Z") => ({ version, createdAt: new Date(createdAt), updatedAt: new Date(updatedAt) });
@@ -109,5 +109,27 @@ describe("resolveStorePolicy", () => {
     expect(resolveStorePolicy("monitors", policy, { monitors: "every-version" })).toBe("every-version");
     expect(resolveStorePolicy("verity", policy, {})).toBe("every-version");
     expect(resolveStorePolicy(null, policy, { verity: "ignore" })).toBe("every-version");
+  });
+});
+
+describe("isIgnoredAttachment", () => {
+  const prefixes = ["dam-review-"];
+  const attachment = (filename: unknown) => ({ assetType: "attachment", metadata: { filename } });
+
+  it("ignores an attachment whose file name starts with a listed prefix", () => {
+    expect(isIgnoredAttachment(attachment("dam-review-INCIDENT-1-0a1b2c3d-records.md"), prefixes)).toBe(true);
+    expect(isIgnoredAttachment(attachment("topology.png"), prefixes)).toBe(false);
+    expect(isIgnoredAttachment(attachment("my-dam-review-notes.md"), prefixes)).toBe(false);
+  });
+
+  it("keeps assets of other types and attachments without a file name", () => {
+    expect(isIgnoredAttachment({ assetType: "skill", metadata: { filename: "dam-review-x.md" } }, prefixes)).toBe(false);
+    expect(isIgnoredAttachment(attachment(undefined), prefixes)).toBe(false);
+    expect(isIgnoredAttachment(attachment(42), prefixes)).toBe(false);
+  });
+
+  it("ignores nothing without prefixes, and never matches an empty prefix", () => {
+    expect(isIgnoredAttachment(attachment("dam-review-x.md"), [])).toBe(false);
+    expect(isIgnoredAttachment(attachment("anything.md"), [""])).toBe(false);
   });
 });

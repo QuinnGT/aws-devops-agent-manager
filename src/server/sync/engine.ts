@@ -15,7 +15,7 @@ import { getPolicyForRepo, type Policy } from "@/server/policy";
 import type { StoreCommitPolicy } from "@/server/policy/sections/sync";
 import { getHistoryRepoForSpace, getSpaceById, type Space, toAwsConfig, toHistoryRepoConfig } from "@/server/spaces/queries";
 import { authorFor, fallbackAttribution } from "./author";
-import { applyCommitPolicy, assignKinds, detectChanges, orderChanges, type PlannedChange, resolveStorePolicy } from "./changes";
+import { applyCommitPolicy, assignKinds, detectChanges, isIgnoredAttachment, orderChanges, type PlannedChange, resolveStorePolicy } from "./changes";
 import { changedMetadataKeys, parseAssetJson, serializeJson } from "./content";
 import { lastGoodSyncAt, withSucceededAt } from "./last-good";
 import { withSpaceLock } from "./lock";
@@ -263,7 +263,7 @@ class SyncRun {
     // 1. List assets: everything on the first sync and on reconcile, otherwise since the cursor.
     const cursor = state?.updatedAfter ?? null;
     const listAfter = mode === "incremental" && cursor ? new Date(cursor.getTime() - this.policy.sync.cursorOverlapSeconds * 1000) : undefined;
-    const live = await this.reader.listAssets(listAfter);
+    const live = (await this.reader.listAssets(listAfter)).filter((a) => !isIgnoredAttachment(a, this.policy.sync.ignoredAttachmentPrefixes));
     const liveById = new Map(live.map((a) => [a.assetId, a]));
     this.result.listed = live.length;
     await this.progress(0.05, `Listed ${live.length} assets`);
