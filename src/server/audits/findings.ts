@@ -75,8 +75,8 @@ export function clipTitle(s: string, max = TITLE_MAX_CHARS): string {
 }
 
 /** Fill a title template: {field} from the item, {incidentId} from the audit item. Unknown placeholders become empty. */
-export function fillTitle(template: string, item: Obj, incidentId: string | null): string {
-  return clipTitle(template.replace(/\{([A-Za-z0-9_]+)\}/g, (_m, key: string) => (key === "incidentId" ? (incidentId ?? "") : text(item[key]))));
+export function fillTitle(template: string, item: Obj, incidentId: string | null, max = TITLE_MAX_CHARS): string {
+  return clipTitle(template.replace(/\{([A-Za-z0-9_]+)\}/g, (_m, key: string) => (key === "incidentId" ? (incidentId ?? "") : text(item[key]))), max);
 }
 
 function pick(item: Obj, fields: readonly string[]): FindingValues {
@@ -86,9 +86,17 @@ function pick(item: Obj, fields: readonly string[]): FindingValues {
 }
 
 /** The title a finding shows: its template filled from the current values, or the extractor label and position when that is empty. */
-export function findingTitle(extractor: Pick<Extractor, "title" | "label">, values: Obj, incidentId: string | null, ordinal: number): string {
-  const t = fillTitle(extractor.title, values, incidentId).replace(/^[\s:()-]+$/, "");
+export function findingTitle(extractor: Pick<Extractor, "title" | "label">, values: Obj, incidentId: string | null, ordinal: number, max = TITLE_MAX_CHARS): string {
+  const t = fillTitle(extractor.title, values, incidentId, max).replace(/^[\s:()-]+$/, "");
   return t || `${extractor.label} ${ordinal + 1}`;
+}
+
+/**
+ * The title with none of its text cut off. The stored title is cut at
+ * TITLE_MAX_CHARS for the lists; a finding's own page shows this one.
+ */
+export function fullFindingTitle(extractor: Pick<Extractor, "title" | "label"> | undefined, stored: string, values: Obj, incidentId: string | null, ordinal: number): string {
+  return extractor ? findingTitle(extractor, values, incidentId, ordinal, Number.POSITIVE_INFINITY) : stored;
 }
 
 export const extractFindings: ExtractFindings = (profile, output, ctx) => {

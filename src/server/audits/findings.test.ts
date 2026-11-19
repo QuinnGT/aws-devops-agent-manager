@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { getAppPolicy } from "@/server/policy";
 import { BENCHMARK_AUDIT_DIR, benchmarkExpected } from "../../../test/helpers/fixtures";
 import type { Citation, CitationCheck } from "./contract";
-import { citationBelongs, clipTitle, extractFindings, fillTitle, parseFieldPath, TITLE_MAX_CHARS } from "./findings";
+import { citationBelongs, clipTitle, extractFindings, fillTitle, fullFindingTitle, parseFieldPath, TITLE_MAX_CHARS } from "./findings";
 import { benchmarkFixture, benchmarkReviews } from "./testing";
 
 const benchmark = getAppPolicy().policy.audits.profiles.benchmark!;
@@ -44,6 +44,18 @@ describe("field paths", () => {
 });
 
 describe("titles", () => {
+  it("keeps all of a long title for the finding's own page", () => {
+    const fixText = "Add a monitor memory entry for the alert. ".repeat(20).trim();
+    const stored = fillTitle(fix.title, { fix: fixText }, "INCIDENT-1");
+    expect(stored.length).toBeLessThanOrEqual(TITLE_MAX_CHARS);
+    expect(stored.endsWith("...")).toBe(true);
+    const full = fullFindingTitle(fix, stored, { fix: fixText }, "INCIDENT-1", 0);
+    expect(full).toBe(fixText);
+    expect(full.length).toBeGreaterThan(TITLE_MAX_CHARS);
+    // Without an extractor (the profile dropped the kind) the stored title is all there is.
+    expect(fullFindingTitle(undefined, "stored", {}, null, 0)).toBe("stored");
+  });
+
   it("fills {field} and {incidentId}, with unknown placeholders empty", () => {
     expect(fillTitle("{incidentId}: {one_line}", { one_line: "Missed  the\nconsumer" }, "INCIDENT-1")).toBe("INCIDENT-1: Missed the consumer");
     expect(fillTitle("{a} / {b} / {nope}", { a: ["x", "y"], b: 3 }, null)).toBe("x, y / 3 /");
