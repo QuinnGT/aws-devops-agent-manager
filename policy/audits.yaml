@@ -115,8 +115,8 @@ profiles:
     fixOwners:
       - { id: customer_access, label: Customer tool or data access }
       - { id: customer_trigger, label: Customer trigger context }
-      - { id: customer_memory, label: Customer memory or runbook content }
-      - { id: instructions, label: Instruction and skill package }
+      - { id: customer_memory, label: Customer memory or runbook content, changesPackage: true }
+      - { id: instructions, label: Instruction and skill package, changesPackage: true }
       - { id: aws_service, label: DevOps Agent service behavior }
       - { id: none_feasible, label: No feasible fix }
     findings:
@@ -255,8 +255,8 @@ profiles:
     fixOwners:
       - { id: access, label: Tool or data access }
       - { id: trigger, label: Trigger context }
-      - { id: memory, label: Memory or runbook content }
-      - { id: instructions, label: Instruction and skill package }
+      - { id: memory, label: Memory or runbook content, changesPackage: true }
+      - { id: instructions, label: Instruction and skill package, changesPackage: true }
       - { id: aws_service, label: DevOps Agent service behavior }
       - { id: none_feasible, label: No feasible fix }
     findings:

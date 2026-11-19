@@ -250,7 +250,8 @@ export const auditProfileSchema = z.object({
   analyzers: z.array(z.string()).min(1),
   review: reviewConfig,
   failureModes: z.array(labeled).default([]),
-  fixOwners: z.array(labeled).default([]),
+  /** Who a fix is for. changesPackage: the fix is a change to the instruction package, made in a revision; otherwise it is an action for people, listed in the report. */
+  fixOwners: z.array(labeled.extend({ changesPackage: z.boolean().default(false) })).default([]),
   findings: z.array(findingExtractor).min(1),
   report: reportConfig,
 });

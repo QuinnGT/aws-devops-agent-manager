@@ -6,6 +6,7 @@
  * See README.md.
  */
 export * from "./types";
+export { listRevisionOptions, addFindingsToRevision, createRevisionForFindings, findingRevisionLinks, type RevisionOption, type FindingRevisionLink } from "./findings";
 export { REVISION_PERMISSIONS, requestCreateRevision, requestSaveRevision, createPlanFromRevision, exportRevision, revisionDownloadHeaders, abandonRevision, type CreateRevisionPlanResult, type ExportRevisionResult } from "./service";
 export { createRevisionRequest, prepareCreateRevision, createRevisionHandler, type CreateRevisionRequest, type CreateRevisionResult } from "./create";
 export { saveRevisionRequest, prepareSaveRevision, saveRevisionHandler, type SaveRevisionRequest, type SaveRevisionInput, type SaveRevisionResult } from "./save";
