@@ -45,8 +45,13 @@ export const REVISION_PERMISSIONS = {
 } as const satisfies Record<string, Permission>;
 
 /** Validate and enqueue the create job. Returns the revision ID and the job_runs ID for progress polling. */
-export async function requestCreateRevision(space: Space, request: CreateRevisionRequest, actor: RevisionActor): Promise<{ revisionId: string; runId: string; branch: string }> {
-  const row = await prepareCreateRevision(space, request, actor);
+export async function requestCreateRevision(
+  space: Space,
+  request: CreateRevisionRequest,
+  actor: RevisionActor,
+  opts: { toAddressFindingIds?: readonly string[] } = {},
+): Promise<{ revisionId: string; runId: string; branch: string }> {
+  const row = await prepareCreateRevision(space, request, actor, opts);
   try {
     const runId = await enqueue(createRevisionJob, { revisionId: row.id }, { actor: { email: actor.email }, spaceId: space.id });
     await updateRevision(row.id, { createRunId: runId });

@@ -61,6 +61,11 @@ save:
   # Bytes of file content one save may carry (10 MB).
   maxBytes: 10485760
 
+toAddress:
+  # Most findings one revision's to-address list may hold. Findings are sent to
+  # it from an audit and come off it when a save links them.
+  maxFindings: 200
+
 trailers:
   revisionId: Revision-Id
   # One trailer per linked finding.

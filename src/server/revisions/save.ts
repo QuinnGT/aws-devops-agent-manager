@@ -5,7 +5,7 @@ import { TRAILERS } from "@/lib/assets/types";
 import { recordAuditEvent } from "@/server/audit-log";
 import { listLinkableFindings } from "@/server/audits/linkable";
 import { db } from "@/server/db/client";
-import { revisionChanges } from "@/server/db/schema";
+import { revisionChanges, revisions } from "@/server/db/schema";
 import { BranchMovedError } from "@/server/git/history-repo";
 import type { JobContext } from "@/server/jobs/registry";
 import type { PackageContents } from "@/server/packages/types";
@@ -15,7 +15,8 @@ import { runRevisionBuild, toRevisionBuild } from "./build";
 import { renderChangelogSection, upsertChangelog, type ChangelogChange, type ChangelogFinding } from "./changelog";
 import { layoutOf, liveRefs, workerContext } from "./context";
 import { applyEdits, changedPackagePaths, checkEdits, packageFileChanges, readRevisionPackage } from "./package-files";
-import { findingsForChangelog, getRevision, getRevisionById, listChanges, updateRevision, type RevisionRow } from "./queries";
+import { findingsForChangelog, getRevision, getRevisionById, listChanges, type RevisionRow } from "./queries";
+import { takeOffList } from "./to-address";
 import { RevisionError, type RevisionActor, type RevisionFileEdit } from "./types";
 
 /**
@@ -236,27 +237,34 @@ async function saveRevision(row: RevisionRow, input: SaveRevisionInput, ctx: Job
   }
 
   const build = toRevisionBuild(check, commit, { maxResults: policy.revisions.pages.maxResults, now });
-  await db()
-    .insert(revisionChanges)
-    .values({
-      id: input.changeId,
-      revisionId: row.id,
-      spaceId: row.spaceId,
-      commit,
-      parentCommit: parent,
-      changedPaths: edited.changedPaths,
-      buildPaths,
-      message: input.message,
-      findingIds,
-      unlinkedReason: findingIds.length ? null : input.unlinkedReason,
-      buildStatus: build.status,
-      author: ctx.actor.email,
-      authorName: input.authorName,
-      jobRunId: /^[0-9a-f-]{36}$/i.test(ctx.runId) ? ctx.runId : null,
-      createdAt: now,
-    })
-    .onConflictDoNothing();
-  await updateRevision(row.id, { headCommit: commit, latestBuild: build });
+  // One transaction: the change row, the new head and the findings it takes off the to-address list land together.
+  await db().transaction(async (tx) => {
+    await tx
+      .insert(revisionChanges)
+      .values({
+        id: input.changeId,
+        revisionId: row.id,
+        spaceId: row.spaceId,
+        commit,
+        parentCommit: parent,
+        changedPaths: edited.changedPaths,
+        buildPaths,
+        message: input.message,
+        findingIds,
+        unlinkedReason: findingIds.length ? null : input.unlinkedReason,
+        buildStatus: build.status,
+        author: ctx.actor.email,
+        authorName: input.authorName,
+        jobRunId: /^[0-9a-f-]{36}$/i.test(ctx.runId) ? ctx.runId : null,
+        createdAt: now,
+      })
+      .onConflictDoNothing();
+    const [cur] = await tx.select({ toAddress: revisions.toAddressFindingIds }).from(revisions).where(eq(revisions.id, row.id)).for("update");
+    await tx
+      .update(revisions)
+      .set({ headCommit: commit, latestBuild: build, toAddressFindingIds: takeOffList(cur?.toAddress ?? [], findingIds), updatedAt: new Date() })
+      .where(eq(revisions.id, row.id));
+  });
 
   if (policy.revisions.pushBranches) {
     try {
