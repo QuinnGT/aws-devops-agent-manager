@@ -182,7 +182,7 @@ export function AuditHeader({ data, tab }: { data: AuditHeaderData; tab: AuditTa
 
   const reviewerMeta = (r: ReviewerView) => (
     <span>
-      Reviewer {r.label}
+      Reviewer: {r.label}
       {r.options.length ? <span> ({r.options.map((o) => `${o.label.toLowerCase()} ${o.valueLabel.toLowerCase()}`).join(", ")})</span> : null}
     </span>
   );

@@ -316,6 +316,7 @@ export default async function AuditItemPage({ params, searchParams }: PageProps<
           auditId={audit.id}
           itemId={view.item.id}
           incident={incident}
+          hasReview={!!view.item.review}
           download={{ enabled: files.download.enabled, reason: files.download.disabledReason }}
           import={{ enabled: files.import.enabled, reason: files.import.disabledReason }}
           maxUploadMb={maxUploadMb}

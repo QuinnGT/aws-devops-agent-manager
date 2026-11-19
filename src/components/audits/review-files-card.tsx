@@ -19,6 +19,8 @@ export interface ReviewFilesCardProps {
   itemId?: string;
   /** The investigation's name, for its own page */
   incident?: string;
+  /** The investigation already has a review, which an import replaces */
+  hasReview?: boolean;
   /** Investigations waiting for a review file, for the audit's card */
   waiting?: number;
   download: { enabled: boolean; reason: string | null };
@@ -136,7 +138,7 @@ export function ReviewFilesCard(p: ReviewFilesCardProps) {
         </div>
 
         <div className="space-y-3 border-t pt-3">
-          <h3 className="text-[13px] font-semibold">{single ? "Import the review" : "Import reviews"}</h3>
+          <h3 className="text-[13px] font-semibold">{single ? (p.hasReview ? "Replace the review" : "Import the review") : "Import reviews"}</h3>
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label htmlFor={`${ids}-reviewer`}>Reviewer</Label>
@@ -180,7 +182,7 @@ export function ReviewFilesCard(p: ReviewFilesCardProps) {
                   <FileUp aria-hidden />
                   Choose {single ? "file" : "a zip"}
                 </Button>
-                <span className="min-w-0 truncate font-mono text-xs text-muted-foreground">{files.length ? files.map((f) => f.name).join(", ") : "No file chosen"}</span>
+                <span className={`min-w-0 truncate text-xs text-muted-foreground ${files.length ? "font-mono" : ""}`}>{files.length ? files.map((f) => f.name).join(", ") : "No file chosen"}</span>
               </div>
               <p id={`${ids}-file-help`} className="text-xs text-muted-foreground">
                 {single ? "Add manifest.json from the same folder, so the app can check that the review was made from this journal. " : "Each folder holds its review.json and its manifest.json, as downloaded. "}
