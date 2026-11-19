@@ -65,22 +65,31 @@ describe("what happens next", () => {
     const s = nextStepFor(input({}));
     expect(s).toMatchObject({ rule: "package-open", action: { kind: "add-to-revision", label: "Add to revision…", acceptFirst: false }, note: null });
     expect(s.text).toContain("It is a package fix (Customer memory or runbook content), so it is made in a revision");
-    expect(s.text).toContain("It isn't in one yet.");
+    expect(s.text).toContain("It isn't in one yet. Accepting it didn't change the agent.");
   });
 
   it("offers 'Accept and add to revision…' for a proposed package fix, to someone who can decide and build", () => {
     const s = nextStepFor(input({ state: "proposed" }));
     expect(s.action).toEqual({ kind: "add-to-revision", label: "Accept and add to revision…", acceptFirst: true });
-    expect(s.text.startsWith("Accepting adds it to the package fixes.")).toBe(true);
+    expect(s.text.startsWith("Accepting only queues it with the package fixes. It doesn't change the agent.")).toBe(true);
   });
 
-  it("shows the revisions an accepted package fix went to and offers nothing more", () => {
-    const links = [link(), link({ revisionId: "r2", revisionName: "v2.4", kind: "linked", planId: "p1", planState: "applied", releaseName: "v2.4" })];
+  it("says a fix in a revision is only queued, and names how far it got", () => {
+    const links = [link(), link({ revisionId: "r2", revisionName: "v2.4", kind: "linked", planId: "p1", planState: "waiting" })];
     const s = nextStepFor(input({ links }));
     expect(s).toMatchObject({ rule: "package-sent", action: null });
     expect(s.links).toEqual(links);
-    expect(s.text).toBe("In 2 revisions. It is made there and planned to the space from there.");
-    expect(nextStepFor(input({ links: [link()] })).text).toBe("In a revision. It is made there and planned to the space from there.");
+    expect(s.text).toBe(
+      "Queued in 2 revisions, not applied yet. A fix in a revision is only queued: it reaches the agent after someone edits the files in the revision, saves, and applies its plan.",
+    );
+    expect(nextStepFor(input({ links: [link()] })).text).toMatch(/^Queued in a revision, not applied yet\./);
+  });
+
+  it("says applied only when every revision it is in was applied", () => {
+    const applied = link({ revisionId: "r2", revisionName: "v2.4", kind: "linked", planId: "p1", planState: "applied" });
+    expect(nextStepFor(input({ links: [applied] })).text).toBe("Applied. The plan of its revision was applied to the space.");
+    expect(nextStepFor(input({ links: [applied, applied] })).text).toBe("Applied. The plan of its revisions was applied to the space.");
+    expect(nextStepFor(input({ links: [applied, link()] })).text).toMatch(/^Queued in 2 revisions, not applied yet\./);
   });
 
   it("treats an abandoned or failed revision as no revision", () => {
@@ -131,14 +140,19 @@ describe("how far the package fixes got", () => {
 
   it("counts the accepted package fixes that are in a revision, and lists the others", () => {
     const links = new Map([["a", [link()]], ["b", [link({ revisionState: "abandoned" })]]]);
-    expect(fixProgressOf(fixes, links)).toEqual({ total: 2, inRevision: 1, open: ["b"] });
+    expect(fixProgressOf(fixes, links)).toEqual({ total: 2, inRevision: 1, applied: 0, open: ["b"] });
+  });
+
+  it("counts the fixes whose revision was applied", () => {
+    const links = new Map([["a", [link({ planId: "p1", planState: "applied" })]], ["b", [link()]]]);
+    expect(fixProgressOf(fixes, links)).toEqual({ total: 2, inRevision: 2, applied: 1, open: [] });
   });
 
   it("is zero of zero without package fixes", () => {
-    expect(fixProgressOf([f("c", "accepted", ACTION)], new Map())).toEqual({ total: 0, inRevision: 0, open: [] });
+    expect(fixProgressOf([f("c", "accepted", ACTION)], new Map())).toEqual({ total: 0, inRevision: 0, applied: 0, open: [] });
   });
 
   it("doesn't claim anything when the revisions couldn't be read", () => {
-    expect(fixProgressOf(fixes, null)).toEqual({ total: 2, inRevision: null, open: [] });
+    expect(fixProgressOf(fixes, null)).toEqual({ total: 2, inRevision: null, applied: null, open: [] });
   });
 });

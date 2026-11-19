@@ -20,8 +20,11 @@ import { profileOf } from "./store";
 const r = vi.hoisted(() => ({
   links: new Map<string, unknown[]>() as Map<string, unknown[]>,
   options: [] as unknown[],
+  list: [] as unknown[],
+  sources: new Map<string, unknown[]>() as Map<string, unknown[]>,
   linksFail: false,
   optionsFail: false,
+  listFail: false,
   asked: [] as { fn: string; ids?: string[] }[],
 }));
 vi.mock("@/server/revisions", () => ({
@@ -35,6 +38,12 @@ vi.mock("@/server/revisions", () => ({
     if (r.optionsFail) throw new Error("revisions are down");
     return r.options;
   }),
+  loadRevisionList: vi.fn(async () => {
+    r.asked.push({ fn: "list" });
+    if (r.listFail) throw new Error("revisions are down");
+    return { revisions: r.list };
+  }),
+  revisionAuditSources: vi.fn(async (_space: string, ids: string[]) => new Map(ids.map((id) => [id, r.sources.get(id) ?? []]))),
 }));
 
 const policy = getAppPolicy();
@@ -103,8 +112,11 @@ beforeAll(async () => {
 beforeEach(() => {
   r.links = new Map();
   r.options = [];
+  r.list = [];
+  r.sources = new Map();
   r.linksFail = false;
   r.optionsFail = false;
+  r.listFail = false;
   r.asked = [];
 });
 
@@ -172,7 +184,44 @@ describe("where the fixes go", () => {
     expect(ctx.links!.get(ids.memory!)).toEqual([link()]);
     expect(ctx.options).toEqual([option()]);
     // Two accepted package fixes; one is in a revision, the other isn't.
-    expect(ctx.progress).toEqual({ total: 2, inRevision: 1, open: [ids.instr!] });
+    expect(ctx.progress).toEqual({ total: 2, inRevision: 1, applied: 0, open: [ids.instr!] });
+  });
+
+  it("tells the revisions apart: base, who started it, its audits, how far it got, and how many of this audit's fixes it holds", async () => {
+    // The accepted fix and the rejected one are both in rev-1; only the accepted one counts as a fix of this audit in it.
+    r.links = new Map([
+      [ids.memory!, [link()]],
+      [ids.rejected!, [link()]],
+    ]);
+    r.options = [option()];
+    r.list = [{ id: "rev-1", name: "moss-lag-fixes", state: "open", changes: 2, plan: null, base: { label: "v2.4" }, createdBy: "sam@example.com", createdAt: new Date("2026-11-17T09:00:00Z"), toAddress: 1, linkedFindings: 0 }];
+    r.sources = new Map([["rev-1", [{ auditId, auditName: "Detail audit", findings: 1 }]]]);
+    const ctx = await loadFixContext(space.id, auditId, await audit(), { canBuild: true });
+    expect(ctx.revisions.get("rev-1")).toMatchObject({
+      name: "moss-lag-fixes",
+      stage: { stage: "saved", words: "Saved, no plan yet" },
+      base: "v2.4",
+      createdBy: "sam@example.com",
+      audits: [{ auditId, auditName: "Detail audit", findings: 1 }],
+      fromThisAudit: 1,
+    });
+  });
+
+  it("counts a fix as applied when its revision's plan was applied", async () => {
+    r.links = new Map([[ids.memory!, [link({ kind: "linked", planId: "p1", planState: "applied" })]], [ids.instr!, [link()]]]);
+    const ctx = await loadFixContext(space.id, auditId, await audit(), { canBuild: false });
+    expect(ctx.progress).toEqual({ total: 2, inRevision: 2, applied: 1, open: [] });
+  });
+
+  it("still loads the audit when the details of the revisions can't be read", async () => {
+    r.links = new Map([[ids.memory!, [link()]]]);
+    r.listFail = true;
+    const err = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const ctx = await loadFixContext(space.id, auditId, await audit(), { canBuild: false });
+    expect(ctx.revisions.size).toBe(0);
+    expect(ctx.progress.inRevision).toBe(1);
+    expect(err).toHaveBeenCalledTimes(1);
+    err.mockRestore();
   });
 
   it("gives the page the words for each finding", async () => {
@@ -200,7 +249,7 @@ describe("where the fixes go", () => {
     const ctx = await loadFixContext(space.id, auditId, await audit(), { canBuild: true });
     expect(ctx.links).toBeNull();
     expect(ctx.options).toEqual([]);
-    expect(ctx.progress).toEqual({ total: 2, inRevision: null, open: [] });
+    expect(ctx.progress).toEqual({ total: 2, inRevision: null, applied: null, open: [] });
     expect(ctx.fixes).toHaveLength(5);
     expect(err).toHaveBeenCalledTimes(2);
     err.mockRestore();

@@ -268,31 +268,7 @@ export function unmatchedText(u: { fileName: string; reason: string; code: strin
 }
 
 
-/** A plan's state in a sentence, for the revisions a finding went to. */
-export function planStateWords(state: string): string {
-  const words: Record<string, string> = {
-    checking: "being checked",
-    ready: "ready to apply",
-    waiting: "waiting for approval",
-    approved: "approved",
-    applying: "being applied",
-    applied: "applied",
-    failed: "failed",
-    discarded: "discarded",
-  };
-  return words[state] ?? state;
-}
-
-/** A revision's state when it isn't plainly open, for the revisions a finding went to; null for an open revision. */
-export function revisionStateWords(state: string): string | null {
-  const words: Record<string, string> = { creating: "Being created", applied: "Applied", abandoned: "Abandoned", failed: "Not created" };
-  return words[state] ?? null;
-}
-
-/** What a revision does with the finding: "To address" while it waits on the list, "Linked by a save" once a save names it. */
-export function linkKindWords(kind: "to-address" | "linked"): string {
-  return kind === "linked" ? "Linked by a save" : "To address";
-}
+export { planStateWords } from "@/server/audits/revision-stage";
 
 /**
  * The check result under one citation of the evidence list: what the citation check found, in words.

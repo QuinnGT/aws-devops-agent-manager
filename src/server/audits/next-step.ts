@@ -1,5 +1,6 @@
 import type { FindingRevisionLink } from "@/server/revisions";
 import type { AuditProfile } from "@/server/policy/sections/audits";
+import { linkApplied } from "./revision-stage";
 import type { FindingState } from "./states";
 
 /**
@@ -84,7 +85,11 @@ export interface NextStep {
 }
 
 const NO_BUILD = "Someone who can build revisions adds it to one.";
-const packageWhere = (owner: string) => `It is a package fix (${owner}), so it is made in a revision: a copy of the package where you edit it, save with this finding linked, and plan the change to the space.`;
+/** Why a package fix goes to a revision, and that being in one only queues it. */
+const packageWhere = (owner: string) =>
+  `It is a package fix (${owner}), so it is made in a revision: a copy of the package. Someone edits the files there, saves with this finding linked, and applies the revision's plan to the space.`;
+/** Accepting, or being in a revision, doesn't change the agent. */
+const QUEUED = "A fix in a revision is only queued: it reaches the agent after someone edits the files in the revision, saves, and applies its plan.";
 
 /** The message and the action for a finding. */
 export function nextStepFor(i: NextStepInput): NextStep {
@@ -123,7 +128,14 @@ export function nextStepFor(i: NextStepInput): NextStep {
   const links = [...i.links];
   const active = links.filter(isActiveLink);
   if (i.state === "accepted" && active.length) {
-    return { ...base, rule: "package-sent", links, text: active.length === 1 ? "In a revision. It is made there and planned to the space from there." : `In ${active.length} revisions. It is made there and planned to the space from there.` };
+    const applied = active.every(linkApplied);
+    const where = active.length === 1 ? "a revision" : `${active.length} revisions`;
+    return {
+      ...base,
+      rule: "package-sent",
+      links,
+      text: applied ? `Applied. The plan of ${where === "a revision" ? "its revision" : "its revisions"} was applied to the space.` : `Queued in ${where}, not applied yet. ${QUEUED}`,
+    };
   }
   const dead = links.length && !active.length ? " Its earlier revision was abandoned or failed." : "";
   if (i.state === "accepted") {
@@ -131,7 +143,7 @@ export function nextStepFor(i: NextStepInput): NextStep {
       ...base,
       links,
       rule: "package-open",
-      text: `${packageWhere(n.ownerLabel)} It isn't in one yet.${dead}`,
+      text: `${packageWhere(n.ownerLabel)} It isn't in one yet. Accepting it didn't change the agent.${dead}`,
       action: i.canBuild ? { kind: "add-to-revision", label: "Add to revision…", acceptFirst: false } : null,
       note: i.canBuild ? null : NO_BUILD,
     };
@@ -142,7 +154,7 @@ export function nextStepFor(i: NextStepInput): NextStep {
     ...base,
     links,
     rule: "package-open",
-    text: `Accepting adds it to the package fixes. ${packageWhere(n.ownerLabel)}`,
+    text: `Accepting only queues it with the package fixes. It doesn't change the agent. ${packageWhere(n.ownerLabel)}`,
     action: can ? { kind: "add-to-revision", label: "Accept and add to revision…", acceptFirst: true } : null,
     note: !i.canDecide ? null : i.canBuild ? null : "You can accept it here. Someone who can build revisions adds it to one afterwards.",
   };
@@ -153,6 +165,8 @@ export interface FixProgress {
   total: number;
   /** Of those, in a revision that can still take them; null when the revisions couldn't be read */
   inRevision: number | null;
+  /** Of those, whose revision's plan was applied to the space; null when the revisions couldn't be read */
+  applied: number | null;
   /** The accepted package fixes in none, for "Add the accepted package fixes to a revision…" (empty when the revisions couldn't be read) */
   open: string[];
 }
@@ -163,12 +177,9 @@ export function fixProgressOf(
   links: ReadonlyMap<string, readonly FindingRevisionLink[]> | null,
 ): FixProgress {
   const accepted = fixes.filter((f) => f.state === "accepted" && f.nature.kind === "package");
-  if (!links) return { total: accepted.length, inRevision: null, open: [] };
+  if (!links) return { total: accepted.length, inRevision: null, applied: null, open: [] };
   const open = accepted.filter((f) => !(links.get(f.id) ?? []).some(isActiveLink)).map((f) => f.id);
-  return { total: accepted.length, inRevision: accepted.length - open.length, open };
+  const applied = accepted.filter((f) => (links.get(f.id) ?? []).some((l) => isActiveLink(l) && linkApplied(l))).length;
+  return { total: accepted.length, inRevision: accepted.length - open.length, applied, open };
 }
 
-/** "to address", "linked": what a revision does with the finding. */
-export function linkWords(l: Pick<FindingRevisionLink, "kind">): string {
-  return l.kind === "linked" ? "Linked by a save" : "To address";
-}

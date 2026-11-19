@@ -19,9 +19,7 @@ import {
   citationResult,
   confirmRevisionLabel,
   evidenceSummary,
-  linkKindWords,
   planStateWords,
-  revisionStateWords,
   showClosedText,
   compactNumber,
   failedReviewSentence,
@@ -539,14 +537,10 @@ describe("words for the flow", () => {
     expect(showClosedText("finalized", 1)).toBe("Show 1 audit with a saved record");
   });
 
-  it("words the plan and revision a finding went to", () => {
+  it("words the plan a finding went to", () => {
     expect(planStateWords("waiting")).toBe("waiting for approval");
     expect(planStateWords("applied")).toBe("applied");
     expect(planStateWords("odd")).toBe("odd");
-    expect(revisionStateWords("open")).toBeNull();
-    expect(revisionStateWords("creating")).toBe("Being created");
-    expect(linkKindWords("to-address")).toBe("To address");
-    expect(linkKindWords("linked")).toBe("Linked by a save");
   });
 
   it("words the confirm button of 'Add to revision…'", () => {

@@ -27,6 +27,7 @@ export {
   type BuildSummary,
   type ActionState,
 } from "./loaders";
+export { revisionAuditSources, type RevisionAuditSource } from "./sources";
 export { renderChangelogSection, upsertChangelog, changelogRow, changelogDate, type ChangelogChange, type ChangelogFinding, type ChangelogInput } from "./changelog";
 export { revisionPlanInput, revisionPlanReason, revisionPlanTitle, findingLabel } from "./plan-input";
 export { checkRevisionName, revisionBranch, revisionPackageDir, revisionPackageName, releaseNameFor, revisionNameKey } from "./names";
