@@ -92,6 +92,7 @@ export default async function RevisionsPage({ params, searchParams }: PageProps<
                   <TableHead className="pl-4 text-[13px] text-muted-foreground">Revision</TableHead>
                   <TableHead className="text-[13px] text-muted-foreground">Based on</TableHead>
                   <TableHead className="text-[13px] text-muted-foreground">State</TableHead>
+                  <TableHead className="text-right text-[13px] text-muted-foreground">To address</TableHead>
                   <TableHead className="text-right text-[13px] text-muted-foreground">Linked findings</TableHead>
                   <TableHead className="text-[13px] text-muted-foreground">Last build</TableHead>
                   <TableHead className="text-[13px] text-muted-foreground">Plan and release</TableHead>
@@ -124,6 +125,7 @@ export default async function RevisionsPage({ params, searchParams }: PageProps<
                       <TableCell>
                         <StatusBadge {...REVISION_STATUS[revisionWord(r)]} />
                       </TableCell>
+                      <TableCell className="text-right tabular-nums">{r.toAddress}</TableCell>
                       <TableCell className="text-right tabular-nums">{r.linkedFindings}</TableCell>
                       <TableCell className="whitespace-nowrap">
                         {r.lastBuild && r.changes > 0 ? (

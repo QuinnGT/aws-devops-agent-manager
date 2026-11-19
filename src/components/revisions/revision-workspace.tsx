@@ -1,8 +1,9 @@
 "use client";
 
 import { CircleCheck, CirclePlus, CircleX, Download, File, FileText, Folder, FolderOpen, GitBranch, GitPullRequest, Lock, Microscope, PenLine, RotateCcw, Save, Trash2, TriangleAlert, Wrench } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useId, useMemo, useRef, useState, useTransition, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useId, useMemo, useRef, useState, useTransition, type ReactNode } from "react";
 import { DisabledReason } from "@/components/common/disabled-reason";
 import { PageHeader } from "@/components/common/page-header";
 import { StatusBadge } from "@/components/common/status-badge";
@@ -30,6 +31,7 @@ import { AbandonButton, type AbandonRevisionAction } from "./abandon-button";
 import { applyQuickFix, deleteOpenFile, editedFiles, isEdited, markSaved, newFileProblem, renameOpenFile, restoreOpenFile, splitIncident, type OpenFile } from "./editor-state";
 import { SaveDialog, type SaveOutcome, type SaveRevisionAction, type SaveRules } from "./save-dialog";
 import { SavesList, type SaveRow } from "./saves-list";
+import { ToAddressCard, type RemoveToAddressAction, type ToAddressItem } from "./to-address-card";
 import { FileDiffPanel } from "./file-diff-panel";
 import { exportLeftOutText, planButtonReason, planHint, REVISION_STATUS, revisionWord, type RevisionStateInput } from "./words";
 
@@ -93,6 +95,16 @@ export interface RevisionWorkspaceProps {
   resultFiles: (string | null)[];
   rebuilt: string | null;
   findings: { id: string; title: string; incidentId: string | null; kindLabel: string; auditName: string; href: string | null; state: string }[];
+  /** The findings sent to the revision from an audit and not linked yet */
+  toAddress: ToAddressItem[];
+  /** Show the "To address" card: it has findings, or the revision still takes them */
+  showToAddress: boolean;
+  /** `revisions.build` and an open revision: findings can be taken off the list */
+  canRemoveToAddress: boolean;
+  removeToAddressAction: RemoveToAddressAction;
+  auditsHref: string;
+  /** The audits the revision's findings come from */
+  sourceAudits: { id: string; name: string; href: string }[];
   changelog: string;
   changelogPath: string | null;
   /** `edited`: the files the saves edited; `built`: the files the build wrote (change record, validation result) */
@@ -344,6 +356,19 @@ export function RevisionWorkspace(p: RevisionWorkspaceProps) {
         </span>,
         `${p.revision.saves} ${p.revision.saves === 1 ? "save" : "saves"}`,
         `${p.revision.linkedFindings} linked ${p.revision.linkedFindings === 1 ? "finding" : "findings"}`,
+        p.sourceAudits.length ? (
+          <span key="audits">
+            Findings from{" "}
+            {p.sourceAudits.map((a, i) => (
+              <Fragment key={a.id}>
+                {i > 0 ? ", " : null}
+                <Link href={a.href} className="underline underline-offset-4 hover:text-foreground">
+                  {a.name}
+                </Link>
+              </Fragment>
+            ))}
+          </span>
+        ) : null,
       ]}
       // One row at lg and up: the meta line wraps under the title, the buttons stay at the right with their reason under them.
       className="lg:flex-nowrap"
@@ -546,6 +571,7 @@ export function RevisionWorkspace(p: RevisionWorkspaceProps) {
 
   const rail = (
     <div className="grid content-start gap-4 sm:grid-cols-2 min-[900px]:col-span-2 xl:col-span-1 xl:grid-cols-1">
+      {p.showToAddress ? <ToAddressCard items={p.toAddress} canRemove={p.canRemoveToAddress} removeAction={p.removeToAddressAction} auditsHref={p.auditsHref} /> : null}
       <Card className="gap-0 py-0" role="region" aria-labelledby="rev-build-h">
         <div className="flex min-h-12 items-center justify-between gap-3 border-b px-4 py-2">
           <h2 id="rev-build-h" className="text-sm font-semibold">

@@ -14,7 +14,7 @@ import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/in
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import type { SaveFinding } from "@/server/revisions/views";
-import { changelogPreview, lineCounts, rankFindings, saveButtonReason, searchFindings, splitIncident, type OpenFile, type UnlinkedRule } from "./editor-state";
+import { changelogPreview, groupFindings, lineCounts, preselectedFindings, saveButtonReason, searchFindings, splitIncident, type OpenFile, type UnlinkedRule } from "./editor-state";
 
 export type SaveRevisionAction = (input: {
   revisionId: string;
@@ -30,6 +30,8 @@ export interface SaveRules {
   reasonMinChars: number;
   reasonMaxChars: number;
   messageMaxChars: number;
+  /** Most findings one save may link (revisions.yaml save.maxFindings) */
+  maxFindings: number;
 }
 
 /** What the job reported when it finished. */
@@ -41,7 +43,8 @@ const MAX_SHOWN = 50;
  * The save dialog (revision-detail.md, option 1 "Save"): the changed files
  * with their counts, the message, linked accepted findings (or the reason
  * when none is linked, revisions.yaml save.unlinked), and the changelog
- * entry preview. "Save and build" starts the revisions.save job and shows
+ * entry preview. The findings sent to the revision from an audit are listed
+ * first and ticked each time the dialog opens. "Save and build" starts the revisions.save job and shows
  * its progress, then the build result.
  */
 export function SaveDialog({
@@ -74,7 +77,14 @@ export function SaveDialog({
   const ids = { message: useId(), messageHelp: useId(), search: useId(), findingsHelp: useId(), reason: useId(), reasonHelp: useId() };
   const [message, setMessage] = useState("");
   const [q, setQ] = useState("");
-  const [chosen, setChosen] = useState<string[]>([]);
+  const preselect = useMemo(() => preselectedFindings(findings, rules.maxFindings), [findings, rules.maxFindings]);
+  const [chosen, setChosen] = useState<string[]>(preselect.ids);
+  // Each time the dialog opens, the findings sent to the revision are ticked again (adjusting state while rendering, not in an effect).
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
+    if (open) setChosen(preselect.ids);
+  }
   const [reason, setReason] = useState("");
   const [result, setResult] = useState<ActionResult<{ runId: string; changeId: string }> | null>(null);
   const [outcome, setOutcome] = useState<SaveOutcome | null>(null);
@@ -83,9 +93,9 @@ export function SaveDialog({
 
   const counts = useMemo(() => files.map((f) => ({ path: f.path, isNew: f.base === null, deleted: f.deleted === true, ...lineCounts(f.base, f.deleted ? "" : f.text) })), [files]);
   const matches = useMemo(() => searchFindings(findings, q), [findings, q]);
-  // Findings that name an edited file or asset come first, then the rest.
-  const ranked = useMemo(() => rankFindings(matches, files.map((f) => f.path)), [matches, files]);
-  const ordered = useMemo(() => [...ranked.related, ...ranked.rest], [ranked]);
+  // Findings sent to the revision first, then those that name an edited file or asset, then the rest.
+  const groups = useMemo(() => groupFindings(matches, files.map((f) => f.path)), [matches, files]);
+  const ordered = useMemo(() => groups.flatMap((g) => g.items.map((item, i) => ({ item, header: i === 0 && (groups.length > 1 || g.key !== "rest") ? g.label : null }))), [groups]);
   const picked = findings.filter((f) => chosen.includes(f.id));
   const runId = result?.ok ? result.runId : null;
   const running = runId !== null && outcome === null;
@@ -96,7 +106,7 @@ export function SaveDialog({
     picked.map((f) => ({ id: f.id, incidentId: f.incidentId, title: f.title, records: f.records })),
     chosen.length ? null : reason,
   );
-  const blocked = saveButtonReason({ message, findings: chosen.length, reason, rule: rules.unlinked, reasonMinChars: rules.reasonMinChars, messageMaxChars: rules.messageMaxChars, files: files.length });
+  const blocked = saveButtonReason({ message, findings: chosen.length, reason, rule: rules.unlinked, reasonMinChars: rules.reasonMinChars, messageMaxChars: rules.messageMaxChars, files: files.length, maxFindings: rules.maxFindings });
   const needsReason = chosen.length === 0 && rules.unlinked === "reason";
 
   const reset = () => {
@@ -228,23 +238,17 @@ export function SaveDialog({
                   <p className="rounded-md border px-3 py-2.5 text-[13px] text-muted-foreground">No accepted finding matches “{q}”.</p>
                 ) : (
                   <ul className="max-h-64 overflow-y-auto rounded-md border" aria-label={q ? `Accepted findings matching ${q}` : "Accepted findings"}>
-                    {ordered.slice(0, MAX_SHOWN).map((f, i) => {
+                    {ordered.slice(0, MAX_SHOWN).map(({ item: f, header }) => {
                       const cid = `${ids.search}-${f.id}`;
                       const t = splitIncident(f.title, f.incidentId);
                       const owner = f.kind === "fix" && f.owner ? `${f.ownerLabel ?? "Owner"}: ${f.owner}` : null;
                       const meta = [f.kindLabel, owner ?? f.auditName, f.kind === "fix" ? f.incidentId : f.acceptedBy ? `accepted by ${f.acceptedBy}` : null].filter(Boolean).join(" · ");
-                      const header =
-                        ranked.related.length && i === 0 ? (
-                          <li key="related-h" className="border-b bg-muted/40 px-3 py-1 text-xs font-medium text-muted-foreground">
-                            About the files you changed
-                          </li>
-                        ) : ranked.related.length && i === ranked.related.length ? (
-                          <li key="rest-h" className="border-b bg-muted/40 px-3 py-1 text-xs font-medium text-muted-foreground">
-                            Other accepted findings
-                          </li>
-                        ) : null;
                       return [
-                        header,
+                        header ? (
+                          <li key={`${header}-h`} className="border-b bg-muted/40 px-3 py-1 text-xs font-medium text-muted-foreground">
+                            {header}
+                          </li>
+                        ) : null,
                         <li key={f.id} className="flex items-start gap-2 border-b px-3 py-2 last:border-b-0">
                           <Checkbox id={cid} checked={chosen.includes(f.id)} onCheckedChange={(on) => setChosen((c) => (on ? [...c, f.id] : c.filter((x) => x !== f.id)))} disabled={running} className="-mt-0.5" />
                           <Label htmlFor={cid} className="grid gap-0.5 text-[13px] leading-5 font-normal">
@@ -263,7 +267,9 @@ export function SaveDialog({
                   </ul>
                 )}
                 <p id={ids.findingsHelp} className="text-xs text-muted-foreground">
-                  Only accepted findings can be linked. {chosen.length} selected.{matches.length > MAX_SHOWN ? ` Showing ${MAX_SHOWN} of ${matches.length}; search to narrow them.` : ""}
+                  Only accepted findings can be linked. {chosen.length} selected.
+                  {preselect.left > 0 ? ` One save can link ${rules.maxFindings} findings, so the first ${rules.maxFindings} of the ${preselect.left + rules.maxFindings} sent to this revision are ticked.` : ""}
+                  {matches.length > MAX_SHOWN ? ` Showing ${MAX_SHOWN} of ${matches.length}; search to narrow them.` : ""}
                 </p>
                 {fieldErrors.findingIds ? (
                   <p role="alert" className="text-xs text-destructive-fg">

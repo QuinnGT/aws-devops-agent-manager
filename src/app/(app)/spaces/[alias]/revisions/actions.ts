@@ -3,7 +3,7 @@
 import { z } from "zod";
 import type { ActionResult } from "@/components/plans/action-state";
 import { AuthError, requirePermission } from "@/server/auth/dal";
-import { abandonRevision, createPlanFromRevision, REVISION_PERMISSIONS, RevisionError, requestCreateRevision, requestSaveRevision } from "@/server/revisions";
+import { abandonRevision, createPlanFromRevision, removeFindingFromRevision, REVISION_PERMISSIONS, RevisionError, requestCreateRevision, requestSaveRevision } from "@/server/revisions";
 import { actorOf } from "@/server/spaces/actor";
 import { getSpaceByAlias } from "@/server/spaces/queries";
 
@@ -103,6 +103,21 @@ export async function saveRevisionAction(alias: string, input: z.input<typeof sa
       actorOf(user),
     );
     return { ok: true, runId: r.runId, changeId: r.changeId };
+  } catch (err) {
+    return failure(err);
+  }
+}
+
+// ---------- to-address list ----------
+
+/** Take a finding off a revision's to-address list. Needs `revisions.build`; the service checks that the revision belongs to the space. */
+export async function removeToAddressFindingAction(alias: string, revisionId: string, findingId: string): Promise<ActionResult<{ removed: boolean }>> {
+  const space = await spaceFor(alias);
+  if (!space) return { ok: false, message: NO_ACCESS, fieldErrors: {} };
+  try {
+    const user = await requirePermission(REVISION_PERMISSIONS.build, space.id);
+    const r = await removeFindingFromRevision(space, { revisionId: idSchema.parse(revisionId), findingId: idSchema.parse(findingId) }, actorOf(user));
+    return { ok: true, removed: r.removed };
   } catch (err) {
     return failure(err);
   }
