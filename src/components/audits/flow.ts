@@ -16,9 +16,10 @@ export interface FlowInput {
   /** Citations the checks looked at in the current reviews, and how many failed */
   citations: { checked: number; failed: number };
   findings: { proposed: number; accepted: number; rejected: number; total: number };
-  /** Accepted package fixes and how many are in a revision; inRevision is null when the revisions couldn't be read */
-  fix: { total: number; inRevision: number | null };
-  report: { built: boolean; sections: number };
+  /** Accepted package fixes, how many are in a revision and how many of those were applied; null when the revisions couldn't be read */
+  fix: { total: number; inRevision: number | null; applied?: number | null };
+  /** The sections the saved report holds, and the ones left out because they have no text yet */
+  report: { built: boolean; sections: number; empty?: number };
   /** The commit of the saved record, or null */
   commit: string | null;
 }
@@ -79,22 +80,33 @@ export function flowStrip(i: FlowInput): FlowStrip {
   };
 
   const f = i.fix;
+  const inRev = f.inRevision;
+  const notIn = inRev === null ? 0 : f.total - inRev;
   const fix: FlowCell = {
     step: "fix",
     label: LABELS.fix,
-    value: f.total === 0 ? { strong: null, rest: "No package fixes" } : f.inRevision === null ? { strong: null, rest: plural(f.total, "accepted package fix", "accepted package fixes") } : { strong: null, rest: `${f.inRevision} of ${plural(f.total, "package fix", "package fixes")}` },
+    value: f.total === 0 ? { strong: null, rest: "No package fixes" } : inRev === null ? { strong: null, rest: plural(f.total, "accepted package fix", "accepted package fixes") } : { strong: null, rest: `${inRev} of ${plural(f.total, "package fix", "package fixes")}` },
+    // In a revision is only queued: it reaches the agent after edits, a save and an applied plan.
+    detail:
+      f.total === 0 || inRev === null
+        ? null
+        : notIn > 0
+          ? `${notIn} in no revision yet. ${inRev > 0 ? "The rest are queued, not applied." : ""}`.trim()
+          : (f.applied ?? 0) >= f.total
+            ? "All applied to the space"
+            : "Queued only: applied after edits, a save and the plan",
     // With no accepted package fix, or when the revisions can't be read, this step doesn't say where the person is.
-    done: f.total === 0 || f.inRevision === null || f.inRevision === f.total,
-    detail: null,
-    tone: "normal",
+    done: f.total === 0 || inRev === null || inRev === f.total,
+    tone: notIn > 0 ? "warning" : "normal",
   };
 
+  const empty = i.report.empty ?? 0;
   const report: FlowCell = {
     step: "report",
     label: LABELS.report,
     value: { strong: null, rest: i.report.built ? `Built · ${plural(i.report.sections, "section")}` : "Not built" },
+    detail: i.report.built && empty > 0 ? `${plural(empty, "section")} with no text yet, left out of the record` : null,
     done: i.report.built,
-    detail: null,
     tone: "normal",
   };
 

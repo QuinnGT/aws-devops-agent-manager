@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { AuditFilters } from "@/components/audits/audit-filters";
 import { RecordSummary } from "@/components/audit-reports/record-summary";
-import { auditDetail, fixContext, getAuditCached } from "@/components/audits/detail-data";
+import { auditDetail, fixContext, getAuditCached, revisionDialog } from "@/components/audits/detail-data";
 import { FindingsWorkspace, type DetailData, type ListGroup, type ListRow } from "@/components/audits/findings-workspace";
 import { AUDIT_PAGE, defaultFindingState, findingListQuery, parseFindingListParams } from "@/components/audits/list-params";
 import { auditsBase, loadAuditsPage } from "@/components/audits/page-guard";
@@ -42,11 +42,12 @@ export default async function FindingsPage({ params, searchParams }: PageProps<"
   // A link to one finding shows every state, so the finding is in the list whatever its state.
   const state = p.state || (p.finding ? "all" : defaultFindingState(audit.state));
   const canBuild = perms.has("revisions.build");
-  const [queue, detail, fix, loaded] = await Promise.all([
+  const [queue, detail, fix, loaded, dialog] = await Promise.all([
     loadFindingsQueue(space, audit.id, { limit: 500 }, viewer),
     auditDetail(space.id, audit.id, viewer),
     fixContext(space.id, audit.id, canBuild),
     loadedPolicyForSpace(space.id),
+    revisionDialog(space.id, audit.id, canBuild),
   ]);
   if (!queue || !detail || !fix) notFound();
 
@@ -244,10 +245,7 @@ export default async function FindingsPage({ params, searchParams }: PageProps<"
           detail={detailData}
           hiddenByFilters={hiddenByFilters}
           bulkRevision={bulkRevision}
-          revisions={{
-            options: fix.options.map((o) => ({ id: o.id, name: o.name, state: o.state, toAddress: o.toAddress, linked: o.linked, updatedAt: o.updatedAt.toISOString() })),
-            nameRule: loaded.policy.revisions.name,
-          }}
+          revisions={{ options: dialog.choices, nameRule: dialog.nameRule }}
           canDecide={queue.actions.review}
           empty={empty}
           footer={

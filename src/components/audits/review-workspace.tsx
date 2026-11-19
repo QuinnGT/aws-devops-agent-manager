@@ -12,7 +12,7 @@ import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import type { NextStep } from "@/server/audits/next-step";
-import type { RevisionChoice } from "./add-to-revision-dialog";
+import type { RevisionChoice } from "./revision-choice";
 import { CheckForm, DecisionButtons, EditForm, RejectForm } from "./finding-decision";
 import { CitationChip, FieldValue } from "./finding-fields";
 import { NextStepPanel } from "./next-step-panel";

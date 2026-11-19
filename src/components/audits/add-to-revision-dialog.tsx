@@ -10,20 +10,9 @@ import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, Di
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { cn } from "@/lib/utils";
 import { nameProblem } from "@/components/revisions/words";
+import { defaultChoice, NEW_REVISION, type RevisionChoice } from "./revision-choice";
 import { confirmRevisionLabel, plural } from "./words";
-
-/** An open revision a finding can go to (RevisionOption, with the time as text so it crosses to the client). */
-export interface RevisionChoice {
-  id: string;
-  name: string;
-  /** "open", "creating" */
-  state: string;
-  toAddress: number;
-  linked: number;
-  updatedAt: string;
-}
 
 export interface AddToRevisionDialogProps {
   alias: string;
@@ -38,7 +27,14 @@ export interface AddToRevisionDialogProps {
   trigger: (open: () => void, disabled: boolean) => ReactNode;
 }
 
-const NEW = "new";
+const NEW = NEW_REVISION;
+
+/** "Started from the live space by Alex Rivera on Nov 18": what a revision started from, who started it and when. */
+function revisionWhere(o: Pick<RevisionChoice, "base" | "by" | "at">): string {
+  const day = new Date(o.at).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  const from = o.base ? `Started from ${o.base.charAt(0).toLowerCase()}${o.base.slice(1)}` : "Started";
+  return `${from}${o.by ? ` by ${o.by}` : ""} on ${day}`;
+}
 
 /**
  * "Add to revision…" and "Accept and add to revision…" (pages/audit-detail.md,
@@ -50,7 +46,7 @@ export function AddToRevisionDialog(p: AddToRevisionDialogProps) {
   const router = useRouter();
   const ids = { name: useId(), note: useId(), nameError: useId(), group: useId() };
   const [open, setOpen] = useState(false);
-  const [choice, setChoice] = useState<string>(p.options[0]?.id ?? NEW);
+  const [choice, setChoice] = useState<string>(() => defaultChoice(p.options));
   const [name, setName] = useState("");
   const [note, setNote] = useState("");
   const [error, setError] = useState<{ message: string; field?: string } | null>(null);
@@ -95,6 +91,7 @@ export function AddToRevisionDialog(p: AddToRevisionDialogProps) {
     <>
       {p.trigger(() => {
         setOpener(document.activeElement instanceof HTMLElement ? document.activeElement : null);
+        setChoice(defaultChoice(p.options));
         setError(null);
         setOpen(true);
       }, busy)}
@@ -111,8 +108,8 @@ export function AddToRevisionDialog(p: AddToRevisionDialogProps) {
           <DialogHeader>
             <DialogTitle>{one ? (p.acceptFirst ? "Accept this fix and add it to a revision" : "Add this fix to a revision") : `Add ${p.findings.length} package fixes to a revision`}</DialogTitle>
             <DialogDescription>
-              A revision is a copy of the package where the fix is made. The {one ? "fix goes" : "fixes go"} on its to-address list, and a save that links {one ? "it" : "them"} takes {one ? "it" : "them"} off the list. Nothing changes in the Agent Space until the
-              revision&apos;s plan is applied.
+              A revision is a copy of the package where the fix is made. Adding {one ? "a fix" : "fixes"} only queues {one ? "it" : "them"} on the revision&apos;s to-address list. {one ? "It reaches" : "They reach"} the agent after someone edits the files in the revision, saves, and applies its plan.
+              Nothing changes in the Agent Space until then.
             </DialogDescription>
           </DialogHeader>
           {!one ? (
@@ -127,13 +124,31 @@ export function AddToRevisionDialog(p: AddToRevisionDialogProps) {
           <fieldset className="space-y-1.5">
             <legend className="mb-1 text-[13px] font-medium">Which revision</legend>
             {p.options.map((o) => (
-              <label key={o.id} className={cn("flex cursor-pointer items-start gap-2.5 rounded-lg border px-3 py-2 text-[13px] has-[:checked]:border-foreground/40 has-[:checked]:bg-muted/50 has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-ring")}>
+              <label key={o.id} className="flex cursor-pointer items-start gap-2.5 rounded-lg border px-3 py-2 text-[13px] has-[:checked]:border-foreground/40 has-[:checked]:bg-muted/50 has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-ring">
                 <input type="radio" name={ids.group} value={o.id} checked={choice === o.id} onChange={() => setChoice(o.id)} className="mt-0.5 size-4 accent-foreground" />
-                <span className="min-w-0">
-                  <span className="block font-semibold [overflow-wrap:anywhere]">{o.name}</span>
+                <span className="min-w-0 space-y-0.5">
+                  <span className="flex flex-wrap items-baseline gap-x-2">
+                    <span className="font-semibold [overflow-wrap:anywhere]">{o.name}</span>
+                    {o.stage ? <span className="text-xs text-muted-foreground">{o.stage}</span> : null}
+                  </span>
+                  <span className="block text-xs text-muted-foreground">{revisionWhere(o)}</span>
+                  <span className="block text-xs">
+                    {o.audits.length ? (
+                      <>
+                        <span className="text-muted-foreground">Findings from </span>
+                        {o.audits.map((a, i) => (
+                          <span key={a.id}>
+                            {i > 0 ? ", " : null}
+                            <span className={a.here ? "font-medium" : undefined}>{a.here ? "this audit" : a.name}</span> ({a.findings})
+                          </span>
+                        ))}
+                      </>
+                    ) : (
+                      <span className="text-muted-foreground">No findings in it yet</span>
+                    )}
+                  </span>
                   <span className="block text-xs text-muted-foreground">
-                    {o.state === "creating" ? "Being created. " : ""}
-                    {plural(o.toAddress, "fix", "fixes")} to address, {o.linked} linked
+                    {o.toAddress} waiting to be addressed, {o.linked} addressed in saves
                   </span>
                 </span>
               </label>
@@ -142,7 +157,7 @@ export function AddToRevisionDialog(p: AddToRevisionDialogProps) {
               <input type="radio" name={ids.group} value={NEW} checked={creating} onChange={() => setChoice(NEW)} className="mt-0.5 size-4 accent-foreground" />
               <span className="min-w-0">
                 <span className="block font-semibold">Start a new revision</span>
-                <span className="block text-xs text-muted-foreground">From the live space. You name it; the package is copied in the background.</span>
+                <span className="block text-xs text-muted-foreground">A fresh copy of the package from the live space. You name it; the copy is made in the background.</span>
               </span>
             </label>
           </fieldset>

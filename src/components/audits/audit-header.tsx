@@ -11,9 +11,11 @@ import { CopyCommit } from "@/components/audit-reports/copy-commit";
 import { savedPushText } from "@/components/audit-reports/words";
 import type { RecordInfo } from "@/server/audit-reports/record";
 import type { FixProgress } from "@/server/audits/next-step";
+import type { QueuedRevision, RevisionChoice } from "./revision-choice";
 import type { AuditDetailView } from "@/server/audits/loaders";
 import type { ReviewerView } from "@/server/audits/reviewers";
 import type { ActorAt, AuditModelView } from "@/server/audits/ui";
+import { AddFixesButton } from "./add-fixes-button";
 import { CancelAuditButton, RerunFailedButton, RerunItemButton } from "./audit-buttons";
 import { FailureDetails } from "./failure-details";
 import { failureGroups, failureNextStep, incidentList } from "./failure-view";
@@ -39,10 +41,16 @@ export interface AuditHeaderData {
   record: RecordInfo | null;
   /** The accepted package fixes and how many are in a revision */
   fix: FixProgress;
-  /** Whether the report is built, and how many sections it shows */
-  report: { built: boolean; sections: number };
+  /** Accepted package fixes in no revision, for the banner and its "Add to revision…" button */
+  openFixes: { id: string; title: string; incident: string | null }[];
+  /** Revisions holding this audit's fixes that still have work before the fixes reach the agent */
+  queued: QueuedRevision[];
+  /** The open revisions the add-to-revision dialog offers, and the revision name rule */
+  revisions: { choices: RevisionChoice[]; nameRule: { pattern: string; hint: string; maxLength: number } };
+  /** Whether the report is built, how many sections the saved report holds, and how many have no text yet and are left out */
+  report: { built: boolean; sections: number; empty: number };
   nameOf: (email: string) => string;
-  can: { run: boolean; review: boolean; manage?: boolean };
+  can: { run: boolean; review: boolean; manage?: boolean; build?: boolean };
   /** The space's Bedrock check passes now (checked only when a review failed for missing or expired credentials) */
   accessWorksNow?: boolean;
 }
@@ -131,20 +139,88 @@ export function AuditHeader({ data, tab }: { data: AuditHeaderData; tab: AuditTa
       </Callout>,
     );
   }
-  if (tab !== "report" && readyToSave(a.state, facts)) {
+  // Accepted package fixes: in no revision (nothing will make them), or queued in a revision (nothing is applied yet).
+  const open = data.openFixes;
+  const ready = tab !== "report" && readyToSave(a.state, facts);
+  const lower = (s: string) => (s ? s[0]!.toLowerCase() + s.slice(1) : s);
+  // One sentence that names each revision still waiting, with its state in plain words and a link to it.
+  const queuedList = data.queued.length ? (
+    <>
+      {" "}
+      Still waiting:{" "}
+      {data.queued.map((q, i) => (
+        <span key={q.id}>
+          {i > 0 ? ", " : ""}
+          <Link href={`/spaces/${encodeURIComponent(alias)}/revisions/${encodeURIComponent(q.name)}`} className="rounded-sm font-medium underline underline-offset-4">
+            {q.name}
+          </Link>{" "}
+          ({lower(q.stage)}; {plural(q.fixes, "fix of this audit", "fixes of this audit")})
+        </span>
+      ))}
+      .
+    </>
+  ) : null;
+  const addFixes =
+    can.build && open.length ? <AddFixesButton alias={alias} findings={open.map((f) => ({ id: f.id, title: f.title }))} choices={data.revisions.choices} nameRule={data.revisions.nameRule} variant={ready ? "outline" : "default"} /> : null;
+  const reportLink = (
+    <Link href={`${base}/report`} className={buttonVariants({ size: "sm" })}>
+      <CheckCheck aria-hidden />
+      Open the Report tab
+    </Link>
+  );
+  const queuedText = data.queued.length ? (
+    <span className="mt-1 block">
+      Accepting a fix doesn&apos;t apply it. A fix in a revision is only queued: it reaches the agent after someone edits the files in the revision, saves, and applies its plan.
+      {queuedList}
+    </span>
+  ) : null;
+  // The text, and its buttons beside it on a wide screen and under it on a narrow one.
+  const withButtons = (text: React.ReactNode, buttons: React.ReactNode) => (
+    <div className="flex flex-col gap-2 xl:flex-row xl:items-start xl:justify-between xl:gap-4">
+      <div className="min-w-0">{text}</div>
+      {buttons ? <div className="flex shrink-0 flex-wrap items-center gap-2">{buttons}</div> : null}
+    </div>
+  );
+  if (open.length) {
     callouts.push(
-      <Callout
-        key="ready"
-        tone="success"
-        title="Ready to save the record"
-        action={
-          <Link href={`${base}/report`} className={buttonVariants({ size: "sm" })}>
-            <CheckCheck aria-hidden />
-            Open the Report tab
-          </Link>
-        }
-      >
-        Every investigation is reviewed and every finding has a decision: {counts.accepted} accepted, {counts.rejected} rejected. Build the report, then save the audit record on the Report tab. Saving it changes nothing in the Agent Space.
+      <Callout key="fixes" tone="warning" title={`${ready ? "Ready to save the record, but " : ""}${plural(open.length, "accepted package fix", "accepted package fixes")} ${open.length === 1 ? "is" : "are"} in no revision`}>
+        {withButtons(
+          <>
+            <span className="block">
+              A package fix is only made in a revision. Until you add {open.length === 1 ? "it" : "them"} to one, {open.length === 1 ? "it" : "they"} won&apos;t reach the agent.
+              {ready ? ` You can still save the record: a person may decide a fix won't be made. Every finding has a decision: ${counts.accepted} accepted, ${counts.rejected} rejected. Saving the record changes nothing in the Agent Space.` : ""}
+              {!can.build ? " Someone who can build revisions adds them." : ""}
+            </span>
+            {queuedText}
+          </>,
+          <>
+            {addFixes}
+            {ready ? reportLink : null}
+          </>,
+        )}
+      </Callout>,
+    );
+  } else if (ready) {
+    callouts.push(
+      <Callout key="ready" tone="success" title="Ready to save the record">
+        {withButtons(
+          <>
+            <span className="block">
+              Every investigation is reviewed and every finding has a decision: {counts.accepted} accepted, {counts.rejected} rejected. Build the report, then save the audit record on the Report tab. Saving it changes nothing in the Agent Space.
+            </span>
+            {queuedText}
+          </>,
+          reportLink,
+        )}
+      </Callout>,
+    );
+  } else if (data.queued.length) {
+    callouts.push(
+      <Callout key="queued" tone="info" title="Accepted fixes are queued, not applied">
+        <span className="block">
+          A fix in a revision is only queued: it reaches the agent after someone edits the files in the revision, saves, and applies its plan.
+          {queuedList}
+        </span>
       </Callout>,
     );
   }
@@ -245,8 +321,13 @@ export function AuditHeader({ data, tab }: { data: AuditHeaderData; tab: AuditTa
       />
       <FlowStrip
         strip={flow}
-        hrefs={{ reviews: base, decide: `${base}/findings`, fix: `${base}/findings${findingListQuery({ state: "accepted", fix: "package" })}`, report: `${base}/report`, record: `${base}/report#report-record` }}
-        extra={analyzersRunning && a.runId ? { reviews: <LiveJobProgress runId={a.runId} /> } : undefined}
+        hrefs={{ reviews: base, decide: `${base}/findings`, fix: `${base}/findings${findingListQuery({ state: "accepted", fix: open.length ? "open" : "package" })}`, report: `${base}/report`, record: `${base}/report#report-record` }}
+        extra={{
+          ...(analyzersRunning && a.runId ? { reviews: <LiveJobProgress runId={a.runId} /> } : {}),
+          ...(can.build && open.length
+            ? { fix: <AddFixesButton alias={alias} findings={open.map((f) => ({ id: f.id, title: f.title }))} choices={data.revisions.choices} nameRule={data.revisions.nameRule} size="xs" variant="outline" short /> }
+            : {}),
+        }}
       />
       <details className="group -mt-2 text-xs text-muted-foreground">
         <summary className="cursor-pointer rounded-sm py-0.5">Details</summary>

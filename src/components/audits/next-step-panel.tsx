@@ -2,11 +2,11 @@
 
 import { GitBranch } from "lucide-react";
 import Link from "next/link";
-import { StatusBadge } from "@/components/common/status-badge";
 import { Button } from "@/components/ui/button";
 import type { NextStep } from "@/server/audits/next-step";
-import { AddToRevisionDialog, type RevisionChoice } from "./add-to-revision-dialog";
-import { linkKindWords, planStateWords, revisionStateWords } from "./words";
+import { linkStageWords } from "@/server/audits/revision-stage";
+import { AddToRevisionDialog } from "./add-to-revision-dialog";
+import type { RevisionChoice } from "./revision-choice";
 
 export interface NextStepPanelProps {
   alias: string;
@@ -41,29 +41,25 @@ export function NextStepPanel({ alias, step, finding, options, nameRule, classNa
       ) : null}
       {step.links.length ? (
         <ul className="mt-2 space-y-1.5">
-          {step.links.map((l) => {
-            const state = revisionStateWords(l.revisionState);
-            return (
-              <li key={`${l.revisionId}-${l.kind}`} className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px]">
-                <GitBranch className="size-3.5 text-muted-foreground" aria-hidden />
-                <Link href={`${base}/revisions/${encodeURIComponent(l.revisionName)}`} className={`${link} font-semibold`}>
-                  {l.revisionName}
+          {step.links.map((l) => (
+            <li key={`${l.revisionId}-${l.kind}`} className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px]">
+              <GitBranch className="size-3.5 text-muted-foreground" aria-hidden />
+              <Link href={`${base}/revisions/${encodeURIComponent(l.revisionName)}`} className={`${link} font-semibold`}>
+                {l.revisionName}
+              </Link>
+              <span className="text-muted-foreground">{linkStageWords(l)}</span>
+              {l.planId ? (
+                <Link href={`${base}/plans/${encodeURIComponent(l.planId)}`} className={`${link} text-muted-foreground`}>
+                  Open the plan
                 </Link>
-                <StatusBadge tone="neutral" label={linkKindWords(l.kind)} />
-                {state ? <StatusBadge tone="neutral" label={state} /> : null}
-                {l.planId ? (
-                  <Link href={`${base}/plans/${encodeURIComponent(l.planId)}`} className={`${link} text-muted-foreground`}>
-                    Plan{l.planState ? `, ${planStateWords(l.planState)}` : ""}
-                  </Link>
-                ) : null}
-                {l.releaseName ? (
-                  <Link href={`${base}/releases/${encodeURIComponent(l.releaseName)}`} className={`${link} text-muted-foreground`}>
-                    Release {l.releaseName}
-                  </Link>
-                ) : null}
-              </li>
-            );
-          })}
+              ) : null}
+              {l.releaseName ? (
+                <Link href={`${base}/releases/${encodeURIComponent(l.releaseName)}`} className={`${link} text-muted-foreground`}>
+                  Release {l.releaseName}
+                </Link>
+              ) : null}
+            </li>
+          ))}
         </ul>
       ) : null}
       {step.note ? <p className="mt-1.5 max-w-[72ch] text-xs text-muted-foreground">{step.note}</p> : null}

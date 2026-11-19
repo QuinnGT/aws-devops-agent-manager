@@ -11,6 +11,7 @@ import { reviewerView } from "@/server/audits/reviewers";
 import { getAudit, profileOf } from "@/server/audits/store";
 import { auditEventTimes, auditModels, auditUsage } from "@/server/audits/ui";
 import { displayNames } from "@/server/drafts/loaders";
+import { queuedRevisions, revisionChoices, type RevisionChoice } from "./revision-choice";
 import type { Permission } from "@/server/policy";
 import { loadRecordInfo } from "@/server/audit-reports/record";
 import type { Space } from "@/server/spaces/queries";
@@ -44,6 +45,17 @@ export const fixContext = cache(async (spaceId: string, auditId: string, canBuil
 });
 
 /**
+ * The open revisions "Add to revision…" offers, with what tells them apart, and the revision name rule. Read once per request.
+ */
+export const revisionDialog = cache(async (spaceId: string, auditId: string, canBuild: boolean): Promise<{ choices: RevisionChoice[]; nameRule: { pattern: string; hint: string; maxLength: number } }> => {
+  const [fix, loaded] = await Promise.all([fixContext(spaceId, auditId, canBuild), loadedPolicyForSpace(spaceId)]);
+  const nameRule = loaded.policy.revisions.name;
+  if (!fix) return { choices: [], nameRule };
+  const nameOf = await displayNames([...fix.revisions.values()].map((r) => r.createdBy));
+  return { choices: revisionChoices(fix, auditId, nameOf), nameRule };
+});
+
+/**
  * The header's data. When a review failed for missing or expired credentials,
  * the space's Bedrock check runs again as `actorEmail`, so the header offers a
  * rerun only once the connection works.
@@ -54,16 +66,20 @@ export const auditHeaderData = cache(async (space: Space, perms: Set<Permission>
   const detail = await auditDetail(space.id, auditId, { permissions: perms });
   if (!detail) return null;
   const profile = profileOf(audit);
-  const [models, events, usage, loaded, fix] = await Promise.all([
+  const [models, events, usage, loaded, fix, dialog] = await Promise.all([
     auditModels(audit),
     auditEventTimes(audit.id, ["audit.start", "audit.cancel"]),
     auditUsage(audit.id),
     loadedPolicyForSpace(space.id),
     fixContext(space.id, auditId, perms.has("revisions.build")),
+    revisionDialog(space.id, auditId, perms.has("revisions.build")),
   ]);
   // What the saved record did (where, which files, pushed or not) is read once the record is saved.
   const record = audit.state === "finalized" ? await loadRecordInfo(space, audit, loaded.policy.historyLayout) : null;
-  const hidden = new Set((audit.report?.sections ?? []).filter((x) => x.hidden).map((x) => x.id));
+  const draft = new Map((audit.report?.sections ?? []).map((x) => [x.id, x]));
+  const shown = profile.report.sections.filter((x) => !draft.get(x.id)?.hidden);
+  // The saved report leaves out a narrative nobody has written yet.
+  const empty = shown.filter((x) => x.kind === "narrative" && !draft.get(x.id)?.narrative?.trim()).length;
   const accessFailed = detail.items.some((i) => i.state === "failed" && ["no-credentials", "expired"].includes(reviewFailureKind(i.stateReason)));
   const accessWorksNow = accessFailed && perms.has("audits.run") ? (await checkBedrock(space, { email: actorEmail })).kind === null : false;
   const nameOf = await displayNames([audit.createdBy, events["audit.start"]?.by ?? "", events["audit.cancel"]?.by ?? "", audit.finalizedBy ?? ""].filter(Boolean));
@@ -85,10 +101,13 @@ export const auditHeaderData = cache(async (space: Space, perms: Set<Permission>
     analyzers: { count: profile.analyzers.length, words: analyzerWords(profile.analyzers, labels) },
     stepLimit: profile.review.stepLimit,
     record,
-    fix: fix ? fix.progress : { total: 0, inRevision: null, open: [] },
-    report: { built: !!audit.report?.builtAt, sections: profile.report.sections.filter((x) => !hidden.has(x.id)).length },
+    fix: fix ? fix.progress : { total: 0, inRevision: null, applied: null, open: [] },
+    openFixes: fix ? fix.progress.open.map((id) => ({ id, title: fix.fixes.find((f) => f.id === id)?.title ?? "", incident: fix.fixes.find((f) => f.id === id)?.incidentId ?? null })) : [],
+    queued: fix ? queuedRevisions(fix) : [],
+    revisions: dialog,
+    report: { built: !!audit.report?.builtAt, sections: shown.length - empty, empty },
     nameOf,
-    can: { run: perms.has("audits.run"), review: perms.has("findings.review"), manage: perms.has("spaces.manage") },
+    can: { run: perms.has("audits.run"), review: perms.has("findings.review"), manage: perms.has("spaces.manage"), build: perms.has("revisions.build") },
     accessWorksNow,
   };
 });

@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { SpaceTopBar } from "@/components/app-shell/space-top-bar";
 import { RerunItemButton } from "@/components/audits/audit-buttons";
 import { byIncident } from "@/components/audits/audit-header";
-import { auditDetail, fixContext, getAuditCached } from "@/components/audits/detail-data";
+import { auditDetail, fixContext, getAuditCached, revisionDialog } from "@/components/audits/detail-data";
 import { firstCitation } from "@/components/audits/finding-view";
 import { FailureDetails } from "@/components/audits/failure-details";
 import { failureGroups } from "@/components/audits/failure-view";
@@ -68,7 +68,7 @@ export default async function AuditItemPage({ params, searchParams }: PageProps<
   const canBuild = perms.has("revisions.build");
   const fix = await fixContext(space.id, audit.id, canBuild);
   const loadedPolicy = await loadedPolicyForSpace(space.id);
-  const revisionChoices = (fix?.options ?? []).map((o) => ({ id: o.id, name: o.name, state: o.state, toAddress: o.toAddress, linked: o.linked, updatedAt: o.updatedAt.toISOString() }));
+  const dialog = await revisionDialog(space.id, audit.id, canBuild);
   const names = await displayNames((review?.findings ?? []).flatMap((f) => [...(f.reviewedBy ? [f.reviewedBy] : []), ...f.citations.flatMap((c) => (c.checked ? [c.checked.by] : []))]));
 
   // Finding cards: diagnosis first, then by kind and position (the loader's order follows the profile's kinds).
@@ -360,7 +360,7 @@ export default async function AuditItemPage({ params, searchParams }: PageProps<
         findings={cards}
         initial={{ citation: first, fieldLabel: firstLabel, data: initialData && "missing" in initialData ? initialData : initialData ? { ...initialData, createdAt: initialData.createdAt.toISOString() } : null }}
         reviewable={reviewable}
-        revisions={{ options: revisionChoices, nameRule: loadedPolicy.policy.revisions.name }}
+        revisions={{ options: dialog.choices, nameRule: dialog.nameRule }}
         counts={counts}
         callout={callouts.length ? <div className="space-y-3">{callouts.slice(0, 3)}</div> : null}
       />

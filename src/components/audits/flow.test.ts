@@ -49,9 +49,30 @@ describe("the flow strip", () => {
     expect(cell(base({ fix: { total: 3, inRevision: null } }), "fix")).toMatchObject({ value: { rest: "3 accepted package fixes" }, done: true });
   });
 
-  it("says whether the report is built and how many sections it has", () => {
+  it("says whether the report is built and how many sections it will hold", () => {
     expect(cell(base(), "report").value.rest).toBe("Not built");
-    expect(cell(base({ report: { built: true, sections: 7 } }), "report")).toMatchObject({ value: { rest: "Built · 7 sections" }, done: true });
+    expect(cell(base({ report: { built: true, sections: 7 } }), "report")).toMatchObject({ value: { rest: "Built · 7 sections" }, done: true, detail: null });
+  });
+
+  it("counts only the sections that are saved, and says how many are left out", () => {
+    const c = cell(base({ report: { built: true, sections: 8, empty: 1 } }), "report");
+    expect(c.value.rest).toBe("Built · 8 sections");
+    expect(c.detail).toBe("1 section with no text yet, left out of the record");
+    expect(cell(base({ report: { built: true, sections: 6, empty: 2 } }), "report").detail).toBe("2 sections with no text yet, left out of the record");
+    expect(cell(base({ report: { built: false, sections: 6, empty: 2 } }), "report").detail).toBeNull();
+  });
+
+  it("says plainly that fixes in a revision are only queued", () => {
+    const queued = cell(base({ fix: { total: 2, inRevision: 2, applied: 0 } }), "fix");
+    expect(queued).toMatchObject({ value: { rest: "2 of 2 package fixes" }, detail: "Queued only: applied after edits, a save and the plan", tone: "normal", done: true });
+    expect(cell(base({ fix: { total: 2, inRevision: 2, applied: 2 } }), "fix").detail).toBe("All applied to the space");
+  });
+
+  it("warns about package fixes in no revision, and says the rest are queued", () => {
+    const some = cell(base({ fix: { total: 3, inRevision: 1, applied: 0 } }), "fix");
+    expect(some).toMatchObject({ detail: "2 in no revision yet. The rest are queued, not applied.", tone: "warning", done: false });
+    expect(cell(base({ fix: { total: 2, inRevision: 0, applied: 0 } }), "fix")).toMatchObject({ detail: "2 in no revision yet.", tone: "warning" });
+    expect(cell(base({ fix: { total: 3, inRevision: null } }), "fix")).toMatchObject({ detail: null, tone: "normal" });
   });
 
   it("says whether the record is saved, with the short commit", () => {
