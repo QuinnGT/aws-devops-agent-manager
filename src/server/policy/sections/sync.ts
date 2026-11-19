@@ -64,6 +64,11 @@ export const syncSection = defineSection(
         maxAgeHours: z.number().positive().default(reconcileDefault.maxAgeHours),
       })
       .default(reconcileDefault),
+    /**
+     * Attachments whose file name starts with one of these are left out of history. A DevOps Agent
+     * chat review attaches its review files for a few minutes (audit profile review.chat.attachmentPrefix).
+     */
+    ignoredAttachmentPrefixes: z.array(z.string().min(1)).default(["dam-review-"]),
     /** Ordering of asset types when changes share a timestamp; unlisted types sort after these */
     typeOrder: z.array(z.string()).default(["memory_store", "agents_md", "skill", "custom_agent", "memory"]),
     /**

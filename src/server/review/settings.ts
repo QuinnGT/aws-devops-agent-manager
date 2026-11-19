@@ -28,6 +28,8 @@ export interface ReviewSettings {
   recordAccessPrompt: string;
   /** Reviews written from files (hand-off and chat) */
   files: { systemPrompt: string; recordAccessPrompt: string; recordCharsCap: number };
+  /** Reviews that run as a DevOps Agent chat */
+  chat: { messageTemplate: string; repairPrompt: string; messageCharsCap: number; attachmentBytesCap: number; attachmentPrefix: string; cancelCheckSeconds: number };
 }
 
 export const REVIEW_DEFAULTS = {
@@ -37,6 +39,19 @@ export const REVIEW_DEFAULTS = {
   promptCache: false,
   recordAccessPrompt: "prompts/record-access-tools.md",
   files: { systemPrompt: "prompts/reviewer-system-files.md", recordAccessPrompt: "prompts/record-access-files.md", recordCharsCap: 20_000 },
+  /**
+   * messageCharsCap is the service's limit for one SendMessage content. attachmentBytesCap is
+   * what a chat read in full in testing (1.8 MB), less a margin: 2.6 MB came back empty.
+   * attachmentPrefix must match sync.yaml ignoredAttachmentPrefixes.
+   */
+  chat: {
+    messageTemplate: "prompts/reviewer-chat.md",
+    repairPrompt: "prompts/reviewer-chat-repair.md",
+    messageCharsCap: 32_768,
+    attachmentBytesCap: 1_500_000,
+    attachmentPrefix: "dam-review-",
+    cancelCheckSeconds: 2,
+  },
 } as const;
 
 export function reviewSettings(profile: AuditProfile): ReviewSettings {
@@ -63,6 +78,14 @@ export function reviewSettings(profile: AuditProfile): ReviewSettings {
       systemPrompt: r.files?.systemPrompt ?? REVIEW_DEFAULTS.files.systemPrompt,
       recordAccessPrompt: r.files?.recordAccessPrompt ?? REVIEW_DEFAULTS.files.recordAccessPrompt,
       recordCharsCap: r.files?.recordCharsCap ?? REVIEW_DEFAULTS.files.recordCharsCap,
+    },
+    chat: {
+      messageTemplate: r.chat?.messageTemplate ?? REVIEW_DEFAULTS.chat.messageTemplate,
+      repairPrompt: r.chat?.repairPrompt ?? REVIEW_DEFAULTS.chat.repairPrompt,
+      messageCharsCap: r.chat?.messageCharsCap ?? REVIEW_DEFAULTS.chat.messageCharsCap,
+      attachmentBytesCap: r.chat?.attachmentBytesCap ?? REVIEW_DEFAULTS.chat.attachmentBytesCap,
+      attachmentPrefix: r.chat?.attachmentPrefix ?? REVIEW_DEFAULTS.chat.attachmentPrefix,
+      cancelCheckSeconds: r.chat?.cancelCheckSeconds ?? REVIEW_DEFAULTS.chat.cancelCheckSeconds,
     },
   };
 }

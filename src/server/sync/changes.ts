@@ -112,6 +112,13 @@ export function assignKinds(changes: readonly CandidateChange[], hasPriorCommits
   });
 }
 
+/** An attachment whose file name starts with one of the prefixes (a DevOps Agent chat review's temporary file): the sync leaves it out. */
+export function isIgnoredAttachment(asset: { assetType: string; metadata: Record<string, unknown> }, prefixes: readonly string[]): boolean {
+  if (asset.assetType !== "attachment") return false;
+  const filename = asset.metadata.filename;
+  return typeof filename === "string" && prefixes.some((p) => p.length > 0 && filename.startsWith(p));
+}
+
 /** Time order across assets; ties broken by type order (stores before memories), asset ID and version. */
 export function orderChanges<T extends { updatedAt: Date; assetType: string; assetId: string; version: number }>(changes: readonly T[], typeOrder: readonly string[]): T[] {
   const rank = (t: string) => {
