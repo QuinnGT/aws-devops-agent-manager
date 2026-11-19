@@ -234,7 +234,7 @@ const reportConfig = z.object({
   /** Output rule severities that refuse an export */
   exportBlockOn: z.array(z.enum(["error", "warning"])).default(["error"]),
   /** Finalize commit subject; placeholders {auditName}, {spaceAlias}, {auditId} */
-  commitMessage: z.string().default("Finalize audit {auditName} of {spaceAlias}"),
+  commitMessage: z.string().default("Save audit record {auditName} of {spaceAlias}"),
   committer: z.object({ name: z.string().min(1), email: z.string().min(1) }).default(committerDefault),
 });
 

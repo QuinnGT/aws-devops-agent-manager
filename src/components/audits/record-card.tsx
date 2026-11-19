@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight, ExternalLink, TriangleAlert } from "lucide-r
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { buttonVariants, Button } from "@/components/ui/button";
+import { formatTime, UTC_ZONE, type ViewerZone } from "@/components/common/time-format";
 import { markQuotes } from "./record-marks";
 import { plural } from "./words";
 
@@ -45,7 +46,10 @@ export function RecordCard({
   checkedNote = null,
   onOpen,
   headingId,
+  zone = UTC_ZONE,
 }: {
+  /** The viewer's time zone from the server, so the server and the browser render the same time */
+  zone?: ViewerZone;
   state: RecordState;
   fieldLabel: string | null;
   quotes: string[];
@@ -70,7 +74,7 @@ export function RecordCard({
         {state.status === "ok" ? (
           <div className="flex items-center gap-3 text-xs text-muted-foreground">
             <span>
-              {typeWords(state.data.recordType)} · <time dateTime={state.data.createdAt}>{new Date(state.data.createdAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</time>
+              {typeWords(state.data.recordType)} · <time dateTime={state.data.createdAt}>{formatTime(state.data.createdAt, "datetime", zone)}</time>
             </span>
             <Link href={state.data.href} className={buttonVariants({ variant: "ghost", size: "sm" })}>
               Open in journal

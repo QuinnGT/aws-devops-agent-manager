@@ -354,7 +354,7 @@ describe("finalize", () => {
 
     const [commit] = await repo.log({ maxCount: 1 });
     expect(commit!.hash).toBe(res.commit);
-    expect(commit!.message).toBe("Finalize audit Late October low scores of rep-space");
+    expect(commit!.message).toBe("Save audit record Late October low scores of rep-space");
     expect(commit!.authorEmail).toBe(actor.email);
     expect(commit!.trailers).toMatchObject({ [AUDIT_TRAILERS.auditId]: auditId, [AUDIT_TRAILERS.profile]: "benchmark", Space: ALIAS });
     expect((await repo.log({ maxCount: 5 })).map((c) => c.hash)).toContain(headBefore);

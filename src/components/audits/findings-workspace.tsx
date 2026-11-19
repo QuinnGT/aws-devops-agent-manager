@@ -20,6 +20,7 @@ import { cardRows, evidenceRows, isCitationList, quotesFor, type CardField, type
 import { NextStepPanel } from "./next-step-panel";
 import { RecordCard, type RecordData, type RecordState } from "./record-card";
 import { isTextTarget, moveFocus, SHORTCUT_KEYS, shortcutFor, type ShortcutAction } from "./shortcuts";
+import type { ViewerZone } from "@/components/common/time-format";
 import { useSingleKeys } from "./use-single-keys";
 import { citationChipReason, citationResult, EDITED_BADGE, evidenceSummary, FINDING_STATE_BADGE, plural } from "./words";
 
@@ -77,6 +78,8 @@ export interface DetailData {
 }
 
 export interface FindingsWorkspaceProps {
+  /** The viewer's time zone, for times rendered in the browser */
+  zone?: ViewerZone;
   alias: string;
   auditId: string;
   groups: ListGroup[];
@@ -482,6 +485,7 @@ function DetailPane({ p, d, kind, error, busy, singleKeys, setSingleKeys, rec, c
         {rec && rec.state.status !== "idle" ? (
           <RecordCard
             headingId={`${ids}-record`}
+            zone={p.zone}
             state={rec.state}
             fieldLabel={rec.opened.fieldLabel}
             quotes={openN && !failedForOpen ? quotesFor(d.citations, openN) : []}

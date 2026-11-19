@@ -1,7 +1,7 @@
 import path from "node:path";
 import { eq, inArray } from "drizzle-orm";
 import { diffText, type FileDiff } from "@/server/assets/diff";
-import { audits, findings as findingsTable, jobRuns, revisions } from "@/server/db/schema";
+import { audits, jobRuns, revisions } from "@/server/db/schema";
 import { db } from "@/server/db/client";
 import type { HistoryRepo } from "@/server/git/history-repo";
 import { listIndexedAssets } from "@/server/assets/queries";
@@ -403,14 +403,6 @@ async function kindLabels(auditIds: readonly string[], profiles?: Map<string, Au
 
 const sentence = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 
-/** Item IDs of findings, for links to the incident review page. */
-async function itemIds(findingIds: readonly string[]): Promise<Map<string, string>> {
-  const ids = [...new Set(findingIds)].filter(isUuid);
-  if (!ids.length) return new Map();
-  const rows = await db().select({ id: findingsTable.id, itemId: findingsTable.auditItemId }).from(findingsTable).where(inArray(findingsTable.id, ids));
-  return new Map(rows.map((r) => [r.id, r.itemId]));
-}
-
 /**
  * The revision detail page: loadRevisionDetail plus the marks, diffs and
  * finding labels the editor, Diff and Saves tabs show. The caller has
@@ -449,16 +441,14 @@ export async function loadRevisionPage(space: Space, idOrName: string, viewer?: 
   let baseFiles: FileDiff[] = [];
   let saves: SaveView[] = [];
   let branchMissing = false;
-  const allFindingIds = detail.changes.flatMap((c) => c.findingIds);
   const toAddressRows = await findingsForToAddress(space.id, r.toAddressIds);
-  const [profiles, items] = await Promise.all([auditProfiles([...detail.findings.map((f) => f.auditId), ...toAddressRows.map((f) => f.auditId)]), itemIds(allFindingIds)]);
+  const profiles = await auditProfiles([...detail.findings.map((f) => f.auditId), ...toAddressRows.map((f) => f.auditId)]);
   const labels = await kindLabels([], profiles);
-  const base = `/spaces/${encodeURIComponent(space.alias)}/audits`;
   const findingLinks: RevisionPage["findingLinks"] = {};
   for (const f of detail.findings) {
     const kindLabel = labels.get(`${f.auditId}:${f.kind}`) ?? sentence(f.kind);
-    const item = items.get(f.id);
-    findingLinks[f.id] = { label: `${f.incidentId ?? f.title} · ${kindLabel}`, href: item ? `${base}/${encodeURIComponent(f.auditId)}/items/${encodeURIComponent(item)}` : null, kindLabel };
+    // The finding itself on its audit's Findings tab, the same place the to-address card links to.
+    findingLinks[f.id] = { label: `${f.incidentId ?? f.title} · ${kindLabel}`, href: findingHref(space.alias, f.auditId, f.id), kindLabel };
   }
 
   if (detail.repo.ok && r.headCommit) {

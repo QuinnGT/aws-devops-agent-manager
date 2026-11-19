@@ -19,6 +19,7 @@ import { NextStepPanel } from "./next-step-panel";
 import { cardRows, citationsByField, isCitationList, quotesFor, type CardField, type CitationRef } from "./finding-view";
 import { RecordCard, type RecordData, type RecordState } from "./record-card";
 import { isTextTarget, moveFocus, SHORTCUT_KEYS, shortcutFor, type ShortcutAction } from "./shortcuts";
+import type { ViewerZone } from "@/components/common/time-format";
 import { useSingleKeys } from "./use-single-keys";
 import { citationChipReason, EDITED_BADGE, FINDING_STATE_BADGE, plural } from "./words";
 
@@ -60,6 +61,8 @@ export const UNCERTAIN_HELP =
   "The review marked this ground truth as partly uncertain (ground_truth_uncertain in its output): the confirmed root cause leaves something open, often an \"Open question\" in the document. Judge the findings that depend on that part with care.";
 
 export interface ReviewWorkspaceProps {
+  /** The viewer's time zone, for times rendered in the browser */
+  zone?: ViewerZone;
   alias: string;
   auditId: string;
   itemId: string;
@@ -147,6 +150,7 @@ export function ReviewWorkspace(props: ReviewWorkspaceProps) {
   const recordCard = (where: "inline" | "sheet") => (
     <RecordCard
       headingId={`${ids}-rec-${where}`}
+      zone={props.zone}
       state={record}
       fieldLabel={opened.citation && opened.citation.record === openN ? opened.fieldLabel : null}
       quotes={openN && !failedForOpen ? quotesFor(allCitations, openN) : []}

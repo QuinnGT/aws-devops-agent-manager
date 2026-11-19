@@ -349,6 +349,7 @@ export default async function AuditItemPage({ params, searchParams }: PageProps<
         </EmptyState>
       ) : null}
       <ReviewWorkspace
+        zone={zone}
         alias={space.alias}
         auditId={audit.id}
         itemId={view.item.id}

@@ -123,6 +123,5 @@ Export is a read: Viewers already export journals. See open items.
 ## Open items
 
 - **Saving with proposed findings.** The design allowed it and warned that they are left out. Decided: saving is blocked until every finding has a decision (MASTER "Page index"), and the dialog lists what is undecided instead of a warning callout.
-- **The commit message** still reads "Finalize audit <name> of <space>" (`report.commitMessage` of the audit profile, whose default is in the audits policy section). Change it there to match the new wording.
 - **Who can export.** Viewers (as for journal exports) or Editors. Viewers is the current rule.
 - **Where an output-rule match is.** `checkOutputText` returns a character offset in the checked text. The export needs a section ID and a row or paragraph, so the audit-reports module checks section by section and maps offsets to rows.

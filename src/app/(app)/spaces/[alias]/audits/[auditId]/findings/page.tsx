@@ -117,11 +117,11 @@ export default async function FindingsPage({ params, searchParams }: PageProps<"
 
   // The selected finding, whole.
   const found = selectedId ? await loadFindingDetail(space, audit.id, selectedId, viewer) : null;
+  const zone = await getViewerZone();
   let detailData: DetailData | null = null;
   if (found) {
     const f = found.finding;
     const ex = profile.findings.find((x) => x.kind === f.kind);
-    const zone = await getViewerZone();
     const name = await displayNames([...(f.reviewedBy ? [f.reviewedBy] : []), ...f.citations.flatMap((c) => (c.checked ? [c.checked.by] : []))]);
     const nature = fix.natures.get(f.id) ?? null;
     const links = fix.links ? (fix.links.get(f.id) ?? []) : null;
@@ -234,6 +234,7 @@ export default async function FindingsPage({ params, searchParams }: PageProps<"
         <Card className="py-0">{empty}</Card>
       ) : (
         <FindingsWorkspace
+          zone={zone}
           alias={space.alias}
           auditId={audit.id}
           groups={groups}

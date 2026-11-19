@@ -178,7 +178,7 @@ describe("loadRevisionPage", () => {
     // A save lists the person's files, not the build's.
     expect(page.saves[1]!.files.map((f) => f.path)).toEqual(["instructions/incident-triage.md"]);
     expect(page.saves[1]!.files[0]!.hunks[0]!.lines.some((l) => l.kind === "add" && l.text === "Check onset first.")).toBe(true);
-    expect(page.saves[0]!.findings).toEqual([{ id: F.fix, label: "INCIDENT-31495 · Fix", href: expect.stringMatching(new RegExp(`^/spaces/${ALIAS}/audits/[0-9a-f-]+/items/[0-9a-f-]+$`)) }]);
+    expect(page.saves[0]!.findings).toEqual([{ id: F.fix, label: "INCIDENT-31495 · Fix", href: expect.stringMatching(new RegExp(`^/spaces/${ALIAS}/audits/[0-9a-f-]+/findings\\?finding=${F.fix}$`)) }]);
     expect(page.findingLinks[F.diag]).toMatchObject({ label: "INCIDENT-31808 · Diagnosis", kindLabel: "Diagnosis" });
   });
 

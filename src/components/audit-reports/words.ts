@@ -125,7 +125,7 @@ export function undecidedText(n: number): string {
 export type FinalizeBlock = { reason: string; link: "findings" | "settings" | null } | null;
 
 /**
- * Why the card's "Finalize audit" button is disabled, or null when it opens
+ * Why the card's "Save the audit record" button is disabled, or null when it opens
  * the dialog. Undecided findings come first (the dialog can't help with
  * them); other issues are listed in the dialog itself.
  */
