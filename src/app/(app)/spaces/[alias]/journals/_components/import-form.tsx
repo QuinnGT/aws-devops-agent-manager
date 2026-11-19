@@ -1,20 +1,21 @@
 "use client";
 
-import { Upload } from "lucide-react";
-import { useActionState, useEffect, useId, useState } from "react";
+import { FileUp, Upload } from "lucide-react";
+import { useActionState, useEffect, useId, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Callout } from "@/components/common/callout";
 import { DisabledReason } from "@/components/common/disabled-reason";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { uploadImportAction } from "../actions";
 import { initialActionState } from "./action-state";
 
 export function ImportForm({ alias, maxMb }: { alias: string; maxMb: number }) {
   const [state, action, pending] = useActionState(uploadImportAction.bind(null, alias), initialActionState);
-  const [chosen, setChosen] = useState(false);
+  const [fileName, setFileName] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
   const id = useId();
+  const chosen = fileName !== null;
 
   useEffect(() => {
     if (state.status === "ok") toast.success(state.message);
@@ -28,18 +29,28 @@ export function ImportForm({ alias, maxMb }: { alias: string; maxMb: number }) {
   );
 
   return (
-    <form action={action} onReset={() => setChosen(false)} className="space-y-3 px-4 py-4 text-sm">
-      <div className="max-w-xl space-y-1">
+    <form action={action} onReset={() => setFileName(null)} className="space-y-3 px-4 py-4 text-sm">
+      <div className="max-w-xl space-y-1.5">
         <Label htmlFor={`${id}-file`}>Journal file</Label>
-        <Input
-          id={`${id}-file`}
-          type="file"
-          name="file"
-          accept=".md,.markdown,.zip"
-          required
-          aria-describedby={`${id}-help`}
-          onChange={(e) => setChosen((e.target.files?.length ?? 0) > 0)}
-        />
+        {/* Same picker as the other uploads: the native control is hidden behind an outline button. */}
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            ref={fileRef}
+            id={`${id}-file`}
+            type="file"
+            name="file"
+            accept=".md,.markdown,.zip"
+            required
+            className="sr-only"
+            aria-describedby={`${id}-help`}
+            onChange={(e) => setFileName(e.target.files?.[0]?.name ?? null)}
+          />
+          <Button type="button" variant="outline" size="sm" disabled={pending} onClick={() => fileRef.current?.click()}>
+            <FileUp aria-hidden />
+            Choose file
+          </Button>
+          <span className={`min-w-0 truncate text-xs text-muted-foreground ${chosen ? "font-mono" : ""}`}>{fileName ?? "No file chosen"}</span>
+        </div>
         <p id={`${id}-help`} className="text-xs text-muted-foreground">
           One markdown journal (.md) or a zip of journals, up to {maxMb} MB.
         </p>
