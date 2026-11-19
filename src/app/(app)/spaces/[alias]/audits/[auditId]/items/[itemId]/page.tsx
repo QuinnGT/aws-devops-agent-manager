@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { SpaceTopBar } from "@/components/app-shell/space-top-bar";
 import { RerunItemButton } from "@/components/audits/audit-buttons";
 import { byIncident } from "@/components/audits/audit-header";
-import { auditDetail, getAuditCached } from "@/components/audits/detail-data";
+import { auditDetail, fixContext, getAuditCached } from "@/components/audits/detail-data";
 import { firstCitation } from "@/components/audits/finding-view";
 import { FailureDetails } from "@/components/audits/failure-details";
 import { failureGroups } from "@/components/audits/failure-view";
@@ -31,6 +31,7 @@ import { cn } from "@/lib/utils";
 import { checkBedrock } from "@/server/audits/bedrock-check";
 import { reviewFailureKind } from "@/server/audits/failure";
 import { loadAuditItem } from "@/server/audits/loaders";
+import { natureOf, nextStepFor } from "@/server/audits/next-step";
 import { loadedPolicyForSpace } from "@/server/audits/profiles";
 import { profileOf } from "@/server/audits/store";
 import { getRecordText, journalRecordCount, reviewHighlights } from "@/server/audits/ui";
@@ -64,6 +65,10 @@ export default async function AuditItemPage({ params, searchParams }: PageProps<
   const next = pos >= 0 && pos < order.length - 1 ? order[pos + 1] : undefined;
 
   const [totalRecords, highlights] = await Promise.all([journalRecordCount(space.id, view.item.taskId), review ? reviewHighlights(view.item.id, review.id) : Promise.resolve(null)]);
+  const canBuild = perms.has("revisions.build");
+  const fix = await fixContext(space.id, audit.id, canBuild);
+  const loadedPolicy = await loadedPolicyForSpace(space.id);
+  const revisionChoices = (fix?.options ?? []).map((o) => ({ id: o.id, name: o.name, state: o.state, toAddress: o.toAddress, linked: o.linked, updatedAt: o.updatedAt.toISOString() }));
   const names = await displayNames((review?.findings ?? []).flatMap((f) => [...(f.reviewedBy ? [f.reviewedBy] : []), ...f.citations.flatMap((c) => (c.checked ? [c.checked.by] : []))]));
 
   // Finding cards: diagnosis first, then by kind and position (the loader's order follows the profile's kinds).
@@ -80,11 +85,11 @@ export default async function AuditItemPage({ params, searchParams }: PageProps<
       id: f.id,
       kind: f.kind,
       position: kindPosition(f.kindLabel, i, perKind.get(f.kind) ?? 1),
-      title: f.title,
+      title: f.fullTitle,
       state: f.state,
       edited: f.edited,
       from: ex?.from ?? "$",
-      hidden: [...(ex?.cardHidden ?? []), ...f.fields.filter((x) => typeof x.value === "string" && x.value.trim() === f.title.trim()).map((x) => x.key)],
+      hidden: [...(ex?.cardHidden ?? []), ...f.fields.filter((x) => typeof x.value === "string" && x.value.trim() === f.fullTitle.trim()).map((x) => x.key)],
       fields: f.fields.map((x) => ({ key: x.key, label: x.label, value: x.value, valueLabel: x.valueLabel, editable: x.editable, choices: x.choices, multiple: x.multiple, changed: x.changed })),
       citations: f.citations.map((c) => ({
         record: c.record,
@@ -102,6 +107,14 @@ export default async function AuditItemPage({ params, searchParams }: PageProps<
       canEdit: f.actions.edit.enabled,
       // Checking a record is a review action on the current review, in any decision state.
       canCheck: f.actions.accept.enabled || f.actions.reject.enabled || f.actions.reopen.enabled,
+      next: nextStepFor({
+        state: f.state,
+        nature: natureOf(profile, { kind: f.kind, values: f.values }),
+        canDecide: f.actions.accept.enabled,
+        canBuild,
+        links: fix?.links ? (fix.links.get(f.id) ?? []) : null,
+        reviewNote: f.reviewNote,
+      }),
     };
   });
   const counts = review?.findingCounts ?? { accepted: 0, proposed: 0, rejected: 0, total: 0 };
@@ -141,7 +154,7 @@ export default async function AuditItemPage({ params, searchParams }: PageProps<
   const nextToDecide = detail ? nextIncidentToReview(detail.items, view.item.id) : null;
   const handoff = view.runner === "handoff";
   const files = view.actions.reviewFiles;
-  const maxUploadMb = files.visible ? Math.floor((await loadedPolicyForSpace(space.id)).policy.audits.handoff.import.maxUploadBytes / 1048576) : 0;
+  const maxUploadMb = files.visible ? Math.floor(loadedPolicy.policy.audits.handoff.import.maxUploadBytes / 1048576) : 0;
   const waitingForFile = handoff && view.item.state === "pending" && !review;
   const running = !handoff && (view.item.state === "pending" || view.item.state === "analyzing" || view.item.state === "reviewing");
 
@@ -346,6 +359,7 @@ export default async function AuditItemPage({ params, searchParams }: PageProps<
         findings={cards}
         initial={{ citation: first, fieldLabel: firstLabel, data: initialData && "missing" in initialData ? initialData : initialData ? { ...initialData, createdAt: initialData.createdAt.toISOString() } : null }}
         reviewable={reviewable}
+        revisions={{ options: revisionChoices, nameRule: loadedPolicy.policy.revisions.name }}
         counts={counts}
         callout={callouts.length ? <div className="space-y-3">{callouts.slice(0, 3)}</div> : null}
       />

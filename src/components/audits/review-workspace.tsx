@@ -1,22 +1,25 @@
 "use client";
 
-import { Check, ChevronDown, CircleCheck, Keyboard, SquarePen, TriangleAlert, Undo2, X } from "lucide-react";
+import { Check, ChevronDown, CircleCheck, Keyboard, TriangleAlert } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { forwardRef, useCallback, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore, useTransition, type ReactNode } from "react";
+import { forwardRef, useCallback, useId, useMemo, useRef, useState, useSyncExternalStore, useTransition, type ReactNode } from "react";
 import { toast } from "sonner";
 import { acceptAllAction, checkCitationAction, findingAction } from "@/app/(app)/spaces/[alias]/audits/actions";
-import { Checkbox } from "@/components/common/checkbox";
 import { StatusBadge } from "@/components/common/status-badge";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Switch } from "@/components/ui/switch";
-import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { cardRows, changedValues, citationsByField, isCitationList, quotesFor, type CardField, type CitationRef } from "./finding-view";
+import type { NextStep } from "@/server/audits/next-step";
+import type { RevisionChoice } from "./add-to-revision-dialog";
+import { CheckForm, DecisionButtons, EditForm, RejectForm } from "./finding-decision";
+import { CitationChip, FieldValue } from "./finding-fields";
+import { NextStepPanel } from "./next-step-panel";
+import { cardRows, citationsByField, isCitationList, quotesFor, type CardField, type CitationRef } from "./finding-view";
 import { RecordCard, type RecordData, type RecordState } from "./record-card";
-import { isTextTarget, moveFocus, SHORTCUT_KEYS, shortcutFor, SINGLE_KEYS_STORAGE, type ShortcutAction } from "./shortcuts";
+import { isTextTarget, moveFocus, SHORTCUT_KEYS, shortcutFor, type ShortcutAction } from "./shortcuts";
+import { useSingleKeys } from "./use-single-keys";
 import { citationChipReason, EDITED_BADGE, FINDING_STATE_BADGE, plural } from "./words";
 
 export interface CardFinding {
@@ -39,6 +42,8 @@ export interface CardFinding {
   canEdit: boolean;
   /** "I checked the record" is offered on failed citations (role, audit state, current review) */
   canCheck?: boolean;
+  /** What happens next with this finding (src/server/audits/next-step.ts) */
+  next: NextStep;
 }
 
 export interface EvidenceDoc {
@@ -66,29 +71,10 @@ export interface ReviewWorkspaceProps {
   initial: { citation: CitationRef | null; fieldLabel: string | null; data: RecordData | { missing: true; total: number } | null };
   /** Shortcuts and bulk accept are offered (findings.review, audit in review, current review) */
   reviewable: boolean;
+  /** The open revisions "Add to revision…" offers, and the revision name rule */
+  revisions: { options: RevisionChoice[]; nameRule: { pattern: string; hint: string; maxLength: number } };
   counts: { accepted: number; proposed: number; rejected: number; total: number };
   callout: ReactNode;
-}
-
-function useSingleKeys(): [boolean, (on: boolean) => void] {
-  const subscribe = useCallback((cb: () => void) => {
-    window.addEventListener("storage", cb);
-    window.addEventListener("dam-single-keys", cb);
-    return () => {
-      window.removeEventListener("storage", cb);
-      window.removeEventListener("dam-single-keys", cb);
-    };
-  }, []);
-  const on = useSyncExternalStore(
-    subscribe,
-    () => window.localStorage.getItem(SINGLE_KEYS_STORAGE) !== "off",
-    () => true,
-  );
-  const set = (v: boolean) => {
-    window.localStorage.setItem(SINGLE_KEYS_STORAGE, v ? "on" : "off");
-    window.dispatchEvent(new Event("dam-single-keys"));
-  };
-  return [on, set];
 }
 
 function useWide(): boolean {
@@ -102,8 +88,6 @@ function useWide(): boolean {
     () => true,
   );
 }
-
-const Kbd = ({ k, on }: { k: string; on: boolean }) => (on ? <kbd className="ml-1 rounded border bg-background px-1 font-mono text-xs text-muted-foreground">{k}</kbd> : null);
 
 /**
  * The incident review, option 1 split view (pages/audit-item.md, MASTER
@@ -325,7 +309,7 @@ export function ReviewWorkspace(props: ReviewWorkspaceProps) {
                 <h2 id={`${ids}-fa`} className="text-sm font-semibold">
                   Agent&apos;s final answer
                 </h2>
-                {props.finalAnswer.record ? <Chip n={props.finalAnswer.record} pressed={openN === props.finalAnswer.record} onClick={() => void openRecord(props.finalAnswer!.record!, { citation: null, fieldLabel: "scored summary" })} /> : null}
+                {props.finalAnswer.record ? <CitationChip n={props.finalAnswer.record} pressed={openN === props.finalAnswer.record} onClick={() => void openRecord(props.finalAnswer!.record!, { citation: null, fieldLabel: "scored summary" })} /> : null}
               </div>
               <p className="max-w-[72ch] px-4 py-3 text-[13px] whitespace-pre-wrap [overflow-wrap:anywhere]">{props.finalAnswer.text}</p>
             </section>
@@ -405,6 +389,8 @@ export function ReviewWorkspace(props: ReviewWorkspaceProps) {
               onRejectOpen={(o) => setRejecting(o ? f.id : null)}
               onReopen={() => act(f, { action: "reopen" })}
               onCheck={(record, note) => check(f, record, note)}
+              alias={alias}
+              revisions={props.revisions}
             />
           ))}
         </div>
@@ -420,55 +406,6 @@ export function ReviewWorkspace(props: ReviewWorkspaceProps) {
       </Sheet>
     </div>
   );
-}
-
-function Chip({ n, pressed, onClick, failed, checked, reason }: { n: number; pressed: boolean; onClick: () => void; failed?: boolean; checked?: boolean; reason?: string | null }) {
-  const id = useId();
-  return (
-    <span className="inline-flex max-w-full items-start gap-1.5">
-      <button
-        type="button"
-        aria-pressed={pressed}
-        aria-describedby={reason ? id : undefined}
-        aria-label={`Open record R${n}`}
-        onClick={onClick}
-        className={cn(
-          "inline-flex h-6 min-w-6 shrink-0 items-center gap-1 rounded-md border px-1.5 font-mono text-xs tabular-nums transition-colors",
-          failed && !checked ? "border-warning/45 bg-warning/12 text-warning-fg" : "bg-background hover:bg-muted",
-          pressed && (!failed || checked) && "border-primary bg-primary text-primary-foreground hover:bg-primary",
-          pressed && failed && !checked && "ring-2 ring-warning",
-        )}
-      >
-        {failed && !checked ? <TriangleAlert className="size-3" aria-hidden /> : null}
-        {checked ? <CircleCheck className="size-3" aria-hidden /> : null}R{n}
-      </button>
-      {reason ? (
-        <span id={id} className="min-w-0 pt-0.5 text-xs text-muted-foreground">
-          {reason}
-        </span>
-      ) : null}
-    </span>
-  );
-}
-
-function FieldValue({ field, primary }: { field: CardField; primary: string | null }) {
-  const v = field.value;
-  if (Array.isArray(v) && field.choices) {
-    const items = v.filter((x): x is string => typeof x === "string" && x !== primary);
-    if (!items.length) return <span className="text-muted-foreground">None</span>;
-    return (
-      <span className="flex flex-wrap gap-1">
-        {items.map((x) => (
-          <span key={x} className="rounded-md bg-muted px-1.5 py-0.5 text-xs">
-            {field.choices!.find((c) => c.value === x)?.label ?? x}
-          </span>
-        ))}
-      </span>
-    );
-  }
-  if (v === null || v === undefined || v === "") return <span className="text-muted-foreground">None</span>;
-  if (Array.isArray(v) || typeof v === "object") return null;
-  return <span className="whitespace-pre-wrap">{field.choices || (typeof v === "string" && field.valueLabel && field.valueLabel !== v) ? field.valueLabel : String(v)}</span>;
 }
 
 const FindingCard = forwardRef<
@@ -492,6 +429,8 @@ const FindingCard = forwardRef<
     onRejectOpen: (open: boolean) => void;
     onReopen: () => void;
     onCheck: (record: number, note: string) => Promise<string | null>;
+    alias: string;
+    revisions: ReviewWorkspaceProps["revisions"];
   }
 >(function FindingCard(p, ref) {
   const { f } = p;
@@ -511,7 +450,7 @@ const FindingCard = forwardRef<
         <span className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
           {cs.map((c) => (
             <span key={`${c.record}-${c.field}`} className="inline-flex max-w-full flex-wrap items-start gap-x-1.5">
-              <Chip n={c.record} pressed={p.openN === c.record} failed={!c.ok} checked={!!c.checked} reason={citationChipReason(c, p.totalRecords)} onClick={() => p.onOpenCitation(c, label)} />
+              <CitationChip n={c.record} pressed={p.openN === c.record} failed={!c.ok} checked={!!c.checked} reason={citationChipReason(c, p.totalRecords)} onClick={() => p.onOpenCitation(c, label)} />
               {!c.ok && !c.checked && f.canCheck && !(checking?.row === label && checking.record === c.record) ? (
                 <Button type="button" size="sm" variant="ghost" className="h-6 px-1.5 text-xs" onClick={() => setChecking({ row: label, record: c.record })}>
                   I checked the record
@@ -553,18 +492,12 @@ const FindingCard = forwardRef<
           {f.edited ? <StatusBadge {...EDITED_BADGE} /> : null}
           {failedCount ? <StatusBadge tone="warning" icon={TriangleAlert} label={`${plural(failedCount, "citation")} failed`} /> : null}
           {checkedCount ? <StatusBadge tone="neutral" icon={CircleCheck} label={`${plural(checkedCount, "failed citation")} checked`} /> : null}
-          {f.state !== "proposed" && f.reviewedBy ? (
-            <span className="ml-auto text-xs text-muted-foreground">
-              {f.reviewedBy}
-              {f.reviewedAtText ? `, ${f.reviewedAtText}` : ""}
-            </span>
-          ) : null}
         </div>
         <h3 id={headingId} className="text-sm font-semibold [overflow-wrap:anywhere]">
           {f.title}
         </h3>
         {p.editing ? (
-          <EditForm f={f} busy={p.busy} onCancel={p.onCancelEdit} onSave={p.onSaveEdit} />
+          <EditForm fields={f.fields} busy={p.busy} onCancel={p.onCancelEdit} onSave={p.onSaveEdit} />
         ) : (
           <dl className="grid grid-cols-1 gap-x-4 gap-y-2 text-[13px] sm:grid-cols-[10rem_1fr]">
             {rows.map((r) => (
@@ -601,230 +534,32 @@ const FindingCard = forwardRef<
           </p>
         ) : null}
       </div>
+      {!p.editing ? (
+        <div className="px-4 pb-3">
+          <NextStepPanel alias={p.alias} step={f.next} finding={{ id: f.id, title: f.title }} options={p.revisions.options} nameRule={p.revisions.nameRule} />
+        </div>
+      ) : null}
       {f.canAct && !p.editing && p.rejecting ? (
         <RejectForm busy={p.busy} onCancel={() => p.onRejectOpen(false)} onReject={p.onReject} />
       ) : null}
-      {f.canAct && !p.editing && !p.rejecting ? (
-        <div className="flex flex-wrap items-center gap-2 border-t px-4 py-2.5">
-          {f.state === "proposed" ? (
-            <>
-              <Button size="sm" onClick={p.onAccept} disabled={p.busy}>
-                <Check aria-hidden />
-                Accept
-                <Kbd k="A" on={p.singleKeys} />
-              </Button>
-              {f.canEdit ? (
-                <Button size="sm" variant="outline" onClick={p.onEdit} disabled={p.busy}>
-                  <SquarePen aria-hidden />
-                  Edit
-                  <Kbd k="E" on={p.singleKeys} />
-                </Button>
-              ) : null}
-              <Button size="sm" variant="ghost" disabled={p.busy} onClick={() => p.onRejectOpen(true)}>
-                <X aria-hidden />
-                Reject
-                <Kbd k="R" on={p.singleKeys} />
-              </Button>
-              {failedCount ? <span className="ml-auto text-xs text-muted-foreground">Accepting keeps the flag in the record.</span> : null}
-            </>
-          ) : (
-            <Button size="sm" variant="ghost" onClick={p.onReopen} disabled={p.busy}>
-              <Undo2 aria-hidden />
-              Change decision
-            </Button>
-          )}
+      {!p.editing && !p.rejecting && (f.state === "proposed" ? f.canAct : true) ? (
+        <div className="border-t px-4 py-2.5">
+          <DecisionButtons
+            state={f.state}
+            canAct={f.canAct}
+            canEdit={f.canEdit && f.state !== "rejected"}
+            busy={p.busy}
+            keys={p.singleKeys}
+            decidedBy={f.reviewedBy ? `${f.reviewedBy}${f.reviewedAtText ? `, ${f.reviewedAtText}` : ""}` : null}
+            flagged={failedCount > 0}
+            label={f.title}
+            onAccept={p.onAccept}
+            onEdit={p.onEdit}
+            onReject={() => p.onRejectOpen(true)}
+            onReopen={p.onReopen}
+          />
         </div>
       ) : null}
     </article>
   );
 });
-
-/**
- * Reject with an optional note, in the card's footer under the evidence
- * (pages/audit-detail.md, "Rejecting"), so it never covers the citations it
- * is about. The note is stored as the finding's review note.
- */
-function RejectForm({ busy, onCancel, onReject }: { busy: boolean; onCancel: () => void; onReject: (note: string) => void }) {
-  const [note, setNote] = useState("");
-  const id = useId();
-  const ref = useRef<HTMLTextAreaElement>(null);
-  useEffect(() => ref.current?.focus(), []);
-  return (
-    <form
-      onSubmit={(e) => {
-        e.preventDefault();
-        onReject(note.trim());
-      }}
-      onKeyDown={(e) => {
-        if (e.key === "Escape") {
-          e.stopPropagation();
-          onCancel();
-        }
-      }}
-      className="space-y-2 border-t px-4 py-2.5 text-[13px]"
-    >
-      <Label htmlFor={id}>Why, for the record</Label>
-      <Textarea ref={ref} id={id} value={note} onChange={(e) => setNote(e.target.value)} rows={2} maxLength={2000} placeholder="Optional" />
-      <div className="flex gap-2">
-        <Button type="submit" size="sm" variant="destructive" disabled={busy}>
-          <X aria-hidden />
-          Reject
-        </Button>
-        <Button type="button" size="sm" variant="ghost" onClick={onCancel}>
-          Cancel
-        </Button>
-      </div>
-    </form>
-  );
-}
-
-/** "I checked the record": a short note on what the record shows. The check's own result stays in the record. */
-function CheckForm({ record, busy, onCancel, onSave }: { record: number; busy: boolean; onCancel: () => void; onSave: (note: string) => Promise<string | null> }) {
-  const [note, setNote] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-  const id = useId();
-  const ref = useRef<HTMLTextAreaElement>(null);
-  useEffect(() => ref.current?.focus(), []);
-  return (
-    <form
-      onSubmit={async (e) => {
-        e.preventDefault();
-        if (!note.trim()) return setError("Say what you found in the record.");
-        setSaving(true);
-        const err = await onSave(note.trim());
-        setSaving(false);
-        setError(err);
-      }}
-      onKeyDown={(e) => {
-        if (e.key === "Escape") {
-          e.stopPropagation();
-          onCancel();
-        }
-      }}
-      className="w-full space-y-1.5 rounded-lg border bg-muted/30 p-2.5"
-    >
-      <Label htmlFor={id}>What did you find in R{record}?</Label>
-      <Textarea
-        ref={ref}
-        id={id}
-        value={note}
-        onChange={(e) => {
-          setNote(e.target.value);
-          setError(null);
-        }}
-        rows={2}
-        maxLength={500}
-        placeholder="For example: the numbers are there; only the dash differs."
-        aria-invalid={error ? true : undefined}
-        aria-describedby={`${id}-help`}
-      />
-      <p id={`${id}-help`} className="text-xs text-muted-foreground">
-        Shown with the citation as &quot;Checked by&quot; you. The failed check stays in the record.
-      </p>
-      {error ? (
-        <p role="alert" className="text-xs text-destructive-fg">
-          {error}
-        </p>
-      ) : null}
-      <div className="flex gap-2">
-        <Button type="submit" size="sm" disabled={busy || saving}>
-          <Check aria-hidden />
-          Save
-        </Button>
-        <Button type="button" size="sm" variant="ghost" onClick={onCancel}>
-          Cancel
-        </Button>
-      </div>
-    </form>
-  );
-}
-
-function EditForm({ f, busy, onCancel, onSave }: { f: CardFinding; busy: boolean; onCancel: () => void; onSave: (values: Record<string, unknown>) => void }) {
-  const editable = f.fields.filter((x) => x.editable);
-  const current = Object.fromEntries(f.fields.map((x) => [x.key, x.value]));
-  const [values, setValues] = useState<Record<string, unknown>>(() => Object.fromEntries(editable.map((x) => [x.key, x.value])));
-  const id = useId();
-  const first = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    (first.current?.querySelector("select, textarea, input") as HTMLElement | null)?.focus();
-  }, []);
-  const set = (k: string, v: unknown) => setValues((s) => ({ ...s, [k]: v }));
-  return (
-    <form
-      onSubmit={(e) => {
-        e.preventDefault();
-        onSave(changedValues(current, values));
-      }}
-      className="space-y-3 text-[13px]"
-    >
-      <div ref={first} className="space-y-3">
-        {editable.map((x) => {
-          const fid = `${id}-${x.key}`;
-          const v = values[x.key];
-          if (x.choices && x.multiple) {
-            const list = Array.isArray(v) ? (v as string[]) : [];
-            return (
-              <fieldset key={x.key} className="space-y-1.5">
-                <legend className="mb-1 font-medium">{x.label}</legend>
-                <div className="grid gap-1 sm:grid-cols-2">
-                  {x.choices.map((c) => (
-                    <label key={c.value} className="flex min-h-6 items-center gap-2">
-                      <Checkbox checked={list.includes(c.value)} onCheckedChange={(on) => set(x.key, on ? [...list, c.value] : list.filter((y) => y !== c.value))} />
-                      {c.label}
-                    </label>
-                  ))}
-                </div>
-              </fieldset>
-            );
-          }
-          if (x.choices && x.choices.length <= 4) {
-            return (
-              <fieldset key={x.key} className="space-y-1.5">
-                <legend className="mb-1 font-medium">{x.label}</legend>
-                <div className="flex flex-wrap gap-x-4 gap-y-1">
-                  {x.choices.map((c) => (
-                    <label key={c.value} className="flex min-h-6 items-center gap-2">
-                      <input type="radio" name={fid} value={c.value} checked={v === c.value} onChange={() => set(x.key, c.value)} className="size-4 accent-foreground" />
-                      {c.label}
-                    </label>
-                  ))}
-                </div>
-              </fieldset>
-            );
-          }
-          if (x.choices) {
-            return (
-              <div key={x.key} className="space-y-1.5">
-                <Label htmlFor={fid}>{x.label}</Label>
-                <select id={fid} value={typeof v === "string" ? v : ""} onChange={(e) => set(x.key, e.target.value)} className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm dark:bg-input/30">
-                  {x.choices.map((c) => (
-                    <option key={c.value} value={c.value}>
-                      {c.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            );
-          }
-          return (
-            <div key={x.key} className="space-y-1.5">
-              <Label htmlFor={fid}>{x.label}</Label>
-              <Textarea id={fid} value={typeof v === "string" ? v : v === null || v === undefined ? "" : String(v)} onChange={(e) => set(x.key, e.target.value)} rows={3} />
-            </div>
-          );
-        })}
-      </div>
-      <p className="text-xs text-muted-foreground">Other fields stay as the review proposed them. The proposed values are kept in the record.</p>
-      <div className="flex gap-2">
-        <Button type="submit" size="sm" disabled={busy}>
-          <Check aria-hidden />
-          Save and accept
-        </Button>
-        <Button type="button" size="sm" variant="ghost" onClick={onCancel}>
-          Cancel
-        </Button>
-      </div>
-    </form>
-  );
-}

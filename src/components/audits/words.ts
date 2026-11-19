@@ -9,14 +9,14 @@ import type { AuditItemState, AuditState, FindingState } from "@/server/audits/s
  * Pure; unit-tested.
  */
 
-export const AUDITS_DESCRIPTION = "An audit reviews a set of investigations with a model. You accept, edit or reject each finding, then build a report from the accepted ones.";
+export const AUDITS_DESCRIPTION = "An audit reviews a set of investigations. You accept, edit or reject each finding, send accepted package fixes to a revision, then build a report and save the audit record.";
 
 /** Audit states. An audit draft is neutral so info stays free for "Running" in the same column. */
 export const AUDIT_STATE_BADGE: Record<AuditState, StatusSpec> = {
   draft: { tone: "neutral", icon: SquarePen, label: "Draft" },
   running: { tone: "info", icon: Loader, label: "Running" },
   reviewing: { tone: "warning", icon: ListChecks, label: "In review" },
-  finalized: { tone: "success", icon: CircleCheck, label: "Finalized" },
+  finalized: { tone: "success", icon: CircleCheck, label: "Record saved" },
   cancelled: { tone: "neutral", icon: CircleX, label: "Cancelled" },
 };
 
@@ -28,18 +28,18 @@ export interface AuditStateFacts {
 }
 
 export const REVIEWS_FAILED_BADGE: StatusSpec = { tone: "destructive", icon: CircleX, label: "Reviews failed" };
-export const READY_TO_FINALIZE_BADGE: StatusSpec = { tone: "success", icon: CheckCheck, label: "Ready to finalize" };
+export const READY_TO_SAVE_BADGE: StatusSpec = { tone: "success", icon: CheckCheck, label: "Ready to save the record" };
 
 /**
  * The audit's badge. An audit in review whose every review failed says
  * "Reviews failed", never "In review"; one whose every investigation is
- * reviewed (or skipped) and every finding decided says "Ready to finalize"
- * (the same rule the Report tab's finalize applies).
+ * reviewed (or skipped) and every finding decided says "Ready to save the
+ * record" (the same rule the Report tab's "Save the audit record" applies).
  */
 export function auditStateBadge(state: AuditState, f?: AuditStateFacts | null): StatusSpec {
   if (!f || state !== "reviewing") return AUDIT_STATE_BADGE[state];
   if (allReviewsFailed(f)) return REVIEWS_FAILED_BADGE;
-  if (readyToFinalize(state, f)) return READY_TO_FINALIZE_BADGE;
+  if (readyToSave(state, f)) return READY_TO_SAVE_BADGE;
   return AUDIT_STATE_BADGE[state];
 }
 
@@ -50,7 +50,7 @@ export function allReviewsFailed(f: AuditStateFacts): boolean {
 }
 
 /** Every investigation reviewed or skipped, at least one reviewed, and no finding left proposed. */
-export function readyToFinalize(state: AuditState, f: AuditStateFacts): boolean {
+export function readyToSave(state: AuditState, f: AuditStateFacts): boolean {
   const i = f.items;
   return state === "reviewing" && i.reviewed > 0 && i.failed + i.pending + i.analyzing + i.reviewing === 0 && f.findings.proposed === 0;
 }
@@ -103,6 +103,12 @@ export function reviewedBy(runner: string, modelId: string): string {
 }
 
 export const plural = (n: number, one: string, other = `${one}s`) => `${n} ${n === 1 ? one : other}`;
+
+/** The audits list's footer link for the audits the default filter leaves out: "Show 2 cancelled audits", "Show 1 audit with a saved record". */
+export function showClosedText(state: "cancelled" | "finalized", n: number): string {
+  if (state === "cancelled") return `Show ${plural(n, "cancelled audit")}`;
+  return `Show ${n} ${n === 1 ? "audit" : "audits"} with a saved record`;
+}
 
 /** "3 accepted, 1 proposed", leaving out zero counts; "None" when there are none. */
 export function findingCountsText(c: { accepted: number; proposed: number; rejected: number }): { parts: { n: number; word: string; strong: boolean }[]; none: boolean } {
@@ -261,3 +267,54 @@ export function unmatchedText(u: { fileName: string; reason: string; code: strin
   }
 }
 
+
+/** A plan's state in a sentence, for the revisions a finding went to. */
+export function planStateWords(state: string): string {
+  const words: Record<string, string> = {
+    checking: "being checked",
+    ready: "ready to apply",
+    waiting: "waiting for approval",
+    approved: "approved",
+    applying: "being applied",
+    applied: "applied",
+    failed: "failed",
+    discarded: "discarded",
+  };
+  return words[state] ?? state;
+}
+
+/** A revision's state when it isn't plainly open, for the revisions a finding went to; null for an open revision. */
+export function revisionStateWords(state: string): string | null {
+  const words: Record<string, string> = { creating: "Being created", applied: "Applied", abandoned: "Abandoned", failed: "Not created" };
+  return words[state] ?? null;
+}
+
+/** What a revision does with the finding: "To address" while it waits on the list, "Linked by a save" once a save names it. */
+export function linkKindWords(kind: "to-address" | "linked"): string {
+  return kind === "linked" ? "Linked by a save" : "To address";
+}
+
+/**
+ * The check result under one citation of the evidence list: what the citation check found, in words.
+ * A failed citation a reviewer read says who checked it and what they found.
+ */
+export function citationResult(c: CitationLike & { quote?: string | null }, totalRecords: number | null): { tone: "success" | "warning"; text: string } {
+  if (c.ok) return { tone: "success", text: c.quote ? `The quoted text is in R${c.record}.` : `R${c.record} exists in this journal.` };
+  return { tone: "warning", text: c.checked ? checkedText(c.checked) : (citationProblemSentence(c, totalRecords) ?? "The citation failed the check.") };
+}
+
+/** The evidence heading's summary: "2 citations passed", "1 of 2 failed", or the failed ones a reviewer checked. */
+export function evidenceSummary(rows: readonly CitationLike[]): { tone: "success" | "warning" | "muted"; label: string } {
+  const failed = rows.filter((r) => !r.ok);
+  const open = failed.filter((r) => !r.checked).length;
+  if (rows.length === 0) return { tone: "muted", label: "No records cited" };
+  if (open > 0) return { tone: "warning", label: `${open} of ${rows.length} failed the check` };
+  if (failed.length > 0) return { tone: "success", label: `${plural(failed.length, "failed citation")} checked by a reviewer` };
+  return { tone: "success", label: `${plural(rows.length, "citation")} passed` };
+}
+
+/** What the confirm button of the "Add to revision…" dialog says. */
+export function confirmRevisionLabel(p: { acceptFirst: boolean; target: "new" | { name: string } }): string {
+  const what = p.acceptFirst ? "Accept and add" : "Add";
+  return p.target === "new" ? `${what} to a new revision` : `${what} to ${p.target.name}`;
+}
