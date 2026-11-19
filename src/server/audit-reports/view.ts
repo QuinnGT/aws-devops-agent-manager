@@ -111,7 +111,7 @@ function listNames(names: string[], max = 5): string {
 /** Why the audit can't be finalized yet, as structured items; empty when it can. */
 export function finalizeIssues(audit: Pick<AuditRecord, "state">, items: ReportItem[], findings: FindingRecord[]): FinalizeIssue[] {
   const issue = (code: FinalizeIssue["code"], message: string, count = 0, incidents: string[] = []): FinalizeIssue => ({ code, message, count, incidents });
-  if (audit.state === "finalized") return [issue("finalized", "The audit is already finalized.")];
+  if (audit.state === "finalized") return [issue("finalized", "The audit's record is already saved.")];
   if (audit.state === "cancelled") return [issue("cancelled", "The audit was cancelled.")];
   const out: FinalizeIssue[] = [];
   if (!items.length) out.push(issue("no-items", "The audit has no investigations."));
@@ -197,7 +197,7 @@ export function titleList(titles: readonly string[]): string {
   return titles.length <= 1 ? (titles[0] ?? "") : `${titles.slice(0, -1).join(", ")} and ${titles[titles.length - 1]}`;
 }
 
-/** Finalize needs a person's text, or approved model text, in every shareable narrative it commits. */
+/** Saving the record needs a person's text, or approved model text, in every shareable narrative it commits. */
 export function unapprovedIssues(sections: ReportSectionView[]): FinalizeIssue[] {
   const list = unapprovedNarratives({ sections }, "shareable");
   if (!list.length) return [];

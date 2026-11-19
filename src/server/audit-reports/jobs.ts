@@ -46,7 +46,7 @@ export async function requestDraftNarrative(input: z.input<typeof draftNarrative
   if (!space) throw new AuditReportError("Space not found.", "not-found");
   const audit = await getAuditInSpace(space.id, parsed.auditId);
   if (!audit) throw new AuditReportError("Audit not found.", "not-found");
-  if (audit.state === "finalized") throw new AuditReportError("This audit is finalized, so its report can't be changed.", "read-only");
+  if (audit.state === "finalized") throw new AuditReportError("This audit's record is saved, so its report can't be changed.", "read-only");
   // An audit whose reviews use no Bedrock model has none for its report unless one was chosen on the draft; say so now, not in a failed job.
   const snapshot = snapshotProfile(audit.profileSnapshot);
   if (!snapshot.report.modelId && !snapshot.review.modelId) throw new AuditReportError(noReportModelReason(snapshot.review.runner), "invalid");

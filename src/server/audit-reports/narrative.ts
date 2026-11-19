@@ -158,7 +158,7 @@ export async function draftNarrativeHandler(input: DraftNarrativeInput, ctx: Job
   // The drafts read the findings as loaded here
   const loadedAt = buildTime(started, rc.data.inputsChangedAt);
   const { audit, profile, policy, view } = rc;
-  if (audit.state === "finalized") throw new AuditReportError("This audit is finalized, so its report can't be changed.", "read-only");
+  if (audit.state === "finalized") throw new AuditReportError("This audit's record is saved, so its report can't be changed.", "read-only");
 
   const narratives = profile.report.sections.filter((s) => s.kind === "narrative");
   const unknown = input.sectionIds.filter((id) => !narratives.some((s) => s.id === id));

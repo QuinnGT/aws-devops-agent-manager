@@ -14,6 +14,7 @@ import { AuditReportError } from "./errors";
 import { exportAuditReport } from "./export";
 import { AUDIT_TRAILERS, finalizeAuditHandler, prepareFinalizeAudit } from "./finalize";
 import { loadAuditReport } from "./loader";
+import { loadRecordInfo } from "./record";
 import { draftNarrativeHandler, draftNarrativeInput } from "./narrative";
 
 /**
@@ -314,6 +315,23 @@ describe("exports", () => {
 });
 
 describe("finalize", () => {
+  it("says before saving where the record goes and which files are new", async () => {
+    const [row] = await db().select().from(audits).where(eq(audits.id, auditId));
+    const info = await loadRecordInfo(space, row!, loaded.policy.historyLayout);
+    expect(info.saved).toBeNull();
+    expect(info.plan).toEqual({
+      repository: "rep-space-history",
+      branch: "main",
+      folder: `audits/${ALIAS}/${auditId}/`,
+      push: { kind: "local", reason: "no-remote", remote: null },
+      files: [
+        { name: "audit.json", status: "new" },
+        { name: "findings.json", status: "new" },
+        { name: "report.md", status: "new" },
+      ],
+    });
+  });
+
   it("refuses while a finding is still proposed", async () => {
     await expect(prepareFinalizeAudit({ spaceId: space.id, auditId })).rejects.toMatchObject({ code: "not-ready", problems: ["1 finding is still proposed. Accept or reject each one first."] });
     await expect(finalizeAuditHandler({ spaceId: space.id, auditId }, testJobContext({ actor, spaceId: space.id }))).rejects.toBeInstanceOf(AuditReportError);
@@ -332,7 +350,7 @@ describe("finalize", () => {
     const res = await finalizeAuditHandler(input, ctx);
     const dir = `audits/${ALIAS}/${auditId}`;
     expect(res).toMatchObject({ auditId, dir, pushed: false, resumed: false });
-    expect(ctx.progressCalls.at(-1)).toEqual([1, "Audit finalized"]);
+    expect(ctx.progressCalls.at(-1)).toEqual([1, "Audit record saved"]);
 
     const [commit] = await repo.log({ maxCount: 1 });
     expect(commit!.hash).toBe(res.commit);
@@ -383,6 +401,36 @@ describe("finalize", () => {
       .from(auditEvents)
       .where(and(eq(auditEvents.action, "audit.finalize"), eq(auditEvents.result, "ok")));
     expect(event).toMatchObject({ targetId: auditId, details: expect.objectContaining({ commit: res.commit }) });
+    // The page reads where the record went from this event; no column keeps it.
+    expect(event!.details).toMatchObject({
+      dir,
+      branch: "main",
+      remote: null,
+      pushed: false,
+      files: [
+        { name: "audit.json", status: "new" },
+        { name: "findings.json", status: "new" },
+        { name: "report.md", status: "new" },
+      ],
+    });
+  });
+
+  it("tells after saving the commit, the folder, the files and that nothing was pushed", async () => {
+    const [row] = await db().select().from(audits).where(eq(audits.id, auditId));
+    const info = await loadRecordInfo(space, row!, loaded.policy.historyLayout);
+    expect(info.saved).toMatchObject({
+      commit: row!.finalizedCommit,
+      by: actor.email,
+      branch: "main",
+      folder: `audits/${ALIAS}/${auditId}/`,
+      push: { pushed: false, error: null, remote: null },
+    });
+    expect(info.saved!.files.map((f) => [f.name, f.status])).toEqual([
+      ["audit.json", "new"],
+      ["findings.json", "new"],
+      ["report.md", "new"],
+    ]);
+    expect(info.plan!.push).toEqual({ kind: "local", reason: "no-remote", remote: null });
   });
 
   it("makes the report read-only, and a retry neither commits again nor changes the record", async () => {

@@ -12,7 +12,7 @@ import { AuditRequestError } from "./errors";
 import { loadedPolicyForSpace } from "./profiles";
 import { buildReviewInput } from "./review-input";
 import { listReviewers } from "./reviewers";
-import { AUDIT_STATE_LABELS, filesEligible } from "./states";
+import { auditStatePhrase, filesEligible } from "./states";
 import { getAudit, listAuditItems, profileOf, type AuditItemRow, type AuditRow } from "./store";
 
 /**
@@ -164,7 +164,7 @@ export function assertTakesReviewFiles(audit: AuditRow, policy: Pick<Policy, "au
     throw new AuditRequestError("state", `This audit's reviews are written by ${label}, not from review files.`);
   }
   if (audit.state !== "running" && audit.state !== "reviewing") {
-    throw new AuditRequestError("state", `The audit is ${AUDIT_STATE_LABELS[audit.state].toLowerCase()}; review files are for an audit that is running or in review.`);
+    throw new AuditRequestError("state", `The audit is ${auditStatePhrase(audit.state)}; review files are for an audit that is running or in review.`);
   }
 }
 

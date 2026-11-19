@@ -21,9 +21,12 @@ export const AUDIT_STATE_LABELS: Record<AuditState, string> = {
   draft: "Draft",
   running: "Running",
   reviewing: "Reviewing findings",
-  finalized: "Finalized",
+  finalized: "Record saved",
   cancelled: "Cancelled",
 };
+
+/** The state inside a sentence: "The audit is <phrase>; ...". */
+export const auditStatePhrase = (state: AuditState): string => (state === "finalized" ? "closed, with its record saved" : AUDIT_STATE_LABELS[state].toLowerCase());
 
 export const ITEM_STATE_LABELS: Record<AuditItemState, string> = {
   pending: "Waiting",
@@ -70,16 +73,27 @@ export const canEditSelection = (s: AuditState) => s === "draft";
 export const canReviewFindings = (s: AuditState) => FINDING_REVIEW_AUDIT_STATES.includes(s);
 export const canRerunItem = (audit: AuditState, item: AuditItemState) => (audit === "running" || audit === "reviewing") && (item === "reviewed" || item === "failed");
 
+/** Why an action is refused once the audit's record is saved (state "finalized"). */
+const SAVED_REASONS = {
+  start: "The audit's record is saved; only a draft can be started.",
+  cancel: "The audit's record is saved; only a running audit can be cancelled.",
+  delete: "An audit whose record is saved can't be deleted.",
+  edit: "The audit's record is saved; investigations can be changed only while it is a draft.",
+  review: "The audit's record is saved, so its findings can't be changed.",
+  rerun: "The audit's record is saved; an item can be reviewed again only while the audit is running or its findings are being reviewed.",
+} as const;
+
 /** Why an audit action is not allowed, in words for the page. */
 export function auditStateReason(action: "start" | "cancel" | "delete" | "edit" | "review" | "rerun", state: AuditState): string {
-  const label = AUDIT_STATE_LABELS[state].toLowerCase();
+  if (state === "finalized") return SAVED_REASONS[action];
+  const label = auditStatePhrase(state);
   switch (action) {
     case "start":
       return `The audit is ${label}; only a draft can be started.`;
     case "cancel":
       return `The audit is ${label}; only a running audit can be cancelled.`;
     case "delete":
-      return state === "running" || state === "finalized" ? `A ${label} audit can't be deleted.` : `The audit is ${label}; only a draft can be deleted.`;
+      return state === "running" ? `A ${label} audit can't be deleted.` : `The audit is ${label}; only a draft can be deleted.`;
     case "edit":
       return `The audit is ${label}; investigations can be changed only while it is a draft.`;
     case "review":
