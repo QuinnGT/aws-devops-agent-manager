@@ -6,6 +6,35 @@ maxItemsPerAudit: 500
 maxEvidenceUploadBytes: 52428800
 defaultProfile: benchmark
 
+# Who writes each review. The audit form offers these, with their options; the
+# profile's review.runner is the default. Leave a runner out to stop offering it.
+reviewers:
+  ai-sdk:
+    label: Amazon Bedrock model
+    description: The app sends each investigation to a model in Amazon Bedrock, which reads the records through tools.
+  handoff:
+    label: Review files
+    description: >-
+      Download review files for each investigation, run them with an agent your company
+      has approved, such as the Kiro CLI or Claude Code, and import each review. No model
+      access from the app is needed.
+  devops-agent-chat:
+    label: DevOps Agent chat
+    description: >-
+      The app attaches the review files to a chat in this Agent Space and reads the review
+      from the reply. It uses the space's DevOps Agent time instead of Amazon Bedrock. The
+      chat loads the space's instructions, so a separate reviewer space gives a more
+      independent review.
+    options:
+      modelTier:
+        label: Model tier
+        description: The DevOps Agent model tier for the chat.
+        default: smart
+        values:
+          - { id: smart, label: Smart, description: "Most thorough. About 2 minutes per review in testing." }
+          - { id: balanced, label: Balanced, description: "The service default. About 2 minutes per review in testing." }
+          - { id: fast, label: Fast, description: "Quickest, but in testing some quotes cited the wrong record." }
+
 profiles:
   benchmark:
     label: Benchmark against ground truth

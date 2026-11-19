@@ -20,7 +20,16 @@ import { compileOutputSchema } from "./validate";
  *   {{ground_truth}}                     each document in a <ground_truth kind=".."> block
  *   {{condensed_trace}}                  the trace in a <condensed_trace> block, capped at traceCharsInPrompt
  *   {{analyzer:<id>}}                    that analyzer's output as JSON in an <analyzer id=".."> block
+ *   {{record_access}}                    how the reviewer reads the full records: the policy text for tools,
+ *                                        or for files (records.md), filled with these same placeholders
+ *   {{record_chars_cap}}                 longest record text in records.md (files mode)
+ *
+ * Mode "tools" is the Bedrock review, which reads records through tools. Mode
+ * "files" is a review written from review files (hand-off and chat): the system
+ * prompt and {{record_access}} point to records.md instead of tools.
  */
+
+export type ReviewMode = "tools" | "files";
 
 export class ReviewSetupError extends Error {
   constructor(message: string) {
@@ -163,8 +172,15 @@ export function incidentIdOf(input: Pick<ReviewRunInput, "incidentId" | "bundle"
 }
 
 /** Resolves the brief's placeholders for one investigation. */
-export function promptValues(input: ReviewRunInput, s: ReviewSettings): (key: string) => string | undefined {
+export function promptValues(input: ReviewRunInput, s: ReviewSettings, mode: ReviewMode = "tools"): (key: string) => string | undefined {
   const fixed: Record<string, () => string> = {
+    record_chars_cap: () => String(s.files.recordCharsCap),
+    record_access: () => {
+      const rel = mode === "files" ? s.files.recordAccessPrompt : s.recordAccessPrompt;
+      const text = readFile(input.policyDirs, rel, "record access prompt").trim();
+      // Filled with the other placeholders; a {{record_access}} inside it is reported as unknown.
+      return fillTemplate(text, (k) => (k === "record_access" ? undefined : resolve(k)));
+    },
     incident_id: () => incidentIdOf(input),
     title: () => (input.bundle.task.title ?? "(no title)").replace(/[\r\n]+/g, " "),
     record_count: () => String(input.bundle.records.length),
@@ -181,11 +197,12 @@ export function promptValues(input: ReviewRunInput, s: ReviewSettings): (key: st
       return block("condensed_trace", t.text, { records: input.bundle.records.length, shortened: t.cut ? "yes" : "no" });
     },
   };
-  return (key) => {
+  const resolve = (key: string): string | undefined => {
     if (Object.hasOwn(fixed, key)) return fixed[key]!();
     if (key.startsWith("analyzer:")) return analyzerBlock(input, key.slice("analyzer:".length), s.analyzerCharsInPrompt);
     return undefined;
   };
+  return resolve;
 }
 
 export interface PreparedReview {
@@ -216,8 +233,8 @@ export function promptDigest(system: string, prompt: string, schemaText: string)
 }
 
 /** Reads the prompts and schema from policy and fills the brief. Throws ReviewSetupError. */
-export function prepareReview(input: ReviewRunInput, s: ReviewSettings): PreparedReview {
-  const system = readFile(input.policyDirs, s.systemPrompt, "reviewer system prompt");
+export function prepareReview(input: ReviewRunInput, s: ReviewSettings, mode: ReviewMode = "tools"): PreparedReview {
+  const system = readFile(input.policyDirs, mode === "files" ? s.files.systemPrompt : s.systemPrompt, "reviewer system prompt");
   const template = readFile(input.policyDirs, s.promptTemplate, "prompt template");
   const finalStep = readFile(input.policyDirs, s.finalStepPrompt, "final step prompt");
   const schemaText = readFile(input.policyDirs, s.outputSchema, "output schema");
@@ -235,7 +252,7 @@ export function prepareReview(input: ReviewRunInput, s: ReviewSettings): Prepare
   } catch (e) {
     throw new ReviewSetupError(`The output schema is not valid JSON Schema (${s.outputSchema}): ${e instanceof Error ? e.message : String(e)}`);
   }
-  const prompt = fillTemplate(template, promptValues(input, s));
+  const prompt = fillTemplate(template, promptValues(input, s, mode));
   const { $schema: _s, $id: _i, ...modelSchema } = schema as Record<string, unknown>;
   return {
     system,

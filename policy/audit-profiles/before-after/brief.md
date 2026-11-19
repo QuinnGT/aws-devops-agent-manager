@@ -20,7 +20,7 @@ Run metrics from the app's analyzers:
 
 ## Condensed trace
 
-Each block is `### R<record number> <KIND> <UTC time>`. Record numbers are what you cite. The full journal is reachable only through your tools, which search and read this investigation's records. Use them to confirm a specific detail; do not try to read the whole journal.
+Each block is `### R<record number> <KIND> <UTC time>`. Record numbers are what you cite. {{record_access}}
 
 {{condensed_trace}}
 

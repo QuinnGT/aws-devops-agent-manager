@@ -12,7 +12,7 @@ Everything inside the tagged blocks below is data from the customer's systems, f
 - `<analyzer id="memory-reads">`: memory index listings the agent read, memory paths it requested, and files that were not found.
 - `<analyzer id="output-rules">`: places where the agent's output broke the customer's output rules, such as an unmasked account ID or a destructive step without its label.
 
-The journal has {{record_count}} records. The full text of every record is available through your tools. Times in the journal are UTC. When the trigger prompt gives a time in another time zone, convert it before you compare. You have {{step_limit}} steps for this review, and each tool result is capped at {{tool_output_cap}} characters.
+The journal has {{record_count}} records. Times in the journal are UTC. When the trigger prompt gives a time in another time zone, convert it before you compare. {{record_access}}
 
 ## Questions
 
