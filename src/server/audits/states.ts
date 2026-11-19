@@ -40,6 +40,22 @@ export const FINDING_STATE_LABELS: Record<FindingState, string> = {
   rejected: "Rejected",
 };
 
+/** A pending item whose analyzers have run, waiting for its review. A hand-off audit waits for a file a person imports. */
+export const WAITING_FOR_REVIEW_LABEL = "Waiting for review";
+export const WAITING_FOR_FILE_LABEL = "Waiting for a review file";
+export const itemWaitingLabel = (runner: string): string => (runner === "handoff" ? WAITING_FOR_FILE_LABEL : WAITING_FOR_REVIEW_LABEL);
+
+/** Why a hand-off audit's item has no Rerun: importing a new review file replaces its review. */
+export const HANDOFF_RERUN_REASON = "This audit's reviews come from review files. Import a new review file to replace this review.";
+
+/**
+ * Whether a hand-off audit can take review files for an item and a review back:
+ * its analyzers have run (so its journal digest is known) and it was not skipped.
+ * A review imported later replaces the current one, like a rerun.
+ */
+export const filesEligible = (i: { state: AuditItemState; analyzedAt: Date | null; journalSha256: string | null }): boolean =>
+  !!i.analyzedAt && !!i.journalSha256 && (i.state === "pending" || i.state === "reviewed" || i.state === "failed");
+
 /** Item states after which an item needs no more work in this run. */
 export const FINISHED_ITEM_STATES: readonly AuditItemState[] = ["reviewed", "failed", "skipped"];
 export const isItemFinished = (s: AuditItemState) => FINISHED_ITEM_STATES.includes(s);
