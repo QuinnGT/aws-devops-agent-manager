@@ -109,7 +109,45 @@ To add a profile:
 
 An audit stores a copy of its profile when it is created, so a policy change never alters an audit that has already started.
 
-No model ID is set in policy. The review model is chosen on the audit, or as the space default in Space settings. A profile may set `review.modelId` as a last fallback. See [AWS setup](aws-setup.md) for the Amazon Bedrock permissions that a model needs.
+No model ID is set in policy. The review model is chosen on the audit, or as the space default in Space settings, and only the Amazon Bedrock reviewer uses one. A profile may set `review.modelId` as a last fallback. See [AWS setup](aws-setup.md) for the Amazon Bedrock permissions that a model needs.
+
+## Reviewers and review files
+
+The `reviewers` block of `audits.yaml` lists who can write an audit's reviews. "New audit" offers each entry, with its label and description, and starts with the profile's `review.runner`.
+
+| Key | What it does |
+|---|---|
+| `ai-sdk` | A model in Amazon Bedrock, which reads the records through tools |
+| `handoff` | Review files that a person runs with an agent and imports back |
+| `devops-agent-chat` | A chat in the Agent Space, with the review files attached |
+
+Each entry has a `label`, a `description` and optional `options`. An option has a `label`, a `default` and a list of `values`, each with an `id`, a `label` and a `description`. The form shows one control per option with the default preselected, and the server refuses a runner that is not listed and an option value that is not one of the option's values. Leave a runner out to stop offering it. If the block is empty, no choice is shown and every audit uses its profile's `review.runner`. The audit keeps its choice in its profile snapshot (`review.runner` and `review.runnerOptions`), so a later policy change does not alter it.
+
+The `handoff` block sets the review files and the import:
+
+| Key | What it does |
+|---|---|
+| `readme` | The file written as `README.md` in each investigation's folder, with `{{incident_id}}`, `{{task_id}}`, `{{audit_name}}` and `{{profile_label}}` filled in. The shipped one is `prompts/handoff-readme.md`: what each file is, a prompt to give an agent, a warning that the files hold journal text and should go only to a tool your company has approved, and how to import |
+| `import.maxUploadBytes` | Largest upload, a zip or one review file |
+| `import.maxZipEntries` | Most entries in an uploaded zip |
+| `import.maxEntryBytes` | Largest file inside a zip (a zip of the folders holds `records.md` beside `review.json`) |
+| `import.maxUncompressedBytes` | Largest total of a zip's files once unpacked |
+| `import.maxReviewBytes` | Largest `review.json` or `manifest.json` |
+| `import.maxLabelChars` | Longest reviewer label |
+
+The review files themselves come from the profile: `review.promptTemplate` and `review.outputSchema` as for the Bedrock review, and `review.files` for the files mode: `systemPrompt` (the reviewer's instructions when the records are in `records.md`), `recordAccessPrompt` (the text for `{{record_access}}`) and `recordCharsCap` (the longest record text before it is cut with a note).
+
+A `devops-agent-chat` review uses the same review files, attached to a chat, and the profile's optional `review.chat` block:
+
+| Key | What it sets |
+|---|---|
+| `messageTemplate` | The chat message, with `{{system_prompt}}`, `{{schema}}`, `{{brief_file}}` and `{{records_file}}`. Shipped: `prompts/reviewer-chat.md` |
+| `repairPrompt` | The one follow-up message sent when the first reply is not JSON. Shipped: `prompts/reviewer-chat-repair.md` |
+| `schemaRepairPrompt` | The one follow-up message sent when the reply is JSON but breaks the output schema, with the problems in `{{schema_errors}}`. The app keeps whichever answer has fewer problems. Shipped: `prompts/reviewer-chat-schema-repair.md` |
+| `messageCharsCap` | Longest message, 32768 (the service's limit) |
+| `attachmentBytesCap` | Most bytes of `brief.md` and `records.md` together, 1500000 by default. A chat read 1.8 MB in full in testing and returned nothing for 2.6 MB |
+| `attachmentPrefix` | Start of the temporary attachment names, `dam-review-` by default. Keep it in step with `ignoredAttachmentPrefixes` in `sync.yaml`, which leaves these attachments out of history |
+| `cancelCheckSeconds` | How often a running chat review checks whether the audit was cancelled |
 
 ## When policy has an error
 

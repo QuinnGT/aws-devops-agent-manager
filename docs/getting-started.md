@@ -50,7 +50,7 @@ The script:
 
 Open `http://127.0.0.1:3001/spaces/anycompany-tickets`. You are signed in as Alex Rivera, the owner of the sample space, with no sign-in screen. The data is a fictional company, AnyCompany Tickets. [`sample-data/README.md`](../sample-data/README.md) says what it contains: two versions of an instruction package, eight audited investigations, releases, plans, audits with reports, and revisions.
 
-What does not work in the demo is everything that calls AWS. A sync, **Test connection** and an audit that calls a model all fail with a credentials error, because the sample space has no Agent Space behind it. The worker runs, so imports, exports and analysis work. Scheduled syncs are switched off, so the pages keep showing the seeded data however long the demo runs. The reason and the setting are in [`scripts/demo-seed/policy/sync.yaml`](../scripts/demo-seed/policy/sync.yaml).
+What does not work in the demo is everything that calls AWS. A sync, **Test connection** and an audit reviewed by an Amazon Bedrock model all fail with a credentials error, because the sample space has no Agent Space behind it. An audit reviewed with review files calls no AWS API, so you can try it ([Audit without Bedrock](#audit-without-bedrock)). The worker runs, so imports, exports and analysis work. Scheduled syncs are switched off, so the pages keep showing the seeded data however long the demo runs. The reason and the setting are in [`scripts/demo-seed/policy/sync.yaml`](../scripts/demo-seed/policy/sync.yaml).
 
 | To do this | Run |
 |---|---|
@@ -98,6 +98,27 @@ Run `up` again at any time, for example after `git pull`. It rebuilds the image,
 5. Watch the sync on the space's home page. When it finishes, **Assets** and **History** show every asset with its full version history.
 
 If the test fails, the space's settings page shows which step failed and the AWS error. Fix the access, then choose **Test connection** there.
+
+### Audit without Bedrock
+
+An audit does not need Amazon Bedrock. Choose the **Review files** reviewer on **New audit**, and the app writes the files and reads the reviews back instead of calling a model.
+
+1. Choose the investigations, add their ground truth, pick **Review files** under **Reviewer** and start the audit. The analyzers run, and each investigation then shows "Waiting for a review file".
+2. On the audit's **Investigations** tab, choose **Download all review files**. The zip has one folder for each investigation. Its `README.md` has a prompt for an agent such as the Kiro CLI or Claude Code.
+3. Run the folders with an agent your company has approved. The files hold journal text from the Agent Space, so give them only to a tool and model approved for that data. The agent writes `review.json` in each folder.
+4. Zip the folders and choose **Import reviews**, or open one investigation and import its `review.json` with its `manifest.json`. Type who or what wrote the reviews, for example "Claude Code, Opus 5.5". The app lists, for each file, whether it was imported or refused and why. When every investigation has a review, the audit moves to "In review" and you accept or reject the findings as usual (see "Review an audit" below).
+
+The sample data has reference reviews in `sample-data/audit/reviews/`. They cite records as `R76`, so convert them to numbers before importing them (the integration test `src/server/audits/handoff.int.test.ts` shows how).
+
+### Review an audit
+
+The strip at the top of an audit shows the steps: Reviews, Decide, Fix in a revision, Report and Record, with what is left at each. Each cell links to its tab or card.
+
+1. Open the **Findings** tab. The list on the left is grouped by incident; the finding you select on the right is shown whole, with its evidence: each cited record, the quoted text and whether the citation check found it. **Accept**, **Edit** and **Reject** are the buttons at the top of the detail. The keys A, E, R, J and K do the same, and **Accept** on an incident's heading accepts the findings that passed the check.
+2. Under each finding, **What happens next** says where it goes. A fix for a memory or an instruction is a package fix: **Add to revision…** (or **Accept and add to revision…**) puts it on an open revision's to-address list, or starts a revision with it. The dialog starts on the revision that already holds findings from this audit, and says what each revision is. Accepting a fix does not apply it: a fix in a revision is only queued, and reaches the agent after someone edits the files in the revision, saves, and applies its plan. The finding then links to the revision, its plan and its release, and the banner at the top of the audit names the revisions still waiting and any accepted package fixes that are in none. Any other fix is listed in the report as an action for its owner, and a diagnosis is counted in the report. An Editor can decide findings and build revisions; a Viewer can read them. The "Who can do what" page lists the roles.
+3. A citation such as **R12** is record 12 of the investigation's journal. Press it to read the record under its row (press **O** for the first cited one). If a citation failed the check and you read the record and the finding holds, press **I checked the record** and say what you found.
+4. On the **Report** tab, build the report, edit the summary and export it if you want to share it.
+5. When every finding has a decision, choose **Save the audit record**. The dialog says the repository, branch and folder, which of `audit.json`, `findings.json` and `report.md` are new, and whether the commit is pushed (only when the repository has a remote and pushing is on). Saving changes nothing in the Agent Space. Afterwards the card shows the commit, which you can copy, and whether it was pushed.
 
 ### Where the data lives
 

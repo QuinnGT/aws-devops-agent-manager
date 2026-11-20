@@ -41,6 +41,12 @@ reconcile:
   # than this. The cron above is missed while the worker isn't running.
   maxAgeHours: 25
 
+# Attachments whose file name starts with one of these are left out of history.
+# A DevOps Agent chat review attaches its review files to the space for a few
+# minutes (audit profile review.chat.attachmentPrefix; keep the two in step).
+ignoredAttachmentPrefixes:
+  - dam-review-
+
 # Changes with the same timestamp are committed in this type order.
 typeOrder: [memory_store, agents_md, skill, custom_agent, memory]
 

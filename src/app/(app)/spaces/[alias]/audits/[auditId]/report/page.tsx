@@ -4,7 +4,10 @@ import type { ReactNode } from "react";
 import { BuildReportButton } from "@/components/audit-reports/build-button";
 import { CountTableBody, FindingsTableBody, IncidentListBody, MetricsTableBody } from "@/components/audit-reports/computed-sections";
 import { ExportCard, type LastExport } from "@/components/audit-reports/export-card";
-import { FinalizeCard, type FinalizeIssueLink } from "@/components/audit-reports/finalize-card";
+import { fixContext } from "@/components/audits/detail-data";
+import { findingListQuery } from "@/components/audits/list-params";
+import { queuedRevisions } from "@/components/audits/revision-choice";
+import { SaveRecordCard, type RecordCardRecord, type RecordIssueLink } from "@/components/audit-reports/save-record-card";
 import { ReportProvider } from "@/components/audit-reports/report-context";
 import { HideToggle, NarrativeSection } from "@/components/audit-reports/section-actions";
 import { ReportSectionCard } from "@/components/audit-reports/section-card";
@@ -13,15 +16,17 @@ import { Callout } from "@/components/common/callout";
 import { Time } from "@/components/common/time";
 import { SafeMarkdown } from "@/components/safe-markdown";
 import { getAnalyzer } from "@/server/analyzers/registry";
+import { displayNames } from "@/server/drafts/loaders";
+import type { RecordInfo } from "@/server/audit-reports/record";
 import { decodeParam } from "@/server/assets/guard";
-import { loadReportPage, NO_REPORT_MODEL_REASON, REPORT_PERMISSIONS, unapprovedNarratives, type Audience, type ExportRecord, type ReportPage, type ReportSectionView } from "@/server/audit-reports";
+import { loadReportPage, noReportModelReason, REPORT_PERMISSIONS, unapprovedNarratives, type Audience, type ExportRecord, type ReportPage, type ReportSectionView } from "@/server/audit-reports";
 import { can, requireUserOrRedirect } from "@/server/auth/dal";
 import { getSpaceByAlias } from "@/server/spaces/queries";
 import { approveNarrativeAction, buildReportAction, draftNarrativeAction, finalizeAuditAction, saveNarrativeAction, setSectionHiddenAction } from "./actions";
 
 /**
  * The Report tab of an audit (pages/audit-report.md: the report, the HTML export
- * and the finalize dialog). It renders inside the audit layout, which owns the
+ * and the "Save the audit record" card). It renders inside the audit layout, which owns the
  * top bar, the audit header and the tabs; this page adds the report's
  * callouts, the section cards and the Export and Finalize cards.
  */
@@ -111,6 +116,35 @@ function sectionMeta(s: ReportSectionView, page: ReportPage, kind: KindLabel | u
   }
 }
 
+/** Accepted package fixes of the audit that sit in a revision whose plan isn't applied yet. */
+function queuedFixCount(fix: Awaited<ReturnType<typeof fixContext>>): number {
+  return fix ? queuedRevisions(fix).reduce((n, q) => n + q.fixes, 0) : 0;
+}
+
+/** The record's facts for the card: the times as server-rendered elements, the names as text. */
+function recordForCard(info: RecordInfo, nameOf: (email: string) => string): RecordCardRecord | null {
+  const { plan, saved } = info;
+  if (!plan) return null;
+  return {
+    repository: plan.repository,
+    branch: plan.branch,
+    folder: plan.folder,
+    push: plan.push,
+    files: plan.files,
+    saved: saved
+      ? {
+          commit: saved.commit,
+          branch: saved.branch,
+          folder: saved.folder,
+          files: saved.files,
+          push: saved.push,
+          when: saved.at ? <Time value={saved.at} format="datetime" /> : "earlier",
+          by: saved.by ? nameOf(saved.by) : null,
+        }
+      : null,
+  };
+}
+
 function lastExport(r: ExportRecord | null): LastExport | null {
   if (!r) return null;
   return { refused: r.result === "denied", errors: r.errorCount ?? r.ruleIds.length, when: <Time value={r.at} format="datetime" />, actor: r.actor, failed: r.result === "error", fileName: r.fileName };
@@ -122,14 +156,17 @@ export default async function AuditReportPage({ params }: PageProps<"/spaces/[al
   const space = await getSpaceByAlias(decodeParam(alias));
   if (!space || !(await can(user, REPORT_PERMISSIONS.read, space.id))) notFound();
   const auditId = decodeParam(rawAuditId);
-  const [page, canRun, canManage, canRepos] = await Promise.all([
+  const [page, canRun, canManage, canBuild, canRepos] = await Promise.all([
     loadReportPage(space, auditId),
     can(user, REPORT_PERMISSIONS.edit, space.id),
     can(user, "spaces.manage", space.id),
+    can(user, "revisions.build", space.id),
     // History repositories are app settings (as on Home)
     can(user, "spaces.manage", null),
   ]);
   if (!page) notFound();
+  // Accepted package fixes in no revision, or queued in one: the save dialog says so.
+  const fix = await fixContext(space.id, page.view.audit.id, canBuild);
 
   const { view } = page;
   const canEdit = canRun && !view.readOnly;
@@ -141,7 +178,7 @@ export default async function AuditReportPage({ params }: PageProps<"/spaces/[al
   const callout = !built ? (
     <Callout tone="info" title="The report isn't built yet" action={canEdit ? <BuildReportButton rebuild={false} /> : undefined}>
       {canEdit
-        ? "Build it to see the sections, draft the narrative, export it and finalize the audit. The tables count accepted findings only."
+        ? "Build it to see the sections, draft the narrative, export it and save the audit record. The tables count accepted findings only."
         : "Someone who can run audits builds it once the findings are reviewed."}
     </Callout>
   ) : view.stale && !view.readOnly ? (
@@ -177,7 +214,7 @@ export default async function AuditReportPage({ params }: PageProps<"/spaces/[al
     const c = s.content;
     if (c.type === "narrative") {
       const d = page.drafts[s.id];
-      const disabledReason = !page.model.id ? NO_REPORT_MODEL_REASON : accepted === 0 ? "Accept some findings first." : null;
+      const disabledReason = !page.model.id ? noReportModelReason(page.runner) : accepted === 0 ? "Accept some findings first." : null;
       return (
         <NarrativeSection
           key={s.id}
@@ -232,13 +269,14 @@ export default async function AuditReportPage({ params }: PageProps<"/spaces/[al
   // Only the shareable export warns about model text nobody approved.
   const unapproved = { shareable: unapprovedNarratives(view, "shareable"), internal: [] };
 
-  const otherIssues: FinalizeIssueLink[] = view.finalize.issues
+  const otherIssues: RecordIssueLink[] = view.finalize.issues
     .filter((i) => i.code !== "proposed" && i.code !== "finalized" && i.code !== "cancelled")
     .map((i) =>
       i.code === "unapproved-narrative"
         ? { message: i.message, href: null, linkLabel: null, sections: i.sections ?? [] }
         : { message: i.message, href: investigationsHref(space.alias, view.audit.id), linkLabel: "Open the investigations" },
     );
+  const names = await displayNames(page.record.saved?.by ? [page.record.saved.by] : []);
   const reportSections = view.sections.filter((s) => !s.hidden && !(s.content.type === "narrative" && !s.content.text)).length;
 
   return (
@@ -251,17 +289,20 @@ export default async function AuditReportPage({ params }: PageProps<"/spaces/[al
               <p className="max-w-[90ch] text-[13px] text-muted-foreground">{builtFromText(view.counts.acceptedByKind, page.kinds, view.counts.findings.proposed)}</p>
               {sections}
             </div>
-            <aside aria-label="Export and finalize" className="grid content-start gap-4 lg:grid-cols-2 xl:grid-cols-1">
-              <ExportCard help={help} sections={counts} last={last} lastOk={lastOk} unapproved={unapproved} excerptChars={page.excerptChars} />
-              {canEdit ? (
-                <FinalizeCard
+            {/* The record card comes first and the column follows the page, so Save is in view at 1440 by 900; room is left below for toasts. */}
+            <aside
+              aria-label="Save the audit record and export"
+              className="grid content-start gap-4 lg:grid-cols-2 xl:sticky xl:top-[4.5rem] xl:max-h-[calc(100dvh-10.5rem)] xl:grid-cols-1 xl:self-start xl:overflow-y-auto xl:px-1 xl:py-1 xl:-mx-1"
+            >
+              {canEdit || page.record.saved ? (
+                <SaveRecordCard
                   auditName={view.audit.name}
-                  repository={page.repository}
+                  record={recordForCard(page.record, names)}
                   repositorySettingsHref={canRepos ? "/settings" : null}
                   journalCount={page.journalCount}
                   acceptedCount={accepted}
                   reportSections={reportSections}
-                  block={finalizeBlock({ state: view.audit.state, issues: view.finalize.issues, hasRepository: page.repository !== null })}
+                  block={canEdit ? finalizeBlock({ state: view.audit.state, issues: view.finalize.issues, hasRepository: page.repository !== null }) : { reason: "The record is saved.", link: null }}
                   findingsHref={toFindings}
                   settingsHref={canManage ? `/spaces/${encodeURIComponent(space.alias)}/settings` : null}
                   issues={otherIssues}
@@ -272,11 +313,15 @@ export default async function AuditReportPage({ params }: PageProps<"/spaces/[al
                       </>
                     ) : null
                   }
+                  openFixes={(fix?.progress.open ?? []).map((id) => ({ id, title: fix?.fixes.find((f) => f.id === id)?.title ?? "", incident: fix?.fixes.find((f) => f.id === id)?.incidentId ?? null }))}
+                  openFixesHref={`${investigationsHref(space.alias, view.audit.id)}/findings${findingListQuery({ state: "accepted", fix: "open" })}`}
+                  queuedFixes={queuedFixCount(fix)}
                   actor={user.email}
                   runId={page.finalizeRunId}
                   lastFailed={page.finalizeFailed?.error ?? null}
                 />
               ) : null}
+              <ExportCard help={help} sections={counts} last={last} lastOk={lastOk} unapproved={unapproved} excerptChars={page.excerptChars} />
             </aside>
           </div>
         ) : null}

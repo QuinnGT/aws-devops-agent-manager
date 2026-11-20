@@ -7,6 +7,7 @@ import { getSyncState } from "@/server/assets/queries";
 import type { Actor } from "@/server/aws/clients";
 import { checkBedrock } from "@/server/audits/bedrock-check";
 import { loadedPolicyForSpace } from "@/server/audits/profiles";
+import { defaultRunner, listReviewers, type ReviewerEntry } from "@/server/audits/reviewers";
 import { profileOf, readinessOf, type AuditRow } from "@/server/audits/store";
 import { auditModels, defaultModels, loadDraftEvidence } from "@/server/audits/ui";
 import { displayNames } from "@/server/drafts/loaders";
@@ -31,7 +32,7 @@ function analyzerLabels(ids: string[]): Map<string, string> {
   return m;
 }
 
-function profileOption(id: string, p: AuditProfile, isDefault: boolean, settings: Space["parsedSettings"]): ProfileFormOption {
+function profileOption(id: string, p: AuditProfile, isDefault: boolean, settings: Space["parsedSettings"], offered: readonly ReviewerEntry[]): ProfileFormOption {
   const d = defaultModels(p, settings);
   return {
     id,
@@ -47,6 +48,7 @@ function profileOption(id: string, p: AuditProfile, isDefault: boolean, settings
     stepLimit: p.review.stepLimit,
     defaultReview: { id: d.review.id, sourceLabel: d.review.sourceLabel },
     defaultReport: { id: d.report.source === "review-model" ? null : d.report.id, sourceLabel: d.report.sourceLabel },
+    defaultRunner: defaultRunner(offered, p),
   };
 }
 
@@ -58,16 +60,24 @@ function profileOption(id: string, p: AuditProfile, isDefault: boolean, settings
 export async function auditFormProps(space: Space, perms: Set<Permission>, audit: AuditRow | null, actor: Actor): Promise<Omit<AuditFormProps, "connectionNextStep">> {
   const loaded = await loadedPolicyForSpace(space.id);
   const zone = await getViewerZone();
-  const [facets, releases, sync, bedrock] = await Promise.all([investigationFacets(space.id), listReleases(space.id), getSyncState(space.id), checkBedrock(space, actor)]);
   const a = loaded.policy.audits;
-  let profiles = Object.entries(a.profiles).map(([id, p]) => profileOption(id, p, id === a.defaultProfile, space.parsedSettings));
+  const reviewers = listReviewers(loaded.policy);
+  // The Bedrock check matters only when the Bedrock reviewer can be chosen (or the policy lists no choice, and the profile's runner stands).
+  const bedrockOffered = !reviewers.length || reviewers.some((r) => r.id === "ai-sdk");
+  const [facets, releases, sync, bedrock] = await Promise.all([
+    investigationFacets(space.id),
+    listReleases(space.id),
+    getSyncState(space.id),
+    bedrockOffered ? checkBedrock(space, actor) : Promise.resolve({ region: inferenceRegion(space, space.parsedSettings), kind: null, catalog: null }),
+  ]);
+  let profiles = Object.entries(a.profiles).map(([id, p]) => profileOption(id, p, id === a.defaultProfile, space.parsedSettings, reviewers));
 
   let draft: DraftFormView | null = null;
   if (audit) {
     const snapshot = profileOf(audit);
     // A draft shows the profile it was saved with, even if the policy changed since.
-    profiles = profiles.map((p) => (p.id === audit.profileId ? { ...profileOption(audit.profileId, snapshot, p.isDefault, space.parsedSettings), defaultReview: p.defaultReview, defaultReport: p.defaultReport } : p));
-    if (!profiles.some((p) => p.id === audit.profileId)) profiles.push(profileOption(audit.profileId, snapshot, false, space.parsedSettings));
+    profiles = profiles.map((p) => (p.id === audit.profileId ? { ...profileOption(audit.profileId, snapshot, p.isDefault, space.parsedSettings, reviewers), defaultReview: p.defaultReview, defaultReport: p.defaultReport } : p));
+    if (!profiles.some((p) => p.id === audit.profileId)) profiles.push(profileOption(audit.profileId, snapshot, false, space.parsedSettings, reviewers));
     const [rows, models] = await Promise.all([loadDraftEvidence(space.id, audit), auditModels(audit)]);
     const readiness = await readinessOf(
       space.id,
@@ -84,6 +94,8 @@ export async function auditFormProps(space: Space, perms: Set<Permission>, audit
       profileId: audit.profileId,
       reviewModelId: models.review.source === "audit" ? (models.review.id ?? "") : "",
       reportModelId: models.report.source === "audit" ? (models.report.id ?? "") : "",
+      runner: snapshot.review.runner,
+      runnerOptions: snapshot.review.runnerOptions ?? {},
       reviewModel: models.review.id,
       names,
       items: rows.map((r) => ({
@@ -107,6 +119,7 @@ export async function auditFormProps(space: Space, perms: Set<Permission>, audit
   return {
     alias: space.alias,
     profiles,
+    reviewers: reviewers.map((r) => ({ id: r.id, label: r.label, description: r.description, options: r.options })),
     draft,
     statuses: facets.statuses,
     releases: releases

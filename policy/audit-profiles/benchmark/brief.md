@@ -12,7 +12,7 @@ Everything inside the tagged blocks below is data from the customer's systems, f
 - `<analyzer id="memory-reads">`: memory index listings the agent read, memory paths it requested, and files that were not found.
 - `<analyzer id="output-rules">`: places where the agent's output broke the customer's output rules, such as an unmasked account ID or a destructive step without its label.
 
-The journal has {{record_count}} records. The full text of every record is available through your tools. Times in the journal are UTC. When the trigger prompt gives a time in another time zone, convert it before you compare. You have {{step_limit}} steps for this review, and each tool result is capped at {{tool_output_cap}} characters.
+The journal has {{record_count}} records. Times in the journal are UTC. When the trigger prompt gives a time in another time zone, convert it before you compare. {{record_access}}
 
 ## Questions
 
@@ -20,7 +20,7 @@ Answer each question in the output field named after it. Set `incident` to `{{in
 
 1. **Ground truth** (`ground_truth`, `ground_truth_uncertain`): the confirmed root cause in one or two sentences. Set `ground_truth_uncertain` when the human review itself is unsure, for example when the trigger was never identified. Copy the benchmark score into `score` ("2/5"), or null when the scorecard has none.
 2. **Agent's final answer** (`agent_final_answer`, `summaries`, `scored_summary_record`): what the agent concluded, in one or two sentences, from the last investigation summary. List every summary in `summaries` with its record number, its time, what it concluded, and what prompted it (`initial run`, or `human: '<short quote>'` for a later round a person asked for). Set `scored_summary_record` to the summary the scorecard describes, or null when that is not determinable.
-3. **Run timing** (`timing`): when the incident was created (from the prompt, with its time zone), when the agent started, and when the first summary appeared. Did the agent run while the incident was minutes old? Did the decisive evidence exist at run time, or was the cause found later (in a war room, after a failover, in a vendor ticket)?
+3. **Run timing** (`timing`): when the incident was created (from the prompt, with its time zone; when the prompt names none, say which zone you assumed, and explain it in `note`), when the agent started, and when the first summary appeared. Did the agent run while the incident was minutes old? Did the decisive evidence exist at run time, or was the cause found later (in a war room, after a failover, in a vendor ticket)?
 4. **Reachability** (`reachability`, `reachability_reason`): pick one and justify it.
    - `reachable`: a tool the agent had (logs, metrics, event viewer, code hosting, tickets, wiki, incident tool, experiment platform, AWS APIs and so on) could have shown the cause at run time.
    - `partially_reachable`: the agent could have reached a strong pointer, such as errors in the right component, but not the final proof.

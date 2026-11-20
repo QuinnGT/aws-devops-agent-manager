@@ -7,6 +7,8 @@ import { noCredentialsText } from "@/server/ai/error-kind";
 import { AuthError, permissionsIn, requirePermission } from "@/server/auth/dal";
 import { AuditRequestError } from "@/server/audits/errors";
 import { acceptAllProposed, checkCitation, reviewFinding, type FindingActionInput } from "@/server/audits/finding-review";
+import { findingActionReason } from "@/server/audits/states";
+import { addFindingsToRevision, createRevisionForFindings, REVISION_PERMISSIONS, RevisionError } from "@/server/revisions";
 import { selectionSchema } from "@/server/audits/selection";
 import { addAuditItems, cancelAudit, createAudit, deleteAudit, removeAuditItems, rerunFailedItems, rerunItem, setAuditModels, startAudit, updateAuditDraft } from "@/server/audits/service";
 import { listPickableInvestigations, previewSelection, type SelectionPreview } from "@/server/audits/ui";
@@ -27,12 +29,15 @@ const NO_ACCESS = "You don't have permission to do this in this space.";
 const alias = z.string().trim().min(1).max(200);
 const uuid = z.string().uuid();
 const modelId = z.string().trim().max(300).nullish();
+/** The reviewer choice; the service checks it against policy. */
+const reviewer = { runner: z.string().trim().max(50).nullish(), runnerOptions: z.record(z.string().max(100), z.string().max(100)).nullish() };
 
 type Fail = Extract<AuditActionResult, { ok: false }>;
 
 function fail(err: unknown): Fail {
   if (err instanceof AuthError) return { ok: false, message: err.status === 401 ? "Sign in again to continue." : NO_ACCESS, fieldErrors: {} };
   if (err instanceof AuditRequestError) return { ok: false, message: err.message, fieldErrors: {}, code: err.code, details: err.details };
+  if (err instanceof RevisionError) return { ok: false, message: err.message, fieldErrors: err.fieldErrors, code: err.code };
   if (err instanceof z.ZodError) {
     const fieldErrors: Record<string, string> = {};
     for (const i of err.issues) {
@@ -64,6 +69,7 @@ const createInput = z.object({
   selections: z.array(selectionSchema).min(1, "Choose at least one investigation.").max(20),
   reviewModelId: modelId,
   reportModelId: modelId,
+  ...reviewer,
 });
 
 export async function createAuditAction(spaceAlias: string, input: z.input<typeof createInput>): Promise<AuditActionResult<{ auditId: string; items: number }>> {
@@ -71,7 +77,7 @@ export async function createAuditAction(spaceAlias: string, input: z.input<typeo
     const { space, actor } = await authorize(spaceAlias, "audits.run");
     const req = createInput.parse(input);
     if (!req.name.trim()) return { ok: false, message: "Enter a name.", fieldErrors: { name: "Enter a name." } };
-    const r = await createAudit(actor, space.id, { ...req, reviewModelId: req.reviewModelId || null, reportModelId: req.reportModelId || null });
+    const r = await createAudit(actor, space.id, { ...req, reviewModelId: req.reviewModelId || null, reportModelId: req.reportModelId || null, runner: req.runner || null });
     revalidatePath(base(space.alias));
     return { ok: true, ...r };
   } catch (err) {
@@ -79,9 +85,9 @@ export async function createAuditAction(spaceAlias: string, input: z.input<typeo
   }
 }
 
-const draftInput = z.object({ name: z.string().max(200), reviewModelId: modelId, reportModelId: modelId });
+const draftInput = z.object({ name: z.string().max(200), reviewModelId: modelId, reportModelId: modelId, ...reviewer });
 
-/** "Save draft" on a saved draft: its name and its models. */
+/** "Save draft" on a saved draft: its name, reviewer and models. */
 export async function saveDraftAction(spaceAlias: string, auditId: string, input: z.input<typeof draftInput>): Promise<AuditActionResult> {
   try {
     const { space, actor } = await authorize(spaceAlias, "audits.run");
@@ -89,7 +95,7 @@ export async function saveDraftAction(spaceAlias: string, auditId: string, input
     const req = draftInput.parse(input);
     if (!req.name.trim()) return { ok: false, message: "Enter a name.", fieldErrors: { name: "Enter a name." } };
     await updateAuditDraft(actor, space.id, id, { name: req.name });
-    await setAuditModels(actor, space.id, id, { reviewModelId: req.reviewModelId ?? "", reportModelId: req.reportModelId ?? "" });
+    await setAuditModels(actor, space.id, id, { reviewModelId: req.reviewModelId ?? "", reportModelId: req.reportModelId ?? "", runner: req.runner, runnerOptions: req.runnerOptions });
     revalidatePath(`${base(space.alias)}/${id}`);
     return { ok: true };
   } catch (err) {
@@ -261,6 +267,76 @@ export async function acceptAllAction(spaceAlias: string, auditId: string, itemI
     const r = await acceptAllProposed(actor, space.id, uuid.parse(auditId), uuid.parse(itemId));
     revalidatePath(base(space.alias), "layout");
     return { ok: true, ...r };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+// ---------------------------------------------------------------- findings to a revision
+
+const revisionTarget = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("existing"), revisionId: uuid }),
+  z.object({ kind: z.literal("new"), name: z.string().trim().min(1, "Name the revision.").max(200), note: z.string().trim().max(2000).optional() }),
+]);
+
+const toRevisionInput = z.object({
+  findingIds: z.array(uuid).min(1, "Choose at least one finding.").max(200),
+  target: revisionTarget,
+  /** The findings are still proposed: accept them first (needs findings.review as well) */
+  acceptFirst: z.boolean().default(false),
+});
+
+export interface AddedToRevision {
+  /** The revision's name, for the link */
+  revisionName: string | null;
+  /** True when the revision was just created: its create job is still running */
+  created: boolean;
+  accepted: number;
+  added: number;
+  alreadyThere: number;
+}
+
+/**
+ * "Add to revision…" and "Accept and add to revision…": put accepted package
+ * fixes on an open revision's to-address list, or start a revision with them.
+ * Needs `revisions.build`, and `findings.review` too when the findings are
+ * accepted first. The revisions module checks that each finding is accepted,
+ * linkable and of this space.
+ */
+export async function addToRevisionAction(spaceAlias: string, input: z.input<typeof toRevisionInput>): Promise<AuditActionResult<AddedToRevision>> {
+  try {
+    const { space, actor } = await authorize(spaceAlias, REVISION_PERMISSIONS.build);
+    const req = toRevisionInput.parse(input);
+    let accepted = 0;
+    if (req.acceptFirst) {
+      await authorize(spaceAlias, "findings.review");
+      for (const id of req.findingIds) {
+        try {
+          await reviewFinding(actor, space.id, id, { action: "accept" });
+          accepted++;
+        } catch (err) {
+          // Someone accepted it meanwhile: carry on with the revision.
+          if (!(err instanceof AuditRequestError && err.code === "state" && err.message === findingActionReason("accept", "accepted"))) throw err;
+        }
+      }
+      revalidatePath(base(space.alias), "layout");
+    }
+    try {
+      if (req.target.kind === "existing") {
+        const r = await addFindingsToRevision(space, { revisionId: req.target.revisionId, findingIds: req.findingIds }, actor);
+        revalidatePath(base(space.alias), "layout");
+        return { ok: true, revisionName: null, created: false, accepted, added: r.added, alreadyThere: r.alreadyThere };
+      }
+      await createRevisionForFindings(space, { name: req.target.name, findingIds: req.findingIds, note: req.target.note || undefined }, actor);
+      revalidatePath(base(space.alias), "layout");
+      return { ok: true, revisionName: req.target.name, created: true, accepted, added: req.findingIds.length, alreadyThere: 0 };
+    } catch (err) {
+      // The decision stands even though the revision refused: say so, so nobody accepts twice.
+      if (accepted > 0 && err instanceof RevisionError) {
+        return { ok: false, message: `Accepted ${accepted === 1 ? "the finding" : `${accepted} findings`}, but it wasn't added to a revision. ${err.message}`, fieldErrors: err.fieldErrors, code: err.code, details: { accepted } };
+      }
+      throw err;
+    }
   } catch (err) {
     return fail(err);
   }

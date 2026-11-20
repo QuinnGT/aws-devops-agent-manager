@@ -1,0 +1,1 @@
+The full text of every record is available through your tools. You have {{step_limit}} steps for this review, and each tool result is capped at {{tool_output_cap}} characters. Use the tools to confirm a specific detail rather than reading the whole journal.

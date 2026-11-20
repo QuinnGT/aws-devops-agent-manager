@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { NO_REVIEW_MODEL_REASON } from "@/server/ai/models";
 import { assignByTime, cohortCounts, cohortSelections } from "./cohorts";
-import { cardRows, changedValues, citationField, citationsByField, firstCitation, quotesFor, type CardField } from "./finding-view";
+import { cardRows, changedValues, citationField, citationsByField, evidenceRows, firstCitation, quotesFor, type CardField } from "./finding-view";
 import { auditListQuery, defaultFindingState, filterQuery, findingListQuery, itemListQuery, parseAuditListParams, parseFindingListParams, parseItemListParams } from "./list-params";
 import { readinessRows, startBlockedReason, startLabel, CONNECTION_FAILED_REASON, type BedrockReadiness, type ReadinessInput } from "./readiness-view";
 import { failureGroups, failureNextStep, incidentList } from "./failure-view";
@@ -16,6 +16,11 @@ import {
   citationCell,
   citationChipReason,
   citationProblemSentence,
+  citationResult,
+  confirmRevisionLabel,
+  evidenceSummary,
+  planStateWords,
+  showClosedText,
   compactNumber,
   failedReviewSentence,
   failedShortReason,
@@ -27,6 +32,9 @@ import {
   kindPosition,
   parseIncidentIds,
   profileNeeds,
+  reviewedBy,
+  reviewerFacts,
+  startHelp,
   uniqueProblems,
   unmatchedText,
 } from "./words";
@@ -37,7 +45,7 @@ describe("audit words", () => {
       draft: ["neutral", "Draft"],
       running: ["info", "Running"],
       reviewing: ["warning", "In review"],
-      finalized: ["success", "Finalized"],
+      finalized: ["success", "Record saved"],
       cancelled: ["neutral", "Cancelled"],
     });
     expect(itemReviewBadge("pending").label).toBe("Waiting");
@@ -282,6 +290,60 @@ describe("readiness", () => {
   });
 });
 
+describe("readiness for a reviewer that is not a Bedrock model", () => {
+  const input: ReadinessInput = {
+    name: "Hand-off run",
+    investigations: 3,
+    missingJournalIds: 0,
+    missingByInput: [],
+    ready: 3,
+    cohorts: [],
+    analyzers: { count: 4, words: "run metrics, condensed trace, memory reads and output rules" },
+    reviewModelId: null,
+    connectionFailed: true,
+    bedrock: { kind: "no-credentials", region: "us-west-2", detail: null },
+    reviewer: { runner: "handoff", label: "Review files" },
+  };
+
+  it("needs no review model, no Bedrock check and no AWS connection for review files", () => {
+    expect(startBlockedReason(input)).toBeNull();
+    const rows = readinessRows(input);
+    expect(rows.some((r) => r.text.startsWith("Amazon Bedrock"))).toBe(false);
+    expect(rows).toContainEqual({ tone: "success", text: "Reviews by Review files", detail: "The app calls no model and needs no access to Amazon Bedrock." });
+    expect(startLabel(3, "handoff")).toBe("Start audit with 3 review files");
+    expect(startLabel(1, "handoff")).toBe("Start audit with 1 review file");
+  });
+
+  it("still checks the AWS connection for another runner, but not the model or Bedrock", () => {
+    const chat = { ...input, reviewer: { runner: "devops-agent-chat", label: "DevOps Agent chat" } };
+    expect(startBlockedReason(chat)).toBe(CONNECTION_FAILED_REASON);
+    expect(startBlockedReason({ ...chat, connectionFailed: false })).toBeNull();
+    expect(readinessRows(chat).find((r) => r.text.startsWith("Reviews by"))).toEqual({ tone: "success", text: "Reviews by DevOps Agent chat", detail: null });
+  });
+
+  it("keeps every Bedrock check when the reviewer is the Bedrock model, or none is given", () => {
+    const bedrock = { ...input, reviewer: { runner: "ai-sdk", label: "Amazon Bedrock model" } };
+    expect(startBlockedReason(bedrock)).toBe(NO_REVIEW_MODEL_REASON);
+    expect(startBlockedReason({ ...bedrock, reviewModelId: "m" })).toContain("no AWS credentials");
+    expect(readinessRows(bedrock).some((r) => r.text.startsWith("Amazon Bedrock"))).toBe(true);
+    expect(readinessRows(bedrock).some((r) => r.text.startsWith("Reviews by"))).toBe(false);
+    expect(startBlockedReason({ ...input, reviewer: undefined })).toBe(NO_REVIEW_MODEL_REASON);
+  });
+
+  it("words the Start card and a waiting item for review files", () => {
+    expect(itemReviewBadge("pending", "Waiting for a review file")).toMatchObject({ tone: "neutral", label: "Waiting for a review file" });
+    expect(itemReviewBadge("pending").label).toBe("Waiting");
+    expect(itemReviewBadge("reviewed", "Waiting for a review file").label).toBe("Reviewed");
+    expect(reviewerFacts("handoff")[0]![0]).toBe("Review files");
+    expect(reviewerFacts("handoff")[0]![1]).toMatch(/approved/);
+    expect(reviewerFacts("ai-sdk")).toEqual([]);
+    expect(startHelp("handoff")).toMatch(/download the review files/);
+    expect(startHelp("ai-sdk")).toMatch(/Each review reads only its own investigation/);
+    expect(reviewedBy("handoff", "Claude Code, Opus 5.5")).toBe("Claude Code, Opus 5.5, from a review file");
+    expect(reviewedBy("ai-sdk", "us.model")).toBe("us.model");
+  });
+});
+
 describe("audit state words", () => {
   const items = (o: Partial<Record<"pending" | "analyzing" | "reviewing" | "reviewed" | "failed" | "skipped", number>>) => ({ pending: 0, analyzing: 0, reviewing: 0, reviewed: 0, failed: 0, skipped: 0, ...o });
 
@@ -294,13 +356,13 @@ describe("audit state words", () => {
     expect(auditStateBadge("running", f).label).toBe("Running");
   });
 
-  it("says Ready to finalize when every investigation is reviewed and every finding decided", () => {
-    expect(auditStateBadge("reviewing", { items: items({ reviewed: 3 }), findings: { proposed: 0, total: 12 } })).toMatchObject({ tone: "success", label: "Ready to finalize" });
-    expect(auditStateBadge("reviewing", { items: items({ reviewed: 2, skipped: 1 }), findings: { proposed: 0, total: 5 } }).label).toBe("Ready to finalize");
+  it("says Ready to save the record when every investigation is reviewed and every finding decided", () => {
+    expect(auditStateBadge("reviewing", { items: items({ reviewed: 3 }), findings: { proposed: 0, total: 12 } })).toMatchObject({ tone: "success", label: "Ready to save the record" });
+    expect(auditStateBadge("reviewing", { items: items({ reviewed: 2, skipped: 1 }), findings: { proposed: 0, total: 5 } }).label).toBe("Ready to save the record");
     expect(auditStateBadge("reviewing", { items: items({ reviewed: 3 }), findings: { proposed: 1, total: 12 } }).label).toBe("In review");
     // A failed review blocks finalize (pages/audit-report.md), so it isn't ready.
     expect(auditStateBadge("reviewing", { items: items({ reviewed: 2, failed: 1 }), findings: { proposed: 0, total: 8 } }).label).toBe("In review");
-    expect(auditStateBadge("finalized", { items: items({ reviewed: 3 }), findings: { proposed: 0, total: 12 } }).label).toBe("Finalized");
+    expect(auditStateBadge("finalized", { items: items({ reviewed: 3 }), findings: { proposed: 0, total: 12 } }).label).toBe("Record saved");
     expect(auditStateBadge("reviewing", null)).toBe(AUDIT_STATE_BADGE.reviewing);
   });
 
@@ -406,5 +468,84 @@ describe("list params", () => {
     expect(defaultFindingState("reviewing")).toBe("proposed");
     expect(defaultFindingState("finalized")).toBe("all");
     expect(filterQuery({ state: "open", profile: "x", q: "" }, { state: "open", profile: "" })).toBe("?profile=x");
+  });
+});
+
+describe("the selected finding in the address", () => {
+  const id = "11111111-2222-4333-8444-555555555555";
+
+  it("reads ?finding= and keeps only an ID", () => {
+    expect(parseFindingListParams({ finding: id }).finding).toBe(id);
+    expect(parseFindingListParams({ finding: id.toUpperCase() }).finding).toBe(id.toUpperCase());
+    expect(parseFindingListParams({ finding: "../../etc" }).finding).toBe("");
+    expect(parseFindingListParams({}).finding).toBe("");
+  });
+
+  it("writes it back, with the other filters and the default left out", () => {
+    expect(findingListQuery({ state: "accepted", finding: id })).toBe(`?state=accepted&finding=${id}`);
+    expect(findingListQuery({ finding: id })).toBe(`?finding=${id}`);
+    expect(findingListQuery({ state: "", finding: "" })).toBe("");
+  });
+
+  it("reads the Next step filter", () => {
+    expect(parseFindingListParams({ fix: "open" }).fix).toBe("open");
+    expect(parseFindingListParams({ fix: "package" }).fix).toBe("package");
+    expect(parseFindingListParams({ fix: "bogus" }).fix).toBe("");
+    expect(findingListQuery({ state: "accepted", fix: "package" })).toBe("?state=accepted&fix=package");
+  });
+});
+
+describe("the evidence list", () => {
+  const c = (record: number, quote: string | null, ok = true, checked = false) => ({ record, quote, field: "evidence[0]", ok, ...(ok ? {} : { problem: "quote-not-found" as const }), ...(checked ? { checked: { by: "Alex", at: "now", note: "fine" } } : {}) });
+
+  it("has a row for each record and quote, in record order", () => {
+    const rows = evidenceRows([c(153, "b"), c(12, "a"), c(12, "a"), c(12, "other")]);
+    expect(rows.map((r) => [r.record, r.quote])).toEqual([
+      [12, "a"],
+      [12, "other"],
+      [153, "b"],
+    ]);
+  });
+
+  it("keeps the failed copy of a citation over a passed one, and the checked failure over the unchecked one", () => {
+    expect(evidenceRows([c(1, "q"), c(1, "q", false)])[0]!.ok).toBe(false);
+    expect(evidenceRows([c(1, "q", false), c(1, "q", false, true)])[0]!.checked).toBeUndefined();
+    expect(evidenceRows([c(1, "q", false, true), c(1, "q", false)])[0]!.checked).toBeUndefined();
+  });
+
+  it("says what the check found under each citation", () => {
+    expect(citationResult(c(12, "the cache path is healthy"), 200)).toEqual({ tone: "success", text: "The quoted text is in R12." });
+    expect(citationResult(c(12, null), 200)).toEqual({ tone: "success", text: "R12 exists in this journal." });
+    expect(citationResult(c(12, "x", false), 200)).toEqual({ tone: "warning", text: "The text quoted from R12 isn't in that record." });
+    expect(citationResult({ record: 43, quote: "x", ok: false, problem: "missing-record" }, 41)).toEqual({ tone: "warning", text: "R43 doesn't exist: this journal has 41 records." });
+    expect(citationResult(c(12, "x", false, true), 200)).toEqual({ tone: "warning", text: "Checked by Alex: fine" });
+  });
+
+  it("sums the evidence up", () => {
+    expect(evidenceSummary([])).toEqual({ tone: "muted", label: "No records cited" });
+    expect(evidenceSummary([c(1, "a"), c(2, "b")])).toEqual({ tone: "success", label: "2 citations passed" });
+    expect(evidenceSummary([c(1, "a"), c(2, "b", false)])).toEqual({ tone: "warning", label: "1 of 2 failed the check" });
+    expect(evidenceSummary([c(1, "a"), c(2, "b", false, true)])).toEqual({ tone: "success", label: "1 failed citation checked by a reviewer" });
+  });
+});
+
+describe("words for the flow", () => {
+  it("words the audits list's footer links for the audits it leaves out", () => {
+    expect(showClosedText("cancelled", 2)).toBe("Show 2 cancelled audits");
+    expect(showClosedText("cancelled", 1)).toBe("Show 1 cancelled audit");
+    expect(showClosedText("finalized", 3)).toBe("Show 3 audits with a saved record");
+    expect(showClosedText("finalized", 1)).toBe("Show 1 audit with a saved record");
+  });
+
+  it("words the plan a finding went to", () => {
+    expect(planStateWords("waiting")).toBe("waiting for approval");
+    expect(planStateWords("applied")).toBe("applied");
+    expect(planStateWords("odd")).toBe("odd");
+  });
+
+  it("words the confirm button of 'Add to revision…'", () => {
+    expect(confirmRevisionLabel({ acceptFirst: false, target: { name: "moss-lag-fixes" } })).toBe("Add to moss-lag-fixes");
+    expect(confirmRevisionLabel({ acceptFirst: true, target: { name: "v2.4" } })).toBe("Accept and add to v2.4");
+    expect(confirmRevisionLabel({ acceptFirst: false, target: "new" })).toBe("Add to a new revision");
   });
 });

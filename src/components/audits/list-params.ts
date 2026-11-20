@@ -28,7 +28,7 @@ function query(entries: [string, string | number | null | undefined, string | nu
 
 export const AUDIT_STATE_OPTIONS: { value: AuditStateFilter; label: string; hint: string }[] = [
   { value: "open", label: "Open", hint: "Draft, running, in review" },
-  { value: "finalized", label: "Finalized", hint: "" },
+  { value: "finalized", label: "Record saved", hint: "" },
   { value: "cancelled", label: "Cancelled", hint: "" },
   { value: "all", label: "All", hint: "" },
 ];
@@ -85,27 +85,40 @@ export function itemListQuery(p: Partial<ItemListParams>): string {
 
 // ---------------------------------------------------------------- Findings tab
 
+/** The Findings tab's "Next step" filter: every finding, the package fixes, or the accepted ones not in a revision yet. */
+export const FIX_FILTERS = ["", "package", "open"] as const;
+export type FixFilter = (typeof FIX_FILTERS)[number];
+
 export interface FindingListParams {
   kind: string;
   /** "" means the default for the audit's state */
   state: "" | "proposed" | "accepted" | "rejected" | "all";
   mode: string;
   owner: string;
+  fix: FixFilter;
   q: string;
   rows: number;
+  /** The selected finding's ID (a revision links here); "" selects the first in the list */
+  finding: string;
 }
 
 const FINDING_STATES = ["proposed", "accepted", "rejected", "all"] as const;
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export function parseFindingListParams(sp: Raw): FindingListParams {
   const s = first(sp.state);
+  const fix = first(sp.fix) ?? "";
+  const finding = text(sp.finding, 40);
   return {
     kind: text(sp.kind, 100),
     state: (FINDING_STATES as readonly string[]).includes(s ?? "") ? (s as FindingListParams["state"]) : "",
     mode: text(sp.mode, 100),
     owner: text(sp.owner, 100),
+    fix: (FIX_FILTERS as readonly string[]).includes(fix) ? (fix as FixFilter) : "",
     q: text(sp.q),
     rows: show(sp.rows),
+    finding: UUID.test(finding) ? finding : "",
   };
 }
 
@@ -115,8 +128,10 @@ export function findingListQuery(p: Partial<FindingListParams>): string {
     ["state", p.state, ""],
     ["mode", p.mode, ""],
     ["owner", p.owner, ""],
+    ["fix", p.fix, ""],
     ["q", p.q, ""],
     ["rows", p.rows, AUDIT_PAGE],
+    ["finding", p.finding, ""],
   ]);
 }
 

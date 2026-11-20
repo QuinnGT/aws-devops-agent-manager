@@ -566,7 +566,7 @@ describe("benchmark audit over three benchmark journals", () => {
     await db().update(audits).set({ state: "finalized" }).where(eq(audits.id, auditId));
     const [f] = await db().select().from(findings).where(and(eq(findings.auditId, auditId), eq(findings.state, "proposed")));
     if (f) await expect(reviewFinding(reviewer, space.id, f.id, { action: "accept" })).rejects.toMatchObject({ code: "state" });
-    await expect(deleteAudit(actor, space.id, auditId)).rejects.toThrow("A finalized audit can't be deleted.");
+    await expect(deleteAudit(actor, space.id, auditId)).rejects.toThrow("An audit whose record is saved can't be deleted.");
     await expect(reviewFinding(reviewer, crypto.randomUUID(), crypto.randomUUID(), { action: "accept" })).rejects.toMatchObject({ code: "not-found" });
   });
 });

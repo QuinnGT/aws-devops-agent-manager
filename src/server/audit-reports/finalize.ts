@@ -5,13 +5,15 @@ import { TRAILERS } from "@/lib/assets/types";
 import { recordAuditEvent } from "@/server/audit-log";
 import { db } from "@/server/db/client";
 import { analyzerRuns, modelCalls, reviews } from "@/server/db/schema";
-import { assertWorker, HistoryRepo } from "@/server/git/history-repo";
-import { fillTemplate, safeSegment } from "@/server/history/layout";
+import { assertWorker, HistoryRepo, type PathChange } from "@/server/git/history-repo";
+import { fillTemplate } from "@/server/history/layout";
 import type { JobContext } from "@/server/jobs/registry";
-import { getPolicyForRepo, type Policy } from "@/server/policy";
+import { getPolicyForRepo } from "@/server/policy";
 import { getHistoryRepoForSpace, getSpaceById, toHistoryRepoConfig, type SpaceRow } from "@/server/spaces/queries";
 import { AuditReportError } from "./errors";
+import { AUDIT_FILES, auditDirFor } from "./layout";
 import { loadReportContext, type ReportContext } from "./loader";
+import { recordFilesFromCommit } from "./record";
 import { buildAuditManifest, buildFindingsJson, toFileJson, type FindingsJsonFinding, type ManifestAnalyzerRun, type ManifestReview } from "./manifest";
 import { getAuditInSpace } from "./queries";
 import { renderReportMarkdown } from "./report-md";
@@ -28,7 +30,7 @@ import { acceptedFindings } from "./view";
  */
 
 export const AUDIT_TRAILERS = { auditId: "Audit-Id", profile: "Audit-Profile" } as const;
-export const AUDIT_FILES = { auditJson: "audit.json", findingsJson: "findings.json", reportMd: "report.md" } as const;
+export { AUDIT_FILES, auditDirFor };
 
 export const finalizeAuditInput = z.object({ spaceId: z.string().uuid(), auditId: z.string().uuid() });
 export type FinalizeAuditInput = z.output<typeof finalizeAuditInput>;
@@ -41,10 +43,6 @@ export interface FinalizeAuditResult {
   pushError?: string;
   /** An earlier attempt had already committed (or finalized) the audit */
   resumed: boolean;
-}
-
-export function auditDirFor(layout: Policy["historyLayout"], spaceAlias: string, auditId: string): string {
-  return fillTemplate(layout.auditDir, { spaceAlias: safeSegment(spaceAlias), auditId: safeSegment(auditId) });
 }
 
 /**
@@ -143,6 +141,15 @@ export async function finalizeAuditHandler(input: FinalizeAuditInput, ctx: JobCo
   }
 }
 
+/** The folder's changes in one commit (added or modified), or none when git can't say (a root commit has no parent). */
+async function commitChanges(repo: HistoryRepo, commit: string, dir: string): Promise<PathChange[]> {
+  try {
+    return await repo.diffNameStatus(`${commit}^`, commit, dir);
+  } catch {
+    return [];
+  }
+}
+
 async function finalizeAudit(input: FinalizeAuditInput, ctx: JobContext): Promise<FinalizeAuditResult> {
   assertWorker("finalize an audit");
   const space = await getSpaceById(input.spaceId);
@@ -215,14 +222,16 @@ async function finalizeAudit(input: FinalizeAuditInput, ctx: JobContext): Promis
       return { auditId: rc.audit.id, commit: now.finalizedCommit, dir, pushed, ...(pushError ? { pushError } : {}), resumed: true };
     }
   }
+  // The page shows where the record went and what was pushed from this event: no column keeps it.
+  const files = recordFilesFromCommit(dir, await commitChanges(repo, commit, dir));
   await recordAuditEvent({
     actor: ctx.actor,
     action: "audit.finalize",
     spaceId: space.id,
     targetType: "audit",
     targetId: rc.audit.id,
-    details: { commit, dir, pushed, ...(pushError ? { pushError } : {}), resumed, counts: rc.view.counts.findings, stale: rc.view.stale },
+    details: { commit, dir, branch: repoRow.defaultBranch, remote: repoRow.remoteUrl, files, pushed, ...(pushError ? { pushError } : {}), resumed, counts: rc.view.counts.findings, stale: rc.view.stale },
   });
-  await ctx.progress(1, "Audit finalized");
+  await ctx.progress(1, "Audit record saved");
   return { auditId: rc.audit.id, commit, dir, pushed, ...(pushError ? { pushError } : {}), resumed };
 }

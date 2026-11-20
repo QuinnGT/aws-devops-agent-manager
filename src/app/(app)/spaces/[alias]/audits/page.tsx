@@ -5,7 +5,7 @@ import { AuditFilters } from "@/components/audits/audit-filters";
 import { AUDIT_PAGE, AUDIT_STATE_OPTIONS, auditListQuery, parseAuditListParams } from "@/components/audits/list-params";
 import { auditsBase, loadAuditsPage } from "@/components/audits/page-guard";
 import { startAuditsNote } from "@/components/audits/role-text";
-import { auditStateBadge, AUDITS_DESCRIPTION, plural, reviewProgressText } from "@/components/audits/words";
+import { auditStateBadge, AUDITS_DESCRIPTION, plural, reviewProgressText, showClosedText } from "@/components/audits/words";
 import { EmptyState } from "@/components/common/empty-state";
 import { PageHeader } from "@/components/common/page-header";
 import { RoleNote } from "@/components/common/role-note";
@@ -174,7 +174,7 @@ export default async function AuditsPage({ params, searchParams }: PageProps<"/s
             ) : null}
             {closed.map((s) => (
               <Link key={s} href={`${base}${auditListQuery({ ...p, profile, state: s, show: 0 })}`} scroll={false} className={buttonVariants({ variant: "ghost", size: "sm" })}>
-                Show {plural(page.counts[s], `${s} audit`)}
+                {showClosedText(s, page.counts[s])}
               </Link>
             ))}
           </div>

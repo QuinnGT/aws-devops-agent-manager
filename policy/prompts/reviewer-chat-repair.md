@@ -1,0 +1,1 @@
+Your last reply could not be read as one JSON object. Reply again with only the JSON object that matches the output schema from the first message of this chat: no text before or after it, no markdown fence and no tool calls. Keep the content of your review as it was. Do not change any memory, skill, instruction or other asset.

@@ -12,9 +12,10 @@ import { citationProblemCounts, hasOpenProblem } from "./citation-state";
 import { OPEN_CITATION_PROBLEM } from "./finding-review";
 import type { Citation, CitationCheck } from "./contract";
 import { enumOf, propertySchemas } from "./edits";
+import { fullFindingTitle } from "./findings";
 import { loadedPolicyForSpace, profileLabel, readOutputSchema } from "./profiles";
 import { summarizeReadiness, type ItemReadiness, type ReadinessSummary } from "./readiness";
-import { AUDIT_STATE_LABELS, FINDING_STATE_LABELS, ITEM_STATE_LABELS, isItemFinished, type AuditItemState, type AuditState, type FindingState, type ReviewState } from "./states";
+import { AUDIT_STATE_LABELS, FINDING_STATE_LABELS, ITEM_STATE_LABELS, filesEligible, isItemFinished, itemWaitingLabel, type AuditItemState, type AuditState, type FindingState, type ReviewState } from "./states";
 import { currentEvidenceDocs, getAudit, isUuid, listAuditItems, profileOf, readinessOf, type AuditItemRow, type AuditRow, type FindingRow, type ReviewRow } from "./store";
 
 /**
@@ -281,9 +282,15 @@ export interface AuditDetailView {
     /** The field the item list shows as the diagnosis */
     primaryField: { kind: string; field: string; label: string } | null;
     reviewConcurrency: number;
-    /** Null until a model is chosen for the audit or set as the space default */
+    /** Null until a model is chosen for the audit or set as the space default; empty for a runner that uses no Bedrock model */
     modelId: string | null;
+    /** Who writes the reviews: "ai-sdk", "handoff" or "devops-agent-chat" (policy.audits.reviewers) */
+    runner: string;
+    /** The runner's option values by option ID */
+    runnerOptions: Record<string, string>;
   };
+  /** Items whose review files can be downloaded and whose review can be imported (hand-off audits) */
+  filesEligible: number;
   progress: AuditProgress;
   /** The audits.run job */
   job: JobStatusView | null;
@@ -304,11 +311,12 @@ export function progressOf(items: readonly Pick<AuditItemRow, "state" | "analyze
   return { total: items.length, byState, waitingForReview: waiting, finished, fraction: items.length ? finished / items.length : 0 };
 }
 
-function itemStateLabel(i: Pick<AuditItemRow, "state" | "analyzedAt">): string {
-  return i.state === "pending" && i.analyzedAt ? "Waiting for review" : ITEM_STATE_LABELS[i.state];
+function itemStateLabel(i: Pick<AuditItemRow, "state" | "analyzedAt">, runner = "ai-sdk"): string {
+  return i.state === "pending" && i.analyzedAt ? itemWaitingLabel(runner) : ITEM_STATE_LABELS[i.state];
 }
 
-async function currentFindingsOf(auditId: string): Promise<FindingRow[]> {
+/** The findings of every item's current review, by item, kind and position. */
+export async function currentFindingsOf(auditId: string): Promise<FindingRow[]> {
   return db()
     .select({ f: findings })
     .from(findings)
@@ -377,7 +385,7 @@ export async function loadAuditDetail(space: Pick<SpaceRow, "id">, auditId: stri
       cohort: i.cohort,
       cohortLabel: i.cohort ? (profile.cohorts.find((c) => c.id === i.cohort)?.label ?? i.cohort) : null,
       state: i.state,
-      stateLabel: itemStateLabel(i),
+      stateLabel: itemStateLabel(i, profile.review.runner),
       stateReason: i.stateReason,
       columns: cols,
       score: cols[0]?.value ?? null,
@@ -398,6 +406,7 @@ export async function loadAuditDetail(space: Pick<SpaceRow, "id">, auditId: stri
     byKind.set(f.kind, c);
   }
   const readinessSummary = readiness ? summarizeReadiness(readiness, profile) : null;
+  const eligibleFiles = items.filter(filesEligible).length;
   return {
     audit: auditSummary(audit, profile),
     profile: {
@@ -409,13 +418,16 @@ export async function loadAuditDetail(space: Pick<SpaceRow, "id">, auditId: stri
       primaryField: primaryEx?.summaryField ? { kind: primaryEx.kind, field: primaryEx.summaryField, label: fieldLabel(profile, primaryEx.summaryField, primaryEx.kind) } : null,
       reviewConcurrency: profile.review.concurrency,
       modelId: profile.review.modelId ?? null,
+      runner: profile.review.runner,
+      runnerOptions: profile.review.runnerOptions ?? {},
     },
+    filesEligible: eligibleFiles,
     progress: progressOf(items),
     job,
     readiness: readinessSummary,
     items: summaries,
     findingCounts: [...byKind.entries()].map(([kind, counts]) => ({ kind, label: profile.findings.find((f) => f.kind === kind)?.label ?? kind, counts })),
-    actions: auditActions(audit.state, readinessSummary ? { total: readinessSummary.total, ready: readinessSummary.ready } : null, viewer),
+    actions: auditActions(audit.state, readinessSummary ? { total: readinessSummary.total, ready: readinessSummary.ready } : null, viewer, { runner: profile.review.runner, filesEligible: eligibleFiles }),
   };
 }
 
@@ -444,10 +456,17 @@ export interface CitationView extends Citation {
 
 export interface FindingView {
   id: string;
+  /** The investigation (audit item) and its incident */
+  itemId: string;
+  incidentId: string | null;
   kind: string;
   kindLabel: string;
   ordinal: number;
   title: string;
+  /** The title with none of its text cut off (the stored one is cut for lists) */
+  fullTitle: string;
+  /** The finding's current values by field, as the review and the person's edits left them */
+  values: Record<string, unknown>;
   state: FindingState;
   stateLabel: string;
   edited: boolean;
@@ -527,12 +546,70 @@ export interface AuditItemView {
   analyzers: AnalyzerView[];
   reviews: ReviewView[];
   actions: ItemActions;
+  /** Who writes this audit's reviews */
+  runner: string;
 }
 
 function dotted(v: unknown, path: string): unknown {
   let cur = v;
   for (const p of path.split(".")) cur = cur && typeof cur === "object" ? (cur as Json)[p] : undefined;
   return cur;
+}
+
+/**
+ * Builds a finding's view from its row: profile labels for the fields, the
+ * choices of enum fields, the actions the viewer has, and the full title.
+ * Shared by the incident page and the Findings tab's detail. `citationView`
+ * says how a citation is shown (the incident page links records, the detail
+ * opens them through the records route).
+ */
+export function findingViewBuilder(audit: Pick<AuditRow, "state">, profile: AuditProfile, policyDirs: string[], viewer: AuditViewer) {
+  const schema = readOutputSchema(profile, policyDirs);
+  const propsByKind = new Map(profile.findings.map((ex) => [ex.kind, schema ? propertySchemas(schema, ex, ex.fields) : {}]));
+  return (f: FindingRow, isCurrent: boolean, citationView: (c: Citation) => CitationView): FindingView => {
+    const ex = profile.findings.find((x) => x.kind === f.kind);
+    const props = propsByKind.get(f.kind) ?? {};
+    const keys = ex?.fields ?? Object.keys(f.current);
+    return {
+      id: f.id,
+      itemId: f.auditItemId,
+      incidentId: f.incidentId,
+      kind: f.kind,
+      kindLabel: ex?.label ?? f.kind,
+      ordinal: f.ordinal,
+      title: f.title,
+      fullTitle: fullFindingTitle(ex, f.title, f.current, f.incidentId, f.ordinal),
+      values: f.current,
+      state: f.state,
+      stateLabel: FINDING_STATE_LABELS[f.state],
+      edited: f.edited,
+      linkable: !!ex?.linkable,
+      current: isCurrent,
+      fields: keys
+        .filter((k) => Object.hasOwn(f.current, k) || Object.hasOwn(f.proposed, k))
+        .map((k) => {
+          const prop = props[k];
+          const choices = enumOf(prop, schema ?? undefined);
+          return {
+            key: k,
+            label: fieldLabel(profile, k, f.kind),
+            value: f.current[k],
+            valueLabel: fieldValueLabel(profile, k, f.current[k], f.kind),
+            proposed: f.proposed[k],
+            changed: JSON.stringify(f.current[k]) !== JSON.stringify(f.proposed[k]),
+            editable: !!ex?.editable.includes(k),
+            choices: choices ? choices.filter((v): v is string => typeof v === "string").map((v) => ({ value: v, label: fieldValueLabel(profile, k, v, f.kind) })) : null,
+            multiple: !!prop && !Array.isArray(prop.enum) && !!choices,
+          };
+        }),
+      citations: f.citations.map(citationView),
+      reviewNote: f.reviewNote,
+      reviewedBy: f.reviewedBy,
+      reviewedAt: f.reviewedAt,
+      carriedFromId: f.carriedFromId,
+      actions: findingActions(audit.state, { state: f.state, current: isCurrent, editable: !!ex?.editable.length }, viewer),
+    };
+  };
 }
 
 export async function loadAuditItem(space: Pick<SpaceRow, "id" | "alias">, auditId: string, itemId: string, viewer: AuditViewer): Promise<AuditItemView | null> {
@@ -571,48 +648,8 @@ export async function loadAuditItem(space: Pick<SpaceRow, "id" | "alias">, audit
     return { ...c, recordId, href: recordId ? recordHref(space.alias, item.taskId, recordId, position.get(recordId) ?? null, pageSize) : null };
   };
 
-  const schema = readOutputSchema(profile, loaded.dirs);
-  const propsByKind = new Map(profile.findings.map((ex) => [ex.kind, schema ? propertySchemas(schema, ex, ex.fields) : {}]));
-  const findingView = (f: FindingRow, isCurrent: boolean): FindingView => {
-    const ex = profile.findings.find((x) => x.kind === f.kind);
-    const props = propsByKind.get(f.kind) ?? {};
-    const keys = ex?.fields ?? Object.keys(f.current);
-    return {
-      id: f.id,
-      kind: f.kind,
-      kindLabel: ex?.label ?? f.kind,
-      ordinal: f.ordinal,
-      title: f.title,
-      state: f.state,
-      stateLabel: FINDING_STATE_LABELS[f.state],
-      edited: f.edited,
-      linkable: !!ex?.linkable,
-      current: isCurrent,
-      fields: keys
-        .filter((k) => Object.hasOwn(f.current, k) || Object.hasOwn(f.proposed, k))
-        .map((k) => {
-          const prop = props[k];
-          const choices = enumOf(prop, schema ?? undefined);
-          return {
-            key: k,
-            label: fieldLabel(profile, k, f.kind),
-            value: f.current[k],
-            valueLabel: fieldValueLabel(profile, k, f.current[k], f.kind),
-            proposed: f.proposed[k],
-            changed: JSON.stringify(f.current[k]) !== JSON.stringify(f.proposed[k]),
-            editable: !!ex?.editable.includes(k),
-            choices: choices ? choices.filter((v): v is string => typeof v === "string").map((v) => ({ value: v, label: fieldValueLabel(profile, k, v, f.kind) })) : null,
-            multiple: !!prop && !Array.isArray(prop.enum) && !!choices,
-          };
-        }),
-      citations: f.citations.map(citationView),
-      reviewNote: f.reviewNote,
-      reviewedBy: f.reviewedBy,
-      reviewedAt: f.reviewedAt,
-      carriedFromId: f.carriedFromId,
-      actions: findingActions(audit.state, { state: f.state, current: isCurrent, editable: !!ex?.editable.length }, viewer),
-    };
-  };
+  const buildFinding = findingViewBuilder(audit, profile, loaded.dirs, viewer);
+  const findingView = (f: FindingRow, isCurrent: boolean) => buildFinding(f, isCurrent, citationView);
 
   const reviewViews: ReviewView[] = reviewRows.map((r: ReviewRow) => {
     const isCurrent = r.id === item.currentReviewId;
@@ -659,7 +696,7 @@ export async function loadAuditItem(space: Pick<SpaceRow, "id" | "alias">, audit
     cohort: item.cohort,
     cohortLabel: item.cohort ? (profile.cohorts.find((c) => c.id === item.cohort)?.label ?? item.cohort) : null,
     state: item.state,
-    stateLabel: itemStateLabel(item),
+    stateLabel: itemStateLabel(item, profile.review.runner),
     stateReason: item.stateReason,
     columns: cols,
     score: cols[0]?.value ?? null,
@@ -727,7 +764,8 @@ export async function loadAuditItem(space: Pick<SpaceRow, "id" | "alias">, audit
     }),
     analyzers,
     reviews: reviewViews,
-    actions: itemActions(audit.state, item.state, current?.findingCounts.proposed ?? 0, viewer),
+    actions: itemActions(audit.state, item.state, current?.findingCounts.proposed ?? 0, viewer, { runner: profile.review.runner, eligible: filesEligible(item) }),
+    runner: profile.review.runner,
   };
 }
 

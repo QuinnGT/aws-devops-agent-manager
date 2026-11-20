@@ -9,7 +9,7 @@ One audit opens `audit-detail.md`. "New audit" opens `audit-new.md`.
 1. **Top bar:** breadcrumb "<space name> › Audits"; `SyncStatus` on the right.
 2. **`PageHeader`:**
    - Title "Audits".
-   - Description: "An audit reviews a set of investigations with a model. You accept, edit or reject each finding, then build a report from the accepted ones."
+   - Description: "An audit reviews a set of investigations. You accept, edit or reject each finding, send accepted package fixes to a revision, then build a report and save the audit record."
    - Action: "New audit" (primary, CirclePlus, `audits.run`), a link to `/spaces/[alias]/audits/new`.
 3. **Card:** filter toolbar, table, footer.
 
@@ -19,7 +19,7 @@ MASTER "Filters" pattern, state in URL search params:
 
 | Filter | Values | Default |
 |---|---|---|
-| State | Open (draft, running, reviewing), Finalized, Cancelled, All | Open |
+| State | Open (draft, running, reviewing), Record saved, Cancelled, All | Open |
 | Profile | All, then each profile's `label` from `policy/audits.yaml` | All |
 | Name | `Input` "Filter by audit name" | empty |
 
@@ -34,7 +34,7 @@ MASTER "Filters" pattern, state in URL search params:
 | Created by | Name (`audits.createdBy`) |
 | Created | `Time`, right-aligned |
 
-Order: created, newest first. Over 50 rows, "Show more". With State "Open", the footer offers "Show <N> cancelled audits" or "Show <N> finalized audits" when there are any.
+Order: created, newest first. Over 50 rows, "Show more". With State "Open", the footer offers "Show <N> cancelled audits" or "Show <N> audits with a saved record" when there are any.
 
 **States** (`AUDIT_STATES` in `src/server/db/schema/audits.ts`). Add these as `STATUS` presets in `status-words.ts`:
 
@@ -43,10 +43,10 @@ Order: created, newest first. Over 50 rows, "Show more". With State "Open", the 
 | `draft` | neutral | SquarePen | Draft |
 | `running` | info | Loader (motion-safe spin) | Running |
 | `reviewing` | warning | ListChecks | In review |
-| `finalized` | success | CircleCheck | Finalized |
+| `finalized` | success | CircleCheck | Record saved |
 | `cancelled` | neutral | CircleX | Cancelled |
 
-"In review" uses the warning tone because a person has work to do, the same reason "Waiting for approval" does. An audit draft is neutral, unlike the info-tone `STATUS.draft` for asset drafts, so that info stays free for "Running" in the same column.
+"In review" uses the warning tone because a person has work to do, the same reason "Waiting for approval" does. Once every investigation is reviewed and every finding decided, an audit in review reads "Ready to save the record" (success, CheckCheck). The state is still `finalized` in code and in the database; people read "Record saved", because nothing in the Agent Space changes when the record is saved. An audit draft is neutral, unlike the info-tone `STATUS.draft` for asset drafts, so that info stays free for "Running" in the same column.
 
 While any visible audit is running, a small client component calls `router.refresh()` every 10 s and stops when none remain (the plans list pattern).
 

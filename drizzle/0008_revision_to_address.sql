@@ -1,0 +1,1 @@
+ALTER TABLE "revisions" ADD COLUMN "to_address_finding_ids" jsonb DEFAULT '[]'::jsonb NOT NULL;

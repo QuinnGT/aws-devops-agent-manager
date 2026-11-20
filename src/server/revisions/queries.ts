@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { db } from "@/server/db/client";
-import { audits, findings, plans, revisionChanges, revisions } from "@/server/db/schema";
+import { audits, findings, plans, releases, revisionChanges, revisions } from "@/server/db/schema";
 import { validationFailedCount } from "@/server/plans/check";
 import type { PlanSummary } from "@/server/plans/types";
 import type { ChangelogFinding } from "./changelog";
@@ -137,4 +137,59 @@ export async function planStates(planIds: readonly string[]): Promise<Map<string
   return new Map(
     rows.map(({ id, checkError, summary, ...r }) => [id, { ...r, checkFailed: Boolean(checkError), validationFailed: validationFailedCount(summary as PlanSummary | null) > 0 }]),
   );
+}
+
+/** The IDs among `ids` that are releases that exist. */
+export async function existingReleaseIds(ids: readonly (string | null)[]): Promise<Set<string>> {
+  const wanted = ids.filter((x): x is string => Boolean(x && isUuid(x)));
+  if (!wanted.length) return new Set();
+  const rows = await db().select({ id: releases.id }).from(releases).where(inArray(releases.id, wanted));
+  return new Set(rows.map((r) => r.id));
+}
+
+/**
+ * Current state ("accepted", "proposed" or "rejected") of findings of this
+ * space by ID. A finding that isn't of this space is absent.
+ */
+export async function findingStates(spaceId: string, ids: readonly string[]): Promise<Map<string, string>> {
+  const wanted = [...new Set(ids)].filter(isUuid);
+  if (!wanted.length) return new Map();
+  const rows = await db()
+    .select({ id: findings.id, state: findings.state })
+    .from(findings)
+    .where(and(eq(findings.spaceId, spaceId), inArray(findings.id, wanted)));
+  return new Map(rows.map((r) => [r.id, r.state]));
+}
+
+export interface ToAddressRow {
+  id: string;
+  auditId: string;
+  auditName: string;
+  incidentId: string | null;
+  title: string;
+  kind: string;
+  state: string;
+  /** The finding's values after a person's edits (the fix's owner is `owner`) */
+  values: Record<string, unknown>;
+}
+
+/** Findings of this space by ID, whatever their state, with what the to-address card shows. */
+export async function findingsForToAddress(spaceId: string, ids: readonly string[]): Promise<ToAddressRow[]> {
+  const wanted = [...new Set(ids)].filter(isUuid);
+  if (!wanted.length) return [];
+  const rows = await db()
+    .select({ f: findings, auditName: audits.name })
+    .from(findings)
+    .innerJoin(audits, eq(audits.id, findings.auditId))
+    .where(and(eq(findings.spaceId, spaceId), inArray(findings.id, wanted)));
+  return rows.map(({ f, auditName }) => ({
+    id: f.id,
+    auditId: f.auditId,
+    auditName,
+    incidentId: f.incidentId,
+    title: f.title,
+    kind: f.kind,
+    state: f.state,
+    values: (f.current ?? {}) as Record<string, unknown>,
+  }));
 }

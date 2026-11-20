@@ -50,6 +50,12 @@ export const revisions = pgTable(
     state: text("state", { enum: REVISION_STATES }).notNull().default("creating"),
     stateReason: text("state_reason"),
     note: text("note"),
+    /**
+     * Audit findings sent to this revision and not yet linked by a save, in the order they were added.
+     * A save that links a finding takes it off in the same transaction. The list holds IDs only: a finding
+     * reopened or rejected on its audit stays here and the pages show it as no longer accepted.
+     */
+    toAddressFindingIds: jsonb("to_address_finding_ids").$type<string[]>().notNull().default(sql`'[]'::jsonb`),
     /** Build and validation of the head commit (RevisionBuild) */
     latestBuild: jsonb("latest_build").$type<RevisionBuild>(),
     /** job_runs.id of the create job and of the latest save */

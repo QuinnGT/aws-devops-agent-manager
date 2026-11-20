@@ -1,0 +1,1 @@
+The full text of every record is in `records.md`, in order. Each record starts with a heading line `## R<n> <TYPE> <UTC time>`, and a record longer than {{record_chars_cap}} characters is cut with a note. Read the records a claim depends on before you rely on them.

@@ -19,7 +19,7 @@ The two options show the same revision at different moments: option 1 after save
 
 **Header** (the asset page header pattern):
 - Icon box with GitBranch, `h1` the name, the state `StatusBadge` (`revisions.md` states).
-- Meta: "Based on release <name>" (or "Based on the live space, <Time>") · "Branch <branch in mono>" · "<N> saves" · "<N> linked findings" (option 1) or the authors (option 2).
+- Meta: "Based on release <name>" (or "Based on the live space, <Time>") · "Branch <branch in mono>" · "<N> saves" · "<N> linked findings" (option 1) or the authors (option 2) · "Findings from <audit>; <audit>" when the revision's findings (to address or linked) come from audits, each audit name a link to that audit (semicolons, because audit names can hold commas).
 - Actions on the right:
 
   | Action | Permission | Does |
@@ -37,7 +37,7 @@ The two options show the same revision at different moments: option 1 after save
 **Save:** each save is one commit on the revision branch with a message and at least one linked finding, then a build job. The save dialog (option 1) and the sheet (option 2) collect the same fields:
 - Changed files with their "+N −M" counts.
 - **Message:** required. Help: "The first line becomes the changelog entry's title."
-- **Linked findings** (at least 1): a search `Input` over accepted, linkable findings (`listLinkableFindings`), then a list of results with `Checkbox`, each with the incident ID in bold, the title, and "Kind · audit name · accepted by <name>" (or "Kind · owner label · incident" for a fix). Help: "Only accepted findings can be linked. <N> selected." Findings already linked by earlier saves sort first.
+- **Linked findings** (at least 1): a search `Input` over accepted, linkable findings (`listLinkableFindings`), then a list of results with `Checkbox`, each with the incident ID in bold, the title, and "Kind · audit name · accepted by <name>" (or "Kind · owner label · incident" for a fix). Help: "Only accepted findings can be linked. <N> selected." The list is grouped: "Sent to this revision" first (the findings on the to-address list that are accepted now, **ticked each time the dialog opens**, up to the most one save may link, with a help line when some were left unticked), then "About the files you changed", then "Other accepted findings"; within a group, findings already linked by earlier saves sort first. A finding that is no longer accepted is not listed.
 - **Changelog entry** preview: the title, "Files: <paths>", "Evidence: <incident> (R<n>, ...)" built from the linked findings' citations.
 - Buttons "Cancel" and "Save and build" (primary, Save). Disabled reasons: "Write a message." / "Link at least one accepted finding."
 
@@ -57,7 +57,8 @@ The two options show the same revision at different moments: option 1 after save
 - **Three columns** at 1280 px and up: file tree (232 px), editor (the rest), right rail (300 px).
   - **File tree** card "Package files <N>": folders in the layout's order, open where a file is edited; files with a 28 px row, the current one with `aria-current="page"`. Right-aligned text marks, never color alone: "Deleted" (destructive-fg), "Edited" (info-fg), "Error" (destructive-fg), "Built" (muted). A filter `Input` at the top when the package has more than 40 files. Footer "New file" (adds a file in the chosen folder; the layout decides where each asset type lives).
   - **Editor** card: the path in mono, "Unsaved changes" in warning-fg while dirty, "Save" (primary, opens the save dialog). The size meter for instruction files as in `draft-editor.md`. The `Textarea` editor from `draft-editor.md` (mono 13 px, `wrap="off"`, no spellcheck, inset focus ring). Footer help: "Plain markdown. Saving commits to the revision branch and runs the build."
-  - **Right rail:** "Build and validation", then "Linked findings <N>" (the two latest, "Show all <N>").
+  - **Right rail:** "To address <N>", then "Build and validation", then "Linked findings <N>" (the two latest, "Show all <N>"). At 768 to 1279 px the To address card spans both rail columns, so long finding titles keep a readable line length.
+  - **To address card** (`ToAddressCard`): the findings sent to the revision from an audit that no save has linked yet, in the order they were added. Shown when it has findings, or while the revision still takes them (open or creating); an empty card says "Nothing sent from an audit. Accepted fixes added to this revision from an audit are listed here until a save links them." with a link to Audits. The count in the header is the findings that are accepted now. Each row: the **incident ID in bold** followed by the finding's **full title** as a link to the finding on its audit (`/spaces/<alias>/audits/<auditId>/findings?finding=<findingId>`; the title wraps, nothing is cut off, and a title the audit clipped at about 300 characters is continued from the finding's own text), then in muted 12 px "<Kind> · <Owner label>: <owner in the profile's words>" and the audit name as a link to the audit. At the right, **"Remove"** (ghost, `revisions.build`, open or creating revision only; the accessible name says which finding) takes it off the list after the server action returns, and the page refreshes. Eight rows show at first, then "Show all <N>". A finding reopened or rejected on its audit stays in the list with a warning line ("Reopened on its audit, so it isn't accepted now. It can be linked again once it is accepted." or "Rejected on its audit. It can't be linked unless it is accepted again."), a note above the list says how many, and it is not counted or ticked in the save dialog; a finding that no longer exists reads "A finding that is no longer in this space" and can be removed.
 - **Diff tab:** `FileDiffView` per changed file, base against the branch head, with a file `ToggleGroup` or the tree to switch.
 - **Changelog tab:** the generated `reference/CHANGELOG.md` rendered through `SafeMarkdown`.
 - **Saves tab:** option 2's change list.
@@ -91,20 +92,20 @@ The two options show the same revision at different moments: option 1 after save
 | Action | Permission |
 |---|---|
 | See the revision, files, diffs, changelog | `audits.read` |
-| Edit, save, new file, abandon, reopen | `revisions.build` |
+| Edit, save, new file, abandon, reopen, remove a finding from the to-address list | `revisions.build` |
 | Create plan | `revisions.build` and `plans.create` (both Editor) |
 | Apply the plan | `revisions.apply` (Publisher), on the plan page (`plan-review.md`) |
 | Export package zip | `audits.read` |
 
 ## Audit log
 
-`revision.save` (commit, files, linked finding IDs, build result), `revision.build` (result, error count), `plan.create` (origin `revision`), `revision.export`, `revision.abandon`, `revision.reopen`.
+`revision.save` (commit, files, linked finding IDs, build result), `revision.findings.add` and `revision.findings.remove` (revision, finding IDs), `revision.create-for-findings` (name, branch, finding IDs), `revision.build` (result, error count), `plan.create` (origin `revision`), `revision.export`, `revision.abandon`, `revision.reopen`.
 
 ## Data
 
-- `getRevision(spaceId, revisionId)`: name, branch, base, state, saves (commit, message, files with counts, linked finding IDs and short titles, author, time, build result), the package file tree with edited, error and built marks, the latest build results, linked findings, the changelog preview, the open or applied plan.
+- `getRevision(spaceId, revisionId)`: name, branch, base, state, saves (commit, message, files with counts, linked finding IDs and short titles, author, time, build result), the package file tree with edited, error and built marks, the latest build results, linked findings, the to-address findings (full title, kind, owner label, audit, links, whether each is accepted now), the audits the findings come from, the changelog preview, the open or applied plan.
 - `readRevisionFile(revisionId, path)` and `revisionDiff(revisionId, path?)` against the base.
-- Service functions: `saveRevision({ files, message, findingIds }, actor)` (commit, then enqueue the build), `createRevisionPlan`, `exportRevisionZip`, `abandonRevision`.
+- Service functions: `saveRevision({ files, message, findingIds }, actor)` (commit, then enqueue the build; it takes the linked findings off the to-address list in the same transaction), `createRevisionPlan`, `exportRevisionZip`, `abandonRevision`, `removeFindingFromRevision({ revisionId, findingId }, actor)`.
 
 ## Components
 

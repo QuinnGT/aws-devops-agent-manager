@@ -35,7 +35,7 @@ export async function POST(req: Request, ctx: RouteContext<"/api/spaces/[alias]/
     if (isCrossSiteRequest(req, env().allowedOrigins)) return problem(403, "The upload came from another site", "Upload the files from this app's audit page.");
     const audit = await getAudit(space.id, auditId);
     if (!audit) return problem(404, "There is no such audit", "Check the address and try again.");
-    if (audit.state === "finalized") return problem(409, "The audit is finalized", "Start a new audit to use new ground truth.");
+    if (audit.state === "finalized") return problem(409, "The audit's record is saved", "Start a new audit to use new ground truth.");
     const cap = (await loadedPolicyForSpace(space.id)).policy.audits.maxEvidenceUploadBytes;
     const mb = Math.floor(cap / 1048576);
 

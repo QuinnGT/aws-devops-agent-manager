@@ -2,7 +2,7 @@
 
 This page describes what the app protects, how, and what it leaves to you. To report a vulnerability, follow [`SECURITY.md`](../SECURITY.md).
 
-The short version: the app listens on `127.0.0.1` by default, writes to an Agent Space only through reviewed plans and only in its worker process, and treats everything that comes from the space, a journal or a model as untrusted text.
+The short version: the app listens on `127.0.0.1` by default, writes to an Agent Space only through reviewed plans and only in its worker process (the one exception is the temporary files of a [chat review](#writes-to-an-agent-space)), and treats everything that comes from the space, a journal or a model as untrusted text.
 
 ## Network exposure
 
@@ -47,6 +47,7 @@ Every page, Server Action and Route Handler goes through one access layer that c
 - **Only in the worker.** The code that builds AWS credentials for write access throws unless the process is the worker (`DAM_PROCESS=worker`). Git commits, tags and pushes follow the same rule. The web process cannot write even if a page tried.
 - **Checked before and after.** Apply re-reads each asset and skips an item that changed since the plan was checked. It sends each write once and reads the result back to compare it with the plan.
 - **Every action is logged.** The audit log records who changed or exported what, with the result. People with the `auditlog.read` permission (Admins) read it on the Audit log page and can export it as CSV or JSON. Findings, reports and revisions record who made each change.
+- **One exception: a chat review's files.** An audit that uses the DevOps Agent chat as its reviewer attaches two temporary files to the space and sends a chat message, without a plan, because the files are working copies of one review and not part of the space's configuration. The worker creates and deletes only files it created itself, names them with the prefix `dam-review-`, and the sync leaves them out of history. The chat stays in the space's chat history, because the service has no call to delete it. Without the optional `chat-review-policy.json` permissions this cannot run. See [AWS setup](aws-setup.md#devops-agent-chat-reviews).
 
 ## AWS access
 
@@ -69,6 +70,7 @@ Text from an Agent Space, from journals and from models can be wrong or hostile.
 - **Model input.** Journal text and ground-truth documents are data. The prompts say so and tell the model to report text that tries to direct it, instead of following it.
 - **Model tools.** A review has three tools, and each reads only that investigation's records. The model has no tool for other journals, files, other spaces or the network.
 - **Model output.** Nothing a model returns is run, fetched, or used as a path. A review is checked against a schema, and every record it cites is checked against the journal. A person accepts or rejects each finding before it can reach a revision.
+- **Chat reviews.** The DevOps Agent chat that writes a chat review has the space's own tools and instructions, not the three tools above, and journal text reaches it as an attached file. The prompt says to treat the journal as evidence and to change nothing, but that is an instruction to a model. The app's controls are the permissions of the write role, the audit's cancel and timeout, and a hard stop: if the chat asks for an approval or an interrupt, the review fails and the app approves nothing. A separate reviewer space with no connected accounts keeps the chat's reach small.
 - **Uploads.** Zips and package folders are read with limits on size and entry count. The reader rejects absolute paths and `..` segments, and package uploads also reject symlinks, encryption and duplicate names. Nothing from a zip is written to disk under its own name.
 
 ## Where data is stored
@@ -81,7 +83,7 @@ Text from an Agent Space, from journals and from models can be wrong or hostile.
 | A history repository's deploy key | Only its path is stored. The key file stays where you put it |
 | AWS credentials | Not stored. The SDK reads them from your profile, environment or role |
 
-Model calls send journal content, ground truth and analyzer output to Amazon Bedrock in the account and Region of the space's read role (or the Region set in Space settings). Choose a model and Region that your data rules allow.
+Model calls send journal content, ground truth and analyzer output to Amazon Bedrock in the account and Region of the space's read role (or the Region set in Space settings). Choose a model and Region that your data rules allow. A chat review sends the same content to a DevOps Agent chat in the audited space instead: two temporary attachments in the space and one message sent to the DevOps Agent service in the space's Region, with the chat kept in the space's chat history.
 
 ## What this does not cover
 

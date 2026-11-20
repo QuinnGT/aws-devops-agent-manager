@@ -4,15 +4,16 @@ import { notFound } from "next/navigation";
 import { SpaceTopBar } from "@/components/app-shell/space-top-bar";
 import { RerunItemButton } from "@/components/audits/audit-buttons";
 import { byIncident } from "@/components/audits/audit-header";
-import { auditDetail, getAuditCached } from "@/components/audits/detail-data";
+import { auditDetail, fixContext, getAuditCached, revisionDialog } from "@/components/audits/detail-data";
 import { firstCitation } from "@/components/audits/finding-view";
 import { FailureDetails } from "@/components/audits/failure-details";
 import { failureGroups } from "@/components/audits/failure-view";
 import { nextIncidentToReview } from "@/components/audits/next-incident";
 import { auditsBase, loadAuditsPage } from "@/components/audits/page-guard";
+import { ReviewFilesCard } from "@/components/audits/review-files-card";
 import { ReviewWorkspace, type CardFinding, type EvidenceDoc } from "@/components/audits/review-workspace";
 import { decideFindingsNote } from "@/components/audits/role-text";
-import { citationProblemSentence, kindPosition, plural, uniqueProblems } from "@/components/audits/words";
+import { citationProblemSentence, kindPosition, plural, reviewedBy, uniqueProblems } from "@/components/audits/words";
 import { Callout } from "@/components/common/callout";
 import { RoleNote } from "@/components/common/role-note";
 import { EmptyState } from "@/components/common/empty-state";
@@ -30,6 +31,8 @@ import { cn } from "@/lib/utils";
 import { checkBedrock } from "@/server/audits/bedrock-check";
 import { reviewFailureKind } from "@/server/audits/failure";
 import { loadAuditItem } from "@/server/audits/loaders";
+import { natureOf, nextStepFor } from "@/server/audits/next-step";
+import { loadedPolicyForSpace } from "@/server/audits/profiles";
 import { profileOf } from "@/server/audits/store";
 import { getRecordText, journalRecordCount, reviewHighlights } from "@/server/audits/ui";
 import { displayNames } from "@/server/drafts/loaders";
@@ -62,6 +65,10 @@ export default async function AuditItemPage({ params, searchParams }: PageProps<
   const next = pos >= 0 && pos < order.length - 1 ? order[pos + 1] : undefined;
 
   const [totalRecords, highlights] = await Promise.all([journalRecordCount(space.id, view.item.taskId), review ? reviewHighlights(view.item.id, review.id) : Promise.resolve(null)]);
+  const canBuild = perms.has("revisions.build");
+  const fix = await fixContext(space.id, audit.id, canBuild);
+  const loadedPolicy = await loadedPolicyForSpace(space.id);
+  const dialog = await revisionDialog(space.id, audit.id, canBuild);
   const names = await displayNames((review?.findings ?? []).flatMap((f) => [...(f.reviewedBy ? [f.reviewedBy] : []), ...f.citations.flatMap((c) => (c.checked ? [c.checked.by] : []))]));
 
   // Finding cards: diagnosis first, then by kind and position (the loader's order follows the profile's kinds).
@@ -78,11 +85,11 @@ export default async function AuditItemPage({ params, searchParams }: PageProps<
       id: f.id,
       kind: f.kind,
       position: kindPosition(f.kindLabel, i, perKind.get(f.kind) ?? 1),
-      title: f.title,
+      title: f.fullTitle,
       state: f.state,
       edited: f.edited,
       from: ex?.from ?? "$",
-      hidden: [...(ex?.cardHidden ?? []), ...f.fields.filter((x) => typeof x.value === "string" && x.value.trim() === f.title.trim()).map((x) => x.key)],
+      hidden: [...(ex?.cardHidden ?? []), ...f.fields.filter((x) => typeof x.value === "string" && x.value.trim() === f.fullTitle.trim()).map((x) => x.key)],
       fields: f.fields.map((x) => ({ key: x.key, label: x.label, value: x.value, valueLabel: x.valueLabel, editable: x.editable, choices: x.choices, multiple: x.multiple, changed: x.changed })),
       citations: f.citations.map((c) => ({
         record: c.record,
@@ -100,6 +107,14 @@ export default async function AuditItemPage({ params, searchParams }: PageProps<
       canEdit: f.actions.edit.enabled,
       // Checking a record is a review action on the current review, in any decision state.
       canCheck: f.actions.accept.enabled || f.actions.reject.enabled || f.actions.reopen.enabled,
+      next: nextStepFor({
+        state: f.state,
+        nature: natureOf(profile, { kind: f.kind, values: f.values }),
+        canDecide: f.actions.accept.enabled,
+        canBuild,
+        links: fix?.links ? (fix.links.get(f.id) ?? []) : null,
+        reviewNote: f.reviewNote,
+      }),
     };
   });
   const counts = review?.findingCounts ?? { accepted: 0, proposed: 0, rejected: 0, total: 0 };
@@ -137,7 +152,11 @@ export default async function AuditItemPage({ params, searchParams }: PageProps<
   const checkedRecords = review ? new Set(cards.flatMap((f) => f.citations.filter((c) => !c.ok && c.checked).map((c) => c.record))).size : 0;
   const allDecided = !!review?.current && counts.total > 0 && counts.proposed === 0;
   const nextToDecide = detail ? nextIncidentToReview(detail.items, view.item.id) : null;
-  const running = view.item.state === "pending" || view.item.state === "analyzing" || view.item.state === "reviewing";
+  const handoff = view.runner === "handoff";
+  const files = view.actions.reviewFiles;
+  const maxUploadMb = files.visible ? Math.floor(loadedPolicy.policy.audits.handoff.import.maxUploadBytes / 1048576) : 0;
+  const waitingForFile = handoff && view.item.state === "pending" && !review;
+  const running = !handoff && (view.item.state === "pending" || view.item.state === "analyzing" || view.item.state === "reviewing");
 
   const callouts: React.ReactNode[] = [];
   if (review && review.citationCheck && review.citationCheck.failed > 0) {
@@ -240,6 +259,7 @@ export default async function AuditItemPage({ params, searchParams }: PageProps<
             <span key="r">
               Reviewed <Time value={review.finishedAt} format="datetime" />
               {review.steps ? ` in ${review.steps} steps` : ""}
+              {handoff ? ` by ${reviewedBy(review.runner, review.modelId)}` : ""}
             </span>
           ) : null,
           view.journalPresent ? `${plural(totalRecords, "journal record")}` : "Journal not cached",
@@ -303,6 +323,21 @@ export default async function AuditItemPage({ params, searchParams }: PageProps<
           {review && !review.current ? <span className="text-xs text-muted-foreground">An earlier review is read only.</span> : null}
         </nav>
       ) : null}
+      {files.visible ? (
+        <ReviewFilesCard
+          alias={space.alias}
+          auditId={audit.id}
+          itemId={view.item.id}
+          incident={incident}
+          hasReview={!!view.item.review}
+          download={{ enabled: files.download.enabled, reason: files.download.disabledReason }}
+          import={{ enabled: files.import.enabled, reason: files.import.disabledReason }}
+          maxUploadMb={maxUploadMb}
+        />
+      ) : null}
+      {waitingForFile ? (
+        <EmptyState title="Waiting for a review file">Its findings appear here when its review is imported.</EmptyState>
+      ) : null}
       {running && !review ? (
         <EmptyState title="This investigation is being reviewed">
           Its findings appear here when the review finishes.
@@ -314,6 +349,7 @@ export default async function AuditItemPage({ params, searchParams }: PageProps<
         </EmptyState>
       ) : null}
       <ReviewWorkspace
+        zone={zone}
         alias={space.alias}
         auditId={audit.id}
         itemId={view.item.id}
@@ -324,6 +360,7 @@ export default async function AuditItemPage({ params, searchParams }: PageProps<
         findings={cards}
         initial={{ citation: first, fieldLabel: firstLabel, data: initialData && "missing" in initialData ? initialData : initialData ? { ...initialData, createdAt: initialData.createdAt.toISOString() } : null }}
         reviewable={reviewable}
+        revisions={{ options: dialog.choices, nameRule: dialog.nameRule }}
         counts={counts}
         callout={callouts.length ? <div className="space-y-3">{callouts.slice(0, 3)}</div> : null}
       />

@@ -197,6 +197,9 @@ describe("reruns", () => {
 
   it("says why a review gave no findings", () => {
     expect(reviewFailureReason({ state: "failed", error: "Throttled", schemaValid: false, schemaErrors: [], output: null })).toBe("Throttled");
+    expect(
+      reviewFailureReason({ state: "failed", error: "The output does not match the schema (1 error).", schemaValid: false, schemaErrors: ["timing.incident_created must NOT have more than 100 characters"], output: {} }),
+    ).toBe("The output does not match the schema (1 error). timing.incident_created must NOT have more than 100 characters.");
     expect(reviewFailureReason({ state: "succeeded", error: null, schemaValid: false, schemaErrors: ["/score must be string"], output: {} })).toContain("/score must be string");
     expect(reviewFailureReason({ state: "succeeded", error: null, schemaValid: true, schemaErrors: [], output: null })).toBe("The model returned no structured output.");
   });
@@ -234,7 +237,7 @@ describe("page helpers and buttons", () => {
     expect(auditActions("draft", { total: 2, ready: 1 }, all).startSkippingIncomplete.enabled).toBe(true);
     expect(auditActions("draft", { total: 2, ready: 2 }, readOnly).start.disabledReason).toBe("Your role can't run audits in this space.");
     expect(auditActions("running", null, all).cancel.enabled).toBe(true);
-    expect(auditActions("finalized", null, all).delete.disabledReason).toBe("A finalized audit can't be deleted.");
+    expect(auditActions("finalized", null, all).delete.disabledReason).toBe("An audit whose record is saved can't be deleted.");
     expect(itemActions("reviewing", "reviewed", 3, all)).toMatchObject({ rerun: { enabled: true }, acceptAll: { enabled: true } });
     expect(itemActions("reviewing", "reviewed", 0, all).acceptAll.disabledReason).toBe("No finding is waiting for a decision.");
     const fa = findingActions("reviewing", { state: "proposed", current: true, editable: true }, all);

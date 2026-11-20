@@ -1,10 +1,7 @@
 import path from "node:path";
-import { inArray } from "drizzle-orm";
 import { missingRoleReason } from "@/server/auth/role-words";
 import type { LinkableFinding } from "@/server/audits/contract";
 import { listLinkableFindings } from "@/server/audits/linkable";
-import { db } from "@/server/db/client";
-import { releases } from "@/server/db/schema";
 import type { HistoryRepo, PathChange } from "@/server/git/history-repo";
 import { policyForSpace } from "@/server/journals/policy";
 import { packageToDesiredAssets, type FileRole } from "@/server/packages/desired";
@@ -15,9 +12,10 @@ import { renderChangelogSection } from "./changelog";
 import { layoutOf, readContext } from "./context";
 import { revisionNameKey } from "./names";
 import { fileView, readRevisionPackage } from "./package-files";
-import { findingsForChangelog, getRevision, getRevisionByNameKey, isUuid, listChanges, listChangesOf, listRevisionRows, planStates, type PlanStateRow, type RevisionChangeRow, type RevisionRow } from "./queries";
+import { existingReleaseIds, findingsForChangelog, findingStates, getRevision, getRevisionByNameKey, isUuid, listChanges, listChangesOf, listRevisionRows, planStates, type PlanStateRow, type RevisionChangeRow, type RevisionRow } from "./queries";
 import { REVISION_PERMISSIONS } from "./service";
 import { exportBlocker, OPEN_PLAN_STATES, planBlocker, saveBlocker } from "./states";
+import { acceptedOnList } from "./to-address";
 import type { RevisionBuild, RevisionError } from "./types";
 
 /**
@@ -72,6 +70,8 @@ export interface RevisionListItem {
   layout: string;
   /** Distinct findings linked by its changes */
   linkedFindings: number;
+  /** Findings sent to it from an audit that are accepted now and not linked yet */
+  toAddress: number;
   changes: number;
   lastBuild: BuildSummary | null;
   plan: PlanLink | null;
@@ -104,14 +104,7 @@ function releaseLink(row: RevisionRow, created: Set<string>): ReleaseLink | null
   return { releaseId: row.releaseId, name: row.releaseName ?? "", created: Boolean(row.releaseId && created.has(row.releaseId)), runId: row.releaseRunId, error: row.releaseError };
 }
 
-async function existingReleases(ids: readonly (string | null)[]): Promise<Set<string>> {
-  const wanted = ids.filter((x): x is string => Boolean(x && isUuid(x)));
-  if (!wanted.length) return new Set();
-  const rows = await db().select({ id: releases.id }).from(releases).where(inArray(releases.id, wanted));
-  return new Set(rows.map((r) => r.id));
-}
-
-function listItem(row: RevisionRow, changes: readonly RevisionChangeRow[], plans: Map<string, PlanStateRow>, created: Set<string>): RevisionListItem {
+function listItem(row: RevisionRow, changes: readonly RevisionChangeRow[], plans: Map<string, PlanStateRow>, created: Set<string>, findingStatesById: ReadonlyMap<string, string>): RevisionListItem {
   return {
     id: row.id,
     name: row.name,
@@ -119,6 +112,7 @@ function listItem(row: RevisionRow, changes: readonly RevisionChangeRow[], plans
     base: { kind: row.baseKind, label: row.base.label, releaseName: row.base.kind === "release" ? row.base.name : null },
     layout: row.layout,
     linkedFindings: new Set(changes.flatMap((c) => c.findingIds)).size,
+    toAddress: acceptedOnList(row.toAddressFindingIds, findingStatesById),
     changes: changes.length,
     lastBuild: buildSummary(row),
     plan: planLink(row, plans),
@@ -137,7 +131,8 @@ export async function loadRevisionList(space: Space, opts: { limit?: number; off
   const page = rows.slice(0, pageSize);
   const changes = await listChangesOf(page.map((r) => r.id));
   const plans = await planStates(page.map((r) => r.planId).filter((x): x is string => Boolean(x)));
-  const created = await existingReleases(page.map((r) => r.releaseId));
+  const created = await existingReleaseIds(page.map((r) => r.releaseId));
+  const states = await findingStates(space.id, page.flatMap((r) => r.toAddressFindingIds));
   return {
     revisions: page.map((r) =>
       listItem(
@@ -145,6 +140,7 @@ export async function loadRevisionList(space: Space, opts: { limit?: number; off
         changes.filter((c) => c.revisionId === r.id),
         plans,
         created,
+        states,
       ),
     ),
     hasMore: rows.length > pageSize,
@@ -213,6 +209,8 @@ export interface RevisionDetail {
     abandonedAt: Date | null;
     /** The release the revision starts from (base kind "release") */
     baseRelease?: { id: string; name: string } | null;
+    /** Every finding on the to-address list, in the order they were added (accepted or not; the pages say which) */
+    toAddressIds: string[];
   };
   repo: { ok: true } | { ok: false; message: string };
   /** Every file of the package at the branch head */
@@ -289,8 +287,8 @@ export async function loadRevisionDetail(
   if (!row) return null;
   const changes = await listChanges(row.id);
   const plans = await planStates(row.planId ? [row.planId] : []);
-  const created = await existingReleases([row.releaseId]);
-  const item = listItem(row, changes, plans, created);
+  const created = await existingReleaseIds([row.releaseId]);
+  const item = listItem(row, changes, plans, created, await findingStates(space.id, row.toAddressFindingIds));
   let layoutLabel = row.layout;
   try {
     layoutLabel = layoutOf(policy, row.layout).label;
@@ -357,6 +355,7 @@ export async function loadRevisionDetail(
       abandonedBy: row.abandonedBy,
       abandonedAt: row.abandonedAt,
       baseRelease: row.base.kind === "release" ? { id: row.base.releaseId, name: row.base.name } : null,
+      toAddressIds: row.toAddressFindingIds,
     },
     repo: repoState,
     tree,

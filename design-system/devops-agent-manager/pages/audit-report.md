@@ -1,8 +1,10 @@
-# Page: Audit report, export and finalize
+# Page: Audit report, export and save the audit record
 
-Overrides `MASTER.md` for `/spaces/[alias]/audits/[auditId]/report`, the Report tab of the audit page. The header, tiles and tabs are in `audit-detail.md`. Data comes from `src/server/audit-reports/`. Screens (example data): the report with a stale notice, the export refused by the output rules, and the finalize dialog (each in light and dark).
+Overrides `MASTER.md` for `/spaces/[alias]/audits/[auditId]/report`, the Report tab of the audit page. The header, tiles and tabs are in `audit-detail.md`. Data comes from `src/server/audit-reports/`. Screens (example data): the report with a stale notice, the export refused by the output rules, the "Save the audit record" dialog, and the card after the record is saved (each in light and dark).
 
 The rules covered are journal audits: cross-incident summary, report and record.
+
+**Saving the record never changes the Agent Space.** It writes three files to the space's history repository and says where. Changes to the space happen only through a revision and its plan (`audit-detail.md`, "What happens next"). The audit's state is `finalized` in code and the database; people read "Record saved", and the action is "Save the audit record", never "Finalize".
 
 ## Model
 
@@ -13,11 +15,11 @@ The rules covered are journal audits: cross-incident summary, report and record.
 
 ## Layout, top to bottom
 
-1. The shared audit header and tabs (`audit-detail.md`), Report current.
+1. The shared audit header, flow strip and tabs (`audit-detail.md`), Report current.
 2. **Stale callout** (warning, `role="status"`) when stale: title "The tables are out of date", body "<N> findings changed after the tables were built on <Time>. Rebuild them to count the latest decisions. Your narrative edits are kept.", action "Rebuild tables" (RefreshCw, `audits.run`). A report never built yet shows instead an info callout "The report isn't built yet" with "Build the report".
 3. **Two columns** (main plus the 340 px side column):
    - Main: one line of help, "Built from <N> accepted diagnoses and <N> accepted fixes. The <N> proposed findings count once you accept them. Sections appear in the profile's order.", then one card per section.
-   - Side: "Export HTML" and "Finalize audit" cards.
+   - Side: "Save the audit record" first, then "Export HTML". From 1280 px the side column is sticky under the top bar (`xl:sticky xl:top-[4.5rem]`, at most `100dvh` − 10.5 rem and scrolling inside), so the card's button is in reach at 1440 x 900 and the toasts at the bottom right don't cover it. The record card stays after the record is saved, for everyone who can read the audit.
 
 ## Section card
 
@@ -61,15 +63,27 @@ The rules covered are journal audits: cross-incident summary, report and record.
 
   Footer note: "Account IDs are masked here too. Each excerpt shows up to <excerptChars> characters on each side of the match." Buttons "Close" and "Check again" (ShieldCheck).
 
-## Finalize audit card
+## Save the audit record card
 
-- Body: "Commits the audit record to <repository>, in <folder>:" then a definition list: `audit.json` "Profile, <N> journal SHA-256s, analyzer and model versions"; `findings.json` "<N> accepted findings with their citations"; `report.md` "The report as shown here". Help: "Findings and the report can't change after this. The journals stay in this app's database."
-- Button "Finalize audit" (primary, GitCommitHorizontal, `audits.run`). Disabled reasons:
-  - "Rebuild the tables first: <N> findings changed after they were built."
+An anchor (`#report-record`) the flow strip's Record cell links to.
+
+- **Before saving.** The sentence "Saves what this audit found, as files in the space's history repository. Nothing in the Agent Space changes." then the button (so it is at the top of the card), the disabled reason under it, and a definition list of the facts, read from the repository now. Exact names stay (repository, branch, folder, commit), each with a few words that say what it is:
+
+  | Label | Content |
+  |---|---|
+  | Repository | The repository's name in bold, "(the space's history repository)", then "on branch <default branch>" in mono, "(the line of history the record is added to)" |
+  | Folder | `audits/<space alias>/<audit ID>/` in mono, "(inside that repository)" |
+  | Files | Each file in mono with "(new)" or "(replaces the file that is there)", and under it what it holds: `audit.json` "the audit's settings, a fingerprint of each of the <N> journals so a later change to a journal can be detected, and the analyzer and model versions"; `findings.json` "the <N> accepted findings with their citations"; `report.md` "the report as text, <N> sections" (the sections the saved report holds: the ones shown, less narratives with no text yet, the same N as the flow strip) |
+  | Copied to | A chip: "Pushes to <remote>" (success), "Local only: this repository has no remote" or "Local only: pushing is off for this repository" (warning), with a sentence under it: what a remote is ("a copy of the repository on a server, such as GitHub") and what happens |
+
+  Help: "Findings and the report can't change after this. The journals stay in this app's database." The button is "Save the audit record" (primary, GitCommitHorizontal, `audits.run`). Disabled reasons:
+  - "<N> findings still need a decision." with a link to them
   - "Wait for the reviews to finish." (running)
   - "The history repository isn't set up for this space." with a link to Space settings for Admins
-- **Confirm** (`AlertDialog`): title "Finalize <name>?", description "Commits the audit record to <repository>. Findings and the report can't change after this." Facts: Folder (mono), each file with what it holds (`audit.json`: profile and policy digest, journal SHA-256s, analyzer versions, model ID and prompt digest; `findings.json`: accepted findings with record citations and check results; `report.md`: every shown section, each marked Internal or Shareable), "Commit by <name>". When findings are still proposed, a warning callout "<N> proposed findings are left out": "They stay proposed here and can't be accepted after finalizing. Revisions can link only to the <N> accepted ones." Buttons "Cancel" and "Finalize and commit".
-- Finalizing runs in the worker (git writes only happen there) and shows `JobProgress` in the dialog. On success the audit page shows the finalized callout with the commit.
+  - "Resolve the items above first." in the dialog, while it lists a refusal
+- **Dialog** (`AlertDialog`): title "Save the audit record?", description "Saves what <name> found. Nothing in the Agent Space changes. Findings and the report can't change after this." The same facts as above, then "The commit is recorded as made by <name>." (a commit is the saved snapshot). Callouts: **"<N> accepted package fixes are in no revision"** (warning), listing up to five of them (incident and title) with "Add them to a revision" (a link to the Findings tab, Accepted and not in a revision) and the sentence "You can still save the record: a person may decide a fix won't be made. A fix in no revision won't reach the agent, and the record says it was accepted." It never blocks saving; a muted line says when other accepted fixes are queued in a revision and not applied yet. Then the other reasons the server refuses (an investigation not reviewed, a shareable summary nobody approved, each with a link), "The record stays on this machine" (warning, with "Repository settings" for Admins under the text) when the push is local only, and "The report was built before the latest decisions" when it is stale. Buttons "Cancel" and "Save the record". Saving runs in the worker (git writes only happen there) and shows `JobProgress` in the dialog; when it succeeds a toast says "Saved the record of <name>".
+- **After saving.** The card's chip says "Saved". It says "Saved <Time> by <name>. Nothing in the Agent Space changed." Then the commit (the short hash in mono with a Copy icon; pressing it copies the full hash), the same list with the repository, the branch and the folder it was saved to, each file with "(new)" or "(replaces the file that is there)", and the push result: "Pushed to <remote>" (success), "Saved here, but the push to <remote> failed: <error> The next push carries it." (destructive), "Local only: this repository has no remote" or "Not pushed: pushing was off for this repository" (warning). A record saved before the result was kept says "The push result wasn't kept for this save." There is no link to History: History lists changes to assets, and an audit record is not one.
+- Where the facts come from: before saving, the repository's settings and the files under the folder at its HEAD (`loadRecordInfo`). After saving, the `audit.finalize` audit event the worker writes (commit, folder, branch, remote, `pushed`, `pushError`, and each file's status from the commit's diff), so no column was added.
 
 ## States
 
@@ -79,8 +93,8 @@ The rules covered are journal audits: cross-incident summary, report and record.
 | Not built | Info callout "The report isn't built yet" and "Build the report" (`audits.run`); no section cards |
 | No accepted findings | Computed sections show `EmptyState` "Nothing accepted yet" with "Open findings"; narrative "Draft with the model" is disabled with "Accept some findings first." |
 | Model draft failed | Destructive callout in the section card with the error as a plain sentence and "Try again" |
-| Finalized | Read only: no Edit, Draft, Hide, Rebuild or Finalize; the export card stays (exports of a finalized report read `report.md` from the commit) |
-| Read only (Viewer) | Sections and the export card; no section actions, no rebuild, no finalize card |
+| Record saved | Read only: no Edit, Draft, Hide, Rebuild or Save; the export card stays (exports of a saved report read `report.md` from the commit), and the record card shows what was saved |
+| Read only (Viewer) | Sections and the export card; no section actions, no rebuild, no record card until the record is saved, then the card without a button |
 
 ## Permissions
 
@@ -89,25 +103,25 @@ The rules covered are journal audits: cross-incident summary, report and record.
 | See the report | `audits.read` |
 | Export HTML | `audits.read` |
 | Edit, draft with the model, hide, rebuild | `audits.run` |
-| Finalize | `audits.run` |
+| Save the audit record | `audits.run` |
 
 Export is a read: Viewers already export journals. See open items.
 
 ## Audit log
 
-`report.build`, `report.section.edit` (section ID), `report.section.draft` (section ID, model ID, tokens), `report.section.hide` and `report.section.show`, `report.export` (audience, result, rule IDs that matched; never the excerpts), `audit.finalize` (commit, counts).
+`report.build`, `report.section.edit` (section ID), `report.section.draft` (section ID, model ID, tokens), `report.section.hide` and `report.section.show`, `report.export` (audience, result, rule IDs that matched; never the excerpts), `audit.finalize` (the action name stays; its details hold the commit, folder, branch, remote, push result, files and counts).
 
 ## Data
 
 - `getReportView(auditId)`: sections in order with audience, kind, hidden, narrative and its source and editor, computed rows, `builtAt`, the stale count, the accepted and proposed counts, and the last export result.
-- Service functions (audit-reports module): `rebuildReport`, `saveNarrative`, `draftNarrative` (enqueues the model call), `setSectionHidden`, `exportReport(audience)` returning a file or the violations with section and position, `finalizeAudit`.
+- Service functions (audit-reports module): `rebuildReport`, `saveNarrative`, `draftNarrative` (enqueues the model call), `setSectionHidden`, `exportReport(audience)` returning a file or the violations with section and position, `finalizeAudit` (the worker job behind "Save the audit record"), and `loadRecordInfo` for the facts the card shows.
 
 ## Components
 
-`StatusBadge`, `Callout`, `DisabledReason`, `EmptyState`, `Time`, `SafeMarkdown`, `JobProgress`, `SectionCard`, shadcn `RadioGroup`, `Dialog`, `AlertDialog`, `Textarea`, `Table`.
+`StatusBadge`, `Callout`, `DisabledReason`, `EmptyState`, `Time`, `SafeMarkdown`, `JobProgress`, `SectionCard`, shadcn `RadioGroup`, `Dialog`, `AlertDialog`, `Textarea`, `Table`, and `SaveRecordCard` and `CopyCommit` (local to the audit pages).
 
 ## Open items
 
-- **Finalize with proposed findings.** The design allowed it and warned that they are left out. Decided: finalizing is blocked until every finding has a decision (MASTER "Page index"), and the finalize dialog lists what is undecided instead of the warning callout described above.
+- **Saving with proposed findings.** The design allowed it and warned that they are left out. Decided: saving is blocked until every finding has a decision (MASTER "Page index"), and the dialog lists what is undecided instead of a warning callout.
 - **Who can export.** Viewers (as for journal exports) or Editors. Viewers is the current rule.
 - **Where an output-rule match is.** `checkOutputText` returns a character offset in the checked text. The export needs a section ID and a row or paragraph, so the audit-reports module checks section by section and maps offsets to rows.

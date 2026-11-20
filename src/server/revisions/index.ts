@@ -6,6 +6,7 @@
  * See README.md.
  */
 export * from "./types";
+export { listRevisionOptions, addFindingsToRevision, removeFindingFromRevision, createRevisionForFindings, findingRevisionLinks, type RevisionOption, type FindingRevisionLink } from "./findings";
 export { REVISION_PERMISSIONS, requestCreateRevision, requestSaveRevision, createPlanFromRevision, exportRevision, revisionDownloadHeaders, abandonRevision, type CreateRevisionPlanResult, type ExportRevisionResult } from "./service";
 export { createRevisionRequest, prepareCreateRevision, createRevisionHandler, type CreateRevisionRequest, type CreateRevisionResult } from "./create";
 export { saveRevisionRequest, prepareSaveRevision, saveRevisionHandler, type SaveRevisionRequest, type SaveRevisionInput, type SaveRevisionResult } from "./save";
@@ -26,6 +27,7 @@ export {
   type BuildSummary,
   type ActionState,
 } from "./loaders";
+export { revisionAuditSources, type RevisionAuditSource } from "./sources";
 export { renderChangelogSection, upsertChangelog, changelogRow, changelogDate, type ChangelogChange, type ChangelogFinding, type ChangelogInput } from "./changelog";
 export { revisionPlanInput, revisionPlanReason, revisionPlanTitle, findingLabel } from "./plan-input";
 export { checkRevisionName, revisionBranch, revisionPackageDir, revisionPackageName, releaseNameFor, revisionNameKey } from "./names";

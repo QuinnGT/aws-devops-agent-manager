@@ -42,7 +42,7 @@ export async function updateReportDraft(
       .where(and(eq(audits.id, audit.id), eq(audits.spaceId, audit.spaceId)))
       .for("update");
     if (!row) throw new AuditReportError("Audit not found.", "not-found");
-    if (row.state === "finalized") throw new AuditReportError("This audit is finalized, so its report can't be changed.", "read-only");
+    if (row.state === "finalized") throw new AuditReportError("This audit's record is saved, so its report can't be changed.", "read-only");
     const draft = mutate(row.report ?? null, row);
     await tx.update(audits).set({ report: draft, reportUpdatedBy: actor.email, reportUpdatedAt: new Date() }).where(eq(audits.id, row.id));
     return { draft, before: row.report ?? null };

@@ -28,17 +28,18 @@ Option 2's design shows a later moment than option 1: the diagnosis and the firs
 **Evidence:**
 - **Confirmed root cause:** the ground-truth document of the first required input, rendered through `SafeMarkdown`, collapsed to its first 12 lines with "Show the full document". A warning badge "Partly uncertain" when the review's `ground_truth_uncertain` is true. Footer in muted 12 px: the file name and "uploaded <Time> by <name>". Several inputs (scorecard) get a `ToggleGroup` in the card header: "Confirmed root cause", "Benchmark scorecard".
 - **Agent's final answer:** the review's `agent_final_answer`, with the scored summary's record as a citation chip.
-- **Journal record** (option 1; in option 2 each evidence row shows its excerpt inline): the record a citation opened. Header "Journal record R<n>", the record type and `Time`, and "Open in journal" (opens the journal page at that record in the same tab). Body: the record's text as plain text in mono, with each quoted span marked (`<mark>`, info tint, underline). Footer: "Opened from the <field> citation. Quoted text is highlighted. Journal text is shown as plain text." and "R<n-1>" and "R<n+1>" buttons.
+- **Journal record** (option 1; in option 2 each evidence row shows its excerpt inline): the record a citation opened. Header "Journal record R<n>", the record type and `Time`, and "Open in journal" (opens the journal page at that record in the same tab). Body: the record's text as plain text in mono, with each quoted span marked (`<mark>`, info tint, underline). Footer: "Opened from the <field> citation. Quoted text is highlighted. Journal text is shown as plain text." and "R<n-1>" and "R<n+1>" buttons. Citation chips are blue and underlined with a pointer cursor and the title "Read journal record R<n>", so they look pressable. "I checked the record" is an outline small button with a Check icon; pressing it opens that record in the viewer first, and saving the note leaves the viewer on the same record.
 
 **Citation chip:** a 24 px mono button "R<n>". Pressing it opens that record in the journal record card and sets `aria-pressed`. A failed citation uses the warning tint with TriangleAlert and an adjacent text reason linked by `aria-describedby` ("Not in this journal (41 records)", "Quoted text not found in R12"); its record card says why it can't show the record, or shows the record without highlights.
 
 **Finding card** (one per finding of the current review, diagnosis first, then by kind and `ordinal`):
-- Header badges: the kind label ("Diagnosis", "Fix 2 of 3"), the state (`StatusBadge`: "Proposed" info Clock, "Accepted" success Check, "Rejected" neutral X), "Edited" when `edited`, and "<N> citation(s) failed" (warning) when any of its citations failed. A flagged card has a warning-tint border.
-- Title: the filled title template, 14 px semibold (16 px in option 2).
+- Header badges: the kind label ("Diagnosis", "Fix 2 of 3": the second of the incident's three fixes; the Findings tab says "Fix 2 of 3 for <incident>"), the state (`StatusBadge`: "Proposed" info Clock, "Accepted" success Check, "Rejected" neutral X), "Edited" when `edited`, and "<N> citation(s) failed" (warning) when any of its citations failed. A flagged card has a warning-tint border.
+- Title: the filled title template with none of its text cut off (the stored title is cut at 300 characters for lists, so the card rebuilds it), 14 px semibold (16 px in option 2).
 - Fields: a definition list of the extractor's `fields`, labelled in plain words (table below), values from `current`. Citations for a field sit under it as chips. Model text is untrusted: render values as plain text or through `SafeMarkdown`, never as HTML.
-- Footer for a proposed finding: "Accept" (primary), "Edit" (outline), "Reject" (ghost). For a decided finding: who and when ("Alex Rivera, 10:02 AM") and "Change decision" (ghost, Undo2). A flagged card adds "Accepting keeps the flag in the record." in muted 12 px.
+- **What happens next:** a dashed card under the fields, the same one the Findings tab shows (`audit-detail.md`, "What happens next"): the finding is recorded and counted in the report, or listed in the report as an action for its owner, or, for a package fix, the revisions it went to or "Add to revision…" ("Accept and add to revision…" while proposed). A rejected finding shows its note.
+- Footer, the shared `DecisionButtons` (also the Findings tab's detail): for a proposed finding three outline buttons joined in one group, "Accept" (success border and text, Check), "Edit" (neutral, SquarePen) and "Reject" (destructive border and text, X), each with its key in a `kbd`. They look like buttons, and the state badge in the card's header is the only status. For a decided finding: "Accepted by Alex Rivera, Nov 18, 10:02 AM" or "Rejected by …" and "Change decision" (outline, Undo2). A flagged card adds "Accepting keeps the flag in the record." in muted 12 px.
 - **Edit:** turns the extractor's `editable` fields into controls in place: failure mode `Select` (labels from `failureModes`), failure modes as a checkbox group, reachability as a `RadioGroup`, owner `Select` (labels from `fixOwners`), text fields as `Textarea`. Buttons "Save and accept" (primary) and "Cancel". Fields not in `editable` stay read only. Saving keeps `proposed` as it was and writes `current`, `edited: true`.
-- **Reject:** a `Popover` with an optional "Why, for the record" note and "Reject".
+- **Reject:** a form under the evidence with an optional "Why, for the record" note and "Reject" (destructive) and "Cancel".
 
 **Field labels** for the benchmark profile (the page reads labels from the profile; these are the defaults to add to it):
 
@@ -60,7 +61,7 @@ Option 2's design shows a later moment than option 1: the diagnosis and the firs
 - Two columns, 5 : 6 (evidence : findings), aligned to the top. Each column scrolls with the page.
 - Left: Confirmed root cause, Agent's final answer, Journal record (opens the first citation of the first proposed finding by default).
 - Right: `h2` "Findings" with "<N>: <a> accepted, <p> proposed", the bulk button, then the finding cards.
-- Below 1280 px the columns stack, evidence first (DOM order and reading order are the same). Below 1024 px the journal record opens in a `Sheet` from the right instead of the card, so a citation doesn't scroll the page away from the finding.
+- Below 1280 px the columns stack, evidence first (DOM order and reading order are the same), and the journal record opens in a `Sheet` from the right instead of the card, so a citation doesn't scroll the page away from the finding. From 1280 px the card is in the left column and **scrolls into view whenever a chip, "I checked the record" or O opens it** (`scrollIntoView({ block: "nearest" })`, instantly with reduced motion), so a chip lower down the right column still shows its record.
 
 ## Option 2: one finding at a time
 
@@ -94,7 +95,7 @@ Option 2's design shows a later moment than option 1: the diagnosis and the firs
 | Skipped | Neutral callout with `stateReason` ("Missing a Benchmark scorecard") and "Upload it on the audit's inputs" for a draft audit |
 | Schema failed | The review is `failed` with `schemaErrors`: a destructive callout listing the first three errors in mono 12 px |
 | Every finding decided | Success callout "Every finding in <ID> has a decision" with "Next incident" |
-| Finalized audit | Read only: no Accept, Edit, Reject or Change decision |
+| Record saved | Read only: no Accept, Edit, Reject or Change decision. "Add to revision…" still works for an accepted package fix |
 | Read only (Viewer) | The same evidence and cards; no footers, no bulk button, no shortcuts |
 | Older reviews | When the item has more than one review, a "Reviews" `Select` in the header ("Current: Oct 28, 9:41 AM", "Oct 28, 9:12 AM, failed") shows an older one read only |
 
@@ -108,7 +109,7 @@ Option 2's design shows a later moment than option 1: the diagnosis and the firs
 
 ## Audit log
 
-`finding.accept`, `finding.edit` (the edited field names, not their values), `finding.reject` (with the note), `finding.reopen` (change decision), `finding.bulk-accept`.
+`finding.accept`, `finding.edit` (the edited field names, not their values), `finding.reject` (with the note), `finding.reopen` (change decision), `finding.accept-all`, `finding.citation.check`. Adding a finding to a revision is recorded by the revisions module.
 
 ## Data
 
@@ -118,7 +119,7 @@ Option 2's design shows a later moment than option 1: the diagnosis and the firs
 
 ## Components
 
-`StatusBadge`, `Callout`, `EmptyState`, `LiveJobProgress`, `Time`, `SafeMarkdown`, `Checkbox`, shadcn `Card`, `Select`, `RadioGroup`, `Textarea`, `Popover`, `Sheet`, `ToggleGroup`, `Switch`. New, local to the page: `CitationChip`, `FindingCard`, `RecordExcerpt`.
+`StatusBadge`, `Callout`, `EmptyState`, `LiveJobProgress`, `Time`, `SafeMarkdown`, `Checkbox`, shadcn `Card`, `Select`, `RadioGroup`, `Textarea`, `Sheet`, `ToggleGroup`, `Switch`. Local to the audit pages: `CitationChip`, `FindingCard`, `RecordCard`, `DecisionButtons`, `NextStepPanel`, `AddToRevisionDialog`.
 
 ## Open items
 

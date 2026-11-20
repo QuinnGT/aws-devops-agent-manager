@@ -44,9 +44,76 @@ const groundTruthInput = z.object({
 
 const labeled = z.object({ id: z.string(), label: z.string(), description: z.string().default("") });
 
+/**
+ * Who writes each review. "ai-sdk": a model in Amazon Bedrock, through the AI SDK, with
+ * tools over the records. "handoff": review files a person runs with an agent of their
+ * choice and imports back. "devops-agent-chat": a DevOps Agent chat in the space, with
+ * the review files attached. The audit's choice is stored in its profile snapshot.
+ */
+export const REVIEW_RUNNERS = ["ai-sdk", "handoff", "devops-agent-chat"] as const;
+export type ReviewRunner = (typeof REVIEW_RUNNERS)[number];
+
+/** A choice the app offers for a runner, for example the chat's model tier. */
+const runnerOption = z.object({
+  label: z.string(),
+  description: z.string().default(""),
+  default: z.string(),
+  values: z.array(labeled).min(1),
+});
+
+/** How a runner is shown on the audit form, and the options it offers. */
+const runnerEntry = z
+  .object({
+    label: z.string(),
+    description: z.string().default(""),
+    options: z.record(z.string().regex(/^[a-zA-Z][a-zA-Z0-9]*$/), runnerOption).default({}),
+  })
+  .refine((r) => Object.values(r.options).every((o) => o.values.some((v) => v.id === o.default)), "each option's default must be one of its values");
+
+/** Settings for reviews written from files (hand-off and chat): every record in one file instead of tools. */
+const filesReviewConfig = z.object({
+  /** Reviewer system prompt for a review that reads records.md instead of calling tools */
+  systemPrompt: policyPath.optional(),
+  /** Text for {{record_access}} in the brief when the review reads records.md */
+  recordAccessPrompt: policyPath.optional(),
+  /** Longest record text in records.md, in characters; longer records are cut with a note */
+  recordCharsCap: z.number().int().positive().optional(),
+});
+
 const reviewConfig = z.object({
-  /** "ai-sdk": AI SDK + Bedrock Converse. The Claude Agent SDK runner is a later addition. */
-  runner: z.enum(["ai-sdk"]).default("ai-sdk"),
+  /** The profile's default runner; the audit form can choose another */
+  runner: z.enum(REVIEW_RUNNERS).default("ai-sdk"),
+  /** The chosen runner's option values (see reviewers.<runner>.options), set in the app */
+  runnerOptions: z.record(z.string(), z.string()).optional(),
+  /** Text for {{record_access}} in the brief when the review uses tools */
+  recordAccessPrompt: policyPath.optional(),
+  /** Reviews written from files: hand-off and chat */
+  files: filesReviewConfig.optional(),
+  /** Reviews run as a DevOps Agent chat in the space (runner "devops-agent-chat") */
+  chat: z
+    .object({
+      /** Message sent to the chat: the reviewer system prompt, the output schema and the reply rules ({{placeholders}} filled by the app) */
+      messageTemplate: policyPath.optional(),
+      /** Message sent in the same chat when the first reply is not a JSON object */
+      repairPrompt: policyPath.optional(),
+      /** Message sent in the same chat when the reply is JSON but breaks the output schema ({{schema_errors}} filled by the app) */
+      schemaRepairPrompt: policyPath.optional(),
+      /** Longest message the chat accepts, in characters (the service refuses more) */
+      messageCharsCap: z.number().int().positive().optional(),
+      /** Largest total size of the attached review files, in bytes; a larger review fails before any call */
+      attachmentBytesCap: z.number().int().positive().optional(),
+      /**
+       * Start of the file name of each attached review file. The sync leaves attachments with this
+       * start out of history (sync.yaml ignoredAttachmentPrefixes), so keep the two in step.
+       */
+      attachmentPrefix: z
+        .string()
+        .regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,39}$/)
+        .optional(),
+      /** Seconds between checks whether the audit was cancelled while the chat answers */
+      cancelCheckSeconds: z.number().min(0).optional(),
+    })
+    .optional(),
   /**
    * Optional fallback only. The review model is chosen in the app (the audit, then the
    * space default in Space settings); see src/server/ai/models.ts. The shipped policy sets none.
@@ -167,7 +234,7 @@ const reportConfig = z.object({
   /** Output rule severities that refuse an export */
   exportBlockOn: z.array(z.enum(["error", "warning"])).default(["error"]),
   /** Finalize commit subject; placeholders {auditName}, {spaceAlias}, {auditId} */
-  commitMessage: z.string().default("Finalize audit {auditName} of {spaceAlias}"),
+  commitMessage: z.string().default("Save audit record {auditName} of {spaceAlias}"),
   committer: z.object({ name: z.string().min(1), email: z.string().min(1) }).default(committerDefault),
 });
 
@@ -183,12 +250,41 @@ export const auditProfileSchema = z.object({
   analyzers: z.array(z.string()).min(1),
   review: reviewConfig,
   failureModes: z.array(labeled).default([]),
-  fixOwners: z.array(labeled).default([]),
+  /** Who a fix is for. changesPackage: the fix is a change to the instruction package, made in a revision; otherwise it is an action for people, listed in the report. */
+  fixOwners: z.array(labeled.extend({ changesPackage: z.boolean().default(false) })).default([]),
   findings: z.array(findingExtractor).min(1),
   report: reportConfig,
 });
 
 export type AuditProfile = z.output<typeof auditProfileSchema>;
+
+const MIB = 1024 * 1024;
+
+/**
+ * Hand-off audits (runner "handoff"): the review files written for each investigation
+ * and the limits on the reviews imported back. Every size is a cap, so an upload that is
+ * too large or unpacks to too much is refused before it is read.
+ */
+const handoffConfig = z.object({
+  /** Text written beside each investigation's review files; {{placeholders}} are filled in */
+  readme: policyPath.default("prompts/handoff-readme.md"),
+  import: z
+    .object({
+      /** Largest upload, a zip or one review file, in bytes */
+      maxUploadBytes: z.number().int().positive().default(25 * MIB),
+      /** Most entries in an uploaded zip */
+      maxZipEntries: z.number().int().positive().default(2000),
+      /** Largest file inside an uploaded zip, in bytes (a zip of the review folders holds records.md beside review.json) */
+      maxEntryBytes: z.number().int().positive().default(16 * MIB),
+      /** Largest total of an uploaded zip's files once unzipped, in bytes */
+      maxUncompressedBytes: z.number().int().positive().default(512 * MIB),
+      /** Largest review.json or manifest.json, in bytes */
+      maxReviewBytes: z.number().int().positive().default(2 * MIB),
+      /** Longest reviewer label, in characters */
+      maxLabelChars: z.number().int().positive().default(80),
+    })
+    .prefault({}),
+});
 
 export const auditsSection = defineSection(
   "audits.yaml",
@@ -199,6 +295,12 @@ export const auditsSection = defineSection(
     maxEvidenceUploadBytes: z.number().int().positive().default(50 * 1024 * 1024),
     /** Default profile for a new audit */
     defaultProfile: z.string(),
+    /** The review runners the audit form offers, with their labels and options; a runner left out is not offered */
+    reviewers: z
+      .object({ "ai-sdk": runnerEntry.optional(), handoff: runnerEntry.optional(), "devops-agent-chat": runnerEntry.optional() } satisfies Record<ReviewRunner, unknown>)
+      .default({}),
     profiles: z.record(z.string().regex(/^[a-z][a-z0-9-]*$/), auditProfileSchema).refine((p) => Object.keys(p).length > 0, "at least one profile"),
+    /** Review files and review import for hand-off audits */
+    handoff: handoffConfig.prefault({}),
   }),
 );

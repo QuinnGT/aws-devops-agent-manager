@@ -7,6 +7,7 @@ import { exportSections } from "./content";
 import { auditDirFor } from "./finalize";
 import { DRAFT_NARRATIVE_QUEUE, FINALIZE_QUEUE } from "./jobs";
 import { loadReportContext } from "./loader";
+import { loadRecordInfo, type RecordInfo } from "./record";
 import { reportModelOf, type ReportModel } from "./model";
 import { AUDIENCES, type Audience, type ReportSectionView, type ReportView } from "./types";
 
@@ -124,6 +125,8 @@ export function audienceSummaries(view: Pick<ReportView, "sections">): Record<Au
 export interface ReportPage {
   view: ReportView;
   model: ReportModel;
+  /** Who wrote the audit's reviews (profile review.runner), for the words about drafting */
+  runner: string;
   /** The profile's finding kinds with their labels, in profile order */
   kinds: { kind: string; label: string; perInvestigation: boolean }[];
   narrativeMaxChars: number;
@@ -134,6 +137,8 @@ export interface ReportPage {
    * `local` says why a commit stays on this machine: the repository has no remote, or pushing is off.
    */
   repository: { name: string; folder: string; local: "no-remote" | "push-off" | null } | null;
+  /** What "Save the audit record" does (branch, files, push) and, once saved, what it did */
+  record: RecordInfo;
   /** Journal SHA-256s audit.json records */
   journalCount: number;
   audiences: Record<Audience, AudienceSummary>;
@@ -191,12 +196,13 @@ export async function loadReportPage(space: Space, auditId: string): Promise<Rep
   const rc = await loadReportContext(space, auditId);
   if (!rc) return null;
   const { view, profile, policy, audit, data } = rc;
-  const [repoRow, events, jobs] = await Promise.all([getHistoryRepoForSpace(space), loadDraftEvents(space.id, audit.id), loadReportJobs(space.id, audit.id)]);
+  const [repoRow, events, jobs, record] = await Promise.all([getHistoryRepoForSpace(space), loadDraftEvents(space.id, audit.id), loadReportJobs(space.id, audit.id), loadRecordInfo(space, audit, policy.policy.historyLayout)]);
   const finalizeJobs = jobs.filter((j) => j.queue === FINALIZE_QUEUE);
   const lastFinalize = finalizeJobs[0];
   return {
     view,
     model: reportModelOf(profile, space.parsedSettings, policy.policy.audits.profiles[audit.profileId] ?? null),
+    runner: profile.review.runner,
     kinds: profile.findings.map((f) => ({ kind: f.kind, label: f.label, perInvestigation: f.from === "$" })),
     narrativeMaxChars: profile.report.narrativeMaxChars,
     excerptChars: policy.policy.outputRules.excerptChars,
@@ -207,13 +213,14 @@ export async function loadReportPage(space: Space, auditId: string): Promise<Rep
           local: !repoRow.remoteUrl ? "no-remote" : !repoRow.pushEnabled ? "push-off" : null,
         }
       : null,
+    record,
     journalCount: data.items.filter((i) => i.journalSha256).length,
     audiences: audienceSummaries(view),
     drafts: sectionDraftInfo(view.sections, events, jobs),
     finalizeRunId: finalizeJobs.find((j) => OPEN.has(j.status))?.id ?? null,
     finalizeFailed:
       lastFinalize?.status === "failed" && view.audit.state !== "finalized"
-        ? { at: (lastFinalize.finishedAt ?? lastFinalize.createdAt).toISOString(), error: lastFinalize.error ?? "Finalizing stopped without an error message." }
+        ? { at: (lastFinalize.finishedAt ?? lastFinalize.createdAt).toISOString(), error: lastFinalize.error ?? "Saving the record stopped without an error message." }
         : null,
   };
 }

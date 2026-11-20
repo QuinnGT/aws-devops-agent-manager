@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyQuickFix, changelogPreview, deleteOpenFile, diffGroups, editedFiles, fileTerms, lineCounts, markSaved, namesText, newFileProblem, rankFindings, renameOpenFile, restoreOpenFile, saveButtonReason, searchFindings, splitIncident, type OpenFile } from "./editor-state";
+import { applyQuickFix, changelogPreview, deleteOpenFile, diffGroups, editedFiles, fileTerms, groupFindings, incidentAndText, lineCounts, markSaved, namesText, newFileProblem, preselectedFindings, rankFindings, renameOpenFile, restoreOpenFile, saveButtonReason, searchFindings, splitIncident, type OpenFile } from "./editor-state";
 import { branchPreview, exportLeftOutText, folderPreview, matchesName, matchesState, nameProblem, parseRevisionListParams, planButtonReason, planHint, freeRevisionName, revisionListQuery, revisionNameFromFile, revisionWord, usualLayoutText } from "./words";
 
 const file = (path: string, base: string | null, text: string): OpenFile => ({ path, base, text, kind: "text", size: text.length });
@@ -181,6 +181,44 @@ describe("save dialog finding order", () => {
     expect(rankFindings(list, ["README.md"])).toEqual({ related: [], rest: list });
     // The search also reads the finding's text.
     expect(searchFindings(list, "weekday").map((x) => x.id)).toEqual(["d"]);
+  });
+});
+
+describe("findings sent to the revision in the save dialog", () => {
+  const f = (id: string, title: string, incidentId: string | null, toAddress = false, text = "") => ({ id, title, incidentId, kindLabel: "Fix", auditName: "Late October", toAddress, text });
+  const list = [f("a", "Plain fix", "INCIDENT-1"), f("b", "Sent fix", "INCIDENT-2", true), f("c", "Edit incident-rca.md", "INCIDENT-3"), f("d", "Sent too", "INCIDENT-4", true)];
+
+  it("groups the sent findings first, then those naming an edited file, then the rest", () => {
+    const groups = groupFindings(list, ["instructions/incident-rca.md"]);
+    expect(groups.map((g) => [g.key, g.items.map((x) => x.id)])).toEqual([
+      ["sent", ["b", "d"]],
+      ["related", ["c"]],
+      ["rest", ["a"]],
+    ]);
+    // Empty groups are left out, and a finding sent to the revision is never ranked as related.
+    expect(groupFindings(list.filter((x) => !x.toAddress), []).map((g) => g.key)).toEqual(["rest"]);
+    expect(groupFindings([], ["README.md"])).toEqual([]);
+    expect(groupFindings(list, ["instructions/sent.md"]).find((g) => g.key === "related")).toBeUndefined();
+  });
+
+  it("ticks the sent findings, up to what one save can link, and says how many were left", () => {
+    expect(preselectedFindings(list, 20)).toEqual({ ids: ["b", "d"], left: 0 });
+    expect(preselectedFindings(list, 1)).toEqual({ ids: ["b"], left: 1 });
+    expect(preselectedFindings(list, 0)).toEqual({ ids: [], left: 2 });
+    expect(preselectedFindings([f("a", "x", null)], 5)).toEqual({ ids: [], left: 0 });
+  });
+
+  it("refuses a save that links more findings than the policy allows", () => {
+    const base = { message: "Fix", findings: 3, reason: "", rule: "reason" as const, reasonMinChars: 10, messageMaxChars: 200, files: 1 };
+    expect(saveButtonReason({ ...base, maxFindings: 3 })).toBeNull();
+    expect(saveButtonReason({ ...base, maxFindings: 2 })).toBe("One save can link at most 2 findings.");
+    expect(saveButtonReason(base)).toBeNull();
+  });
+
+  it("splits the incident ID off a finding's title for the to-address card", () => {
+    expect(incidentAndText("INCIDENT-31499: kept a resolved gap open", "INCIDENT-31499")).toEqual({ incident: "INCIDENT-31499", text: "kept a resolved gap open" });
+    expect(incidentAndText("Record precedents only as hypotheses", "INCIDENT-31495")).toEqual({ incident: "INCIDENT-31495", text: "Record precedents only as hypotheses" });
+    expect(incidentAndText("A finding with no incident", null)).toEqual({ incident: null, text: "A finding with no incident" });
   });
 });
 

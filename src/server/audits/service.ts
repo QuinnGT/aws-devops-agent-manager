@@ -1,6 +1,6 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
-import { MODEL_ID_PATTERN, NO_REVIEW_MODEL_REASON, resolveAuditModels } from "@/server/ai/models";
+import { MODEL_ID_PATTERN, NO_REVIEW_MODEL_REASON } from "@/server/ai/models";
 import { noCredentialsText } from "@/server/ai/error-kind";
 import { recordAuditEvent } from "@/server/audit-log";
 import type { Actor } from "@/server/aws/clients";
@@ -15,7 +15,8 @@ import { auditRunJob, enqueueReview } from "./jobs";
 import { getProfile, loadedPolicyForSpace } from "./profiles";
 import { dispatchReviews } from "./run";
 import { assertWithinLimit, assignCohorts, resolveSelection, selectionSchema, type SelectedItem } from "./selection";
-import { auditStateReason, canCancelAudit, canDeleteAudit, canEditSelection, canRerunItem, canStartAudit, type AuditItemState } from "./states";
+import { modelsForRunner, resolveReviewer, withReviewer } from "./reviewers";
+import { auditStateReason, canCancelAudit, canDeleteAudit, canEditSelection, canRerunItem, canStartAudit, HANDOFF_RERUN_REASON, type AuditItemState } from "./states";
 import { getSpaceById } from "@/server/spaces/queries";
 import type { AuditProfile } from "@/server/policy/sections/audits";
 import { getAudit, getAuditItem, listAuditItems, profileOf, readinessOf, type AuditRow } from "./store";
@@ -35,6 +36,10 @@ export const createAuditInput = z.object({
   /** The audit's own models; empty uses the space default (src/server/ai/models.ts) */
   reviewModelId: z.string().trim().regex(MODEL_ID_PATTERN, "Enter a Bedrock model ID or inference profile ID.").nullish(),
   reportModelId: z.string().trim().regex(MODEL_ID_PATTERN, "Enter a Bedrock model ID or inference profile ID.").nullish(),
+  /** Who writes the reviews (policy.audits.reviewers); empty uses the profile's runner. Checked against policy. */
+  runner: z.string().trim().max(50).nullish(),
+  /** The runner's option values by option ID; options left out take the policy's default */
+  runnerOptions: z.record(z.string().max(100), z.string().max(100)).nullish(),
 });
 
 export type CreateAuditInput = z.input<typeof createAuditInput>;
@@ -77,10 +82,11 @@ export async function createAudit(actor: Actor, spaceId: string, input: CreateAu
   const req = parseOrThrow(createAuditInput, input);
   const loaded = await loadedPolicyForSpace(spaceId);
   const { id: profileId, profile: policyProfile } = getProfile(loaded.policy, req.profileId);
+  const reviewer = resolveReviewer(loaded.policy, policyProfile, { runner: req.runner, runnerOptions: req.runnerOptions });
   // The resolved models go into the snapshot, so the audit keeps them if the space default changes later.
   const space = await getSpaceById(spaceId);
-  const models = resolveAuditModels(policyProfile, space?.parsedSettings, { reviewModelId: req.reviewModelId, reportModelId: req.reportModelId });
-  const profile = withModels(policyProfile, models.review.id, req.reportModelId || space?.parsedSettings.inference.reportModelId || policyProfile.report.modelId || null);
+  const models = modelsForRunner(reviewer.runner, policyProfile, space?.parsedSettings, { reviewModelId: req.reviewModelId, reportModelId: req.reportModelId });
+  const profile = withReviewer(withModels(policyProfile, models.review.id, req.reportModelId || space?.parsedSettings.inference.reportModelId || policyProfile.report.modelId || null), reviewer);
   const max = loaded.policy.audits.maxItemsPerAudit;
   const groups = [];
   for (const s of req.selections) groups.push({ cohort: s.cohort ?? null, tasks: await resolveSelection(spaceId, s, max) });
@@ -107,6 +113,8 @@ export async function createAudit(actor: Actor, spaceId: string, input: CreateAu
       policyDigest: loaded.digest,
       items: items.length,
       selections: req.selections.map((s) => s.by),
+      runner: reviewer.runner,
+      runnerOptions: reviewer.runnerOptions,
       reviewModelId: models.review.id,
       reviewModelSource: models.review.source,
       reportModelId: models.report.id,
@@ -120,13 +128,19 @@ export const auditModelsInput = z.object({
   /** Empty or null: the space default (src/server/ai/models.ts) */
   reviewModelId: z.string().trim().regex(MODEL_ID_PATTERN, "Enter a Bedrock model ID or inference profile ID.").or(z.literal("")).nullish(),
   reportModelId: z.string().trim().regex(MODEL_ID_PATTERN, "Enter a Bedrock model ID or inference profile ID.").or(z.literal("")).nullish(),
+  /** Who writes the reviews; left out, the audit keeps its reviewer. Checked against policy. */
+  runner: z.string().trim().max(50).nullish(),
+  /** The runner's option values; left out, the audit keeps its values (or the defaults for a new runner) */
+  runnerOptions: z.record(z.string().max(100), z.string().max(100)).nullish(),
 });
 
 /**
- * Choose a draft's review and report models. Empty uses the space default as
+ * Choose a draft's reviewer and its review and report models. Empty uses the space default as
  * it is now (then the profile's fallback). The resolved IDs are written into
  * the profile snapshot as createAudit does, and the sources go into the audit
- * event, which the audit page reads to say where each model came from.
+ * event, which the audit page reads to say where each model came from. Only the
+ * Bedrock runner reviews with a model; for another runner the review model is
+ * left empty.
  */
 export async function setAuditModels(
   actor: Actor,
@@ -141,10 +155,17 @@ export async function setAuditModels(
   const space = await getSpaceById(spaceId);
   // The policy's own fallbacks, not the snapshot's (which holds the earlier choice).
   const policyProfile = loaded.policy.audits.profiles[audit.profileId] ?? profileOf(audit);
-  const models = resolveAuditModels(policyProfile, space?.parsedSettings, { reviewModelId: req.reviewModelId || null, reportModelId: req.reportModelId || null });
   const current = profileOf(audit);
+  const changesReviewer = req.runner !== undefined || req.runnerOptions !== undefined;
+  let reviewer = { runner: current.review.runner, runnerOptions: current.review.runnerOptions ?? {} };
+  if (changesReviewer) {
+    const runner = req.runner || current.review.runner;
+    const same = runner === current.review.runner;
+    reviewer = resolveReviewer(loaded.policy, same ? current : policyProfile, { runner, runnerOptions: req.runnerOptions ?? (same ? current.review.runnerOptions : undefined) });
+  }
+  const models = modelsForRunner(reviewer.runner, policyProfile, space?.parsedSettings, { reviewModelId: req.reviewModelId || null, reportModelId: req.reportModelId || null });
   const reportId = models.report.source === "review-model" ? null : models.report.id;
-  const snapshot = withModels(current, models.review.id, reportId);
+  const snapshot = withReviewer(withModels(current, models.review.id, reportId), reviewer);
   const updated = await db()
     .update(audits)
     .set({ profileSnapshot: snapshot })
@@ -158,6 +179,9 @@ export async function setAuditModels(
     targetType: "audit",
     targetId: audit.id,
     details: {
+      runner: reviewer.runner,
+      runnerOptions: reviewer.runnerOptions,
+      previousRunner: current.review.runner,
       reviewModelId: models.review.id,
       reviewModelSource: models.review.source,
       reportModelId: models.report.id,
@@ -247,13 +271,16 @@ export async function startAudit(
   const audit = await auditOrThrow(spaceId, auditId);
   if (!canStartAudit(audit.state)) throw new AuditRequestError("state", auditStateReason("start", audit.state));
   const profile = profileOf(audit);
-  if (!profile.review.modelId) throw new AuditRequestError("invalid", NO_REVIEW_MODEL_REASON, { missing: "reviewModel" });
-  // The reviews call Bedrock with the space's credentials: with none, every review would fail at once.
-  const space = await getSpaceById(spaceId);
-  if (!space) throw new AuditRequestError("not-found", "The space no longer exists.");
-  const bedrock = await checkBedrock(space, actor, { list: deps.listCatalog });
-  if (bedrockBlocksStart(bedrock.kind)) {
-    throw new AuditRequestError("not-ready", noCredentialsText(true), { bedrock: bedrock.kind, region: bedrock.region });
+  // Only the Bedrock reviewer needs a model and the space's credentials. Review files and the other runners do not.
+  if (profile.review.runner === "ai-sdk") {
+    if (!profile.review.modelId) throw new AuditRequestError("invalid", NO_REVIEW_MODEL_REASON, { missing: "reviewModel" });
+    // The reviews call Bedrock with the space's credentials: with none, every review would fail at once.
+    const space = await getSpaceById(spaceId);
+    if (!space) throw new AuditRequestError("not-found", "The space no longer exists.");
+    const bedrock = await checkBedrock(space, actor, { list: deps.listCatalog });
+    if (bedrockBlocksStart(bedrock.kind)) {
+      throw new AuditRequestError("not-ready", noCredentialsText(true), { bedrock: bedrock.kind, region: bedrock.region });
+    }
   }
   const items = await listAuditItems(audit.id);
   if (!items.length) throw new AuditRequestError("invalid", "The audit has no investigations.");
@@ -381,6 +408,8 @@ export async function rerunFailedItems(actor: Actor, spaceId: string, auditId: s
   const audit = await auditOrThrow(spaceId, auditId);
   const failed = (await listAuditItems(audit.id)).filter((i) => i.state === "failed");
   if (!failed.length) return { queued: 0, left: 0 };
+  // A hand-off audit has no review job to run again.
+  if (profileOf(audit).review.runner === "handoff") return { queued: 0, left: failed.length };
   const kinds = new Map(failed.map((i) => [i.id, reviewFailureKind(i.stateReason)]));
   let accessWorksNow = false;
   if ([...kinds.values()].some((k) => k === "no-credentials" || k === "expired")) {
@@ -403,6 +432,7 @@ export async function rerunItem(actor: Actor, spaceId: string, auditId: string, 
   const audit = await auditOrThrow(spaceId, auditId);
   const item = await getAuditItem(audit.id, itemId);
   if (!item) throw new AuditRequestError("not-found", "The investigation is not in this audit.");
+  if (profileOf(audit).review.runner === "handoff") throw new AuditRequestError("state", HANDOFF_RERUN_REASON);
   let allowed = canRerunItem(audit.state, item.state);
   if (!allowed && item.state === "reviewing" && (audit.state === "running" || audit.state === "reviewing")) {
     // A review whose job ended without settling the item (worker lost) can be started again.

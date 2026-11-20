@@ -11,6 +11,12 @@ import {
   goToSection,
   joinNames,
   localRecordText,
+  pushPlanText,
+  recordFileHolds,
+  remoteHelp,
+  savedPushText,
+  fileStatusText,
+  shortCommit,
   MODEL_TEXT_NOTICE,
   pluralLabel,
   ruleErrorsText,
@@ -115,7 +121,7 @@ describe("report words", () => {
     expect(undecidedText(9)).toBe("9 findings still need a decision.");
     expect(undecidedText(1)).toBe("1 finding still needs a decision.");
     expect(finalizeBlock({ state: "running", issues: [open], hasRepository: true })).toEqual({ reason: "Wait for the reviews to finish.", link: null });
-    expect(finalizeBlock({ state: "cancelled", issues: [], hasRepository: true })?.reason).toContain("cancelled");
+    expect(finalizeBlock({ state: "cancelled", issues: [], hasRepository: true })?.reason).toBe("The audit was cancelled, so its record can't be saved.");
     expect(finalizeBlock({ state: "reviewing", issues: [], hasRepository: false })).toEqual({ reason: "The history repository isn't set up for this space.", link: "settings" });
     // Other issues (an open investigation) are listed in the dialog, so the button opens it.
     expect(finalizeBlock({ state: "reviewing", issues: [open], hasRepository: true })).toBeNull();
@@ -142,13 +148,70 @@ describe("model text that needs a person's check", () => {
   });
 
   it("says when the finalize commit stays on this machine, as Home does", () => {
-    expect(localRecordText("demo-history", "no-remote")).toBe("demo-history has no remote, so this audit record stays on this machine until a remote is set. Add one so the history is also kept off this machine.");
-    expect(localRecordText("demo-history", "push-off")).toContain("stays on this machine until it is turned on");
+    expect(localRecordText("demo-history", "no-remote")).toBe(
+      "demo-history has no remote (a copy of the repository on a server such as GitHub), so this audit record stays on this machine until one is set. Add one so the history is also kept off this machine.",
+    );
+    expect(localRecordText("demo-history", "push-off")).toBe("Copying to the remote is off for demo-history, so this audit record stays on this machine until it is turned on.");
     expect(localRecordText("demo-history", null)).toBeNull();
   });
 
   it("uses no em or en dashes", () => {
     const all = [approvalNotice({ draftedBeforeDecisions: true, canApprove: false }).body, unapprovedTitle(["A", "B", "C"]), unapprovedExportBody(2), localRecordText("r", "no-remote"), localRecordText("r", "push-off")].join(" ");
+    expect(all).not.toMatch(/[\u2013\u2014]/);
+  });
+});
+
+describe("where the saved record went", () => {
+  it("says where a save will push, before it is saved", () => {
+    expect(pushPlanText({ kind: "pushes", remote: "git@github.com:acme/history.git" })).toEqual({ tone: "success", text: "Pushes to git@github.com:acme/history.git" });
+    expect(pushPlanText({ kind: "local", reason: "no-remote", remote: null })).toEqual({ tone: "warning", text: "Local only: this repository has no remote" });
+    expect(pushPlanText({ kind: "local", reason: "push-off", remote: "https://example.com/h.git" }).text).toBe("Local only: pushing is off for this repository");
+  });
+
+  it("says what happened to the commit, after it is saved", () => {
+    expect(savedPushText({ pushed: true, error: null, remote: "git@github.com:acme/history.git" }, null)).toEqual({ tone: "success", text: "Pushed to git@github.com:acme/history.git" });
+    expect(savedPushText({ pushed: false, error: "remote rejected the push.", remote: "git@example.com:h.git" }, null)).toEqual({
+      tone: "destructive",
+      text: "Saved here, but the push to git@example.com:h.git failed: remote rejected the push. The next push carries it.",
+    });
+    expect(savedPushText({ pushed: false, error: null, remote: null }, null)).toEqual({ tone: "warning", text: "Local only: this repository has no remote" });
+    expect(savedPushText({ pushed: false, error: null, remote: "git@example.com:h.git" }, null).text).toBe("Not pushed: pushing was off for this repository");
+  });
+
+  it("admits when an older save didn't keep the push result", () => {
+    expect(savedPushText(null, null).text).toBe("The push result wasn't kept for this save.");
+    expect(savedPushText(null, { kind: "local", reason: "no-remote", remote: null }).text).toBe("The push result wasn't kept for this save. Local only: this repository has no remote.");
+  });
+
+  it("words a file's status and the short commit", () => {
+    expect(fileStatusText("new")).toBe("new");
+    expect(fileStatusText("changed")).toBe("replaces the file that is there");
+    expect(shortCommit("5e1c2a90cafe0000")).toBe("5e1c2a9");
+  });
+});
+
+describe("plain words for the saved files", () => {
+  it("explains a fingerprint instead of naming a hash", () => {
+    const text = recordFileHolds("audit.json", { journalCount: 3, acceptedCount: 4, reportSections: 8 });
+    expect(text).toContain("a fingerprint of each of the 3 journals so a later change to a journal can be detected");
+    expect(text).not.toMatch(/sha/i);
+    expect(recordFileHolds("audit.json", { journalCount: 1, acceptedCount: 0, reportSections: 0 })).toContain("a fingerprint of the 1 journal so");
+  });
+
+  it("says what the other files hold, with the counts of this audit", () => {
+    expect(recordFileHolds("findings.json", { journalCount: 3, acceptedCount: 1, reportSections: 8 })).toBe("the 1 accepted finding with their citations");
+    expect(recordFileHolds("findings.json", { journalCount: 3, acceptedCount: 4, reportSections: 8 })).toBe("the 4 accepted findings with their citations");
+    expect(recordFileHolds("report.md", { journalCount: 3, acceptedCount: 4, reportSections: 1 })).toBe("the report as text, 1 section");
+  });
+
+  it("says what copying to the remote means for each repository", () => {
+    expect(remoteHelp({ kind: "pushes", remote: "git@github.com:acme/history.git" })).toBe("The saved commit is copied to the remote when you save.");
+    expect(remoteHelp({ kind: "local", reason: "no-remote", remote: null })).toContain("A remote is a copy of the repository on a server");
+    expect(remoteHelp({ kind: "local", reason: "push-off", remote: "x" })).toBe("Copying to the remote is off for this repository, so the record stays on this machine.");
+  });
+
+  it("uses no em or en dashes", () => {
+    const all = [recordFileHolds("audit.json", { journalCount: 2, acceptedCount: 1, reportSections: 3 }), remoteHelp({ kind: "local", reason: "no-remote", remote: null })].join(" ");
     expect(all).not.toMatch(/[\u2013\u2014]/);
   });
 });

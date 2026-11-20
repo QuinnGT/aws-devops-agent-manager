@@ -259,7 +259,7 @@ export function NarrativeSection(p: NarrativeSectionProps) {
           ) : null
         }
       >
-        {p.canEdit ? "Draft it with the model, or write it yourself with Edit." : "Someone who can run audits drafts or writes this section."}
+        {p.canEdit ? (p.draft?.disabledReason ? "Write it yourself with Edit." : "Draft it with the model, or write it yourself with Edit.") : "Someone who can run audits drafts or writes this section."}
       </EmptyState>
     );
   }
