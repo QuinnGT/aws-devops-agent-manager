@@ -25,7 +25,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends tini
 # The runtime is Amazon Linux 2023 minimal (glibc, so the native addons built above load), not Debian 13, which still
 # had 438 open CVEs with no fix. Only node, git, ssh and the user tools are installed; no npm, corepack or yarn.
 # Pinned by digest; `microdnf upgrade` picks up fixes published after it.
-FROM public.ecr.aws/amazonlinux/amazonlinux:2023-minimal@sha256:c64f3b683d01c1c874831adc6a7b5a2fd6f0f9affd58bc638939a9f46cc03543 AS runtime
+FROM public.ecr.aws/amazonlinux/amazonlinux:2023-minimal@sha256:75a2d4226d9b98c914d7eed878a03bef4f365ad548be5d28d464ccba504cec79 AS runtime
 RUN microdnf -y upgrade --refresh && microdnf -y install --setopt=install_weak_deps=0 nodejs24 git-core openssh-clients shadow-utils \
   && microdnf clean all \
   && groupadd -g 10001 app && useradd --create-home --uid 10001 --gid 10001 app \
