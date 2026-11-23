@@ -163,6 +163,16 @@ See [Policy](policy.md#when-policy-has-an-error).
 
 The app finds the source from CloudTrail. Check that the read role may call [`LookupEvents`](https://docs.aws.amazon.com/awscloudtrail/latest/APIReference/API_LookupEvents.html). CloudTrail keeps 90 days of events, so older changes stay Unknown, and an event can take a few minutes to arrive. The home page flags only unknown changes inside the lookup window.
 
+### A sync, release or saved audit record fails in a git hook
+
+The worker commits to the history repository with `git commit`, so your `pre-commit` and `commit-msg` hooks run on its commits: the repository's own hooks, and those that `core.hooksPath` sets in the git configuration of the user who runs the worker. A hook that rejects a commit fails the job. For example, a secret scanner can flag a key-like string in an asset.
+
+1. Read the hook's message in the worker's log, on a line that ends the job with `failed:`. In a native run it is the terminal that runs `pnpm dev:worker`.
+2. Fix the cause, or change the hook's rule or allowlist if the match is not a secret. Leave the hook on: it is the same check as for any other commit on the computer.
+3. Run the job again, for example with "Sync now".
+
+Git runs the hooks with only `PATH`, `HOME` and the `GIT_*` variables the worker sets, so a hook that needs another environment variable fails. The container image has no global git configuration, so hooks set on your computer do not run in the container stack.
+
 ## Jobs that never finish
 
 ### "Waiting for the background worker"
@@ -179,7 +189,7 @@ Syncs, exports, imports, applies and audits run in the worker. If a job stays qu
 
 The audit reaches Amazon Bedrock through the space's read role, in the space's Region unless Space settings sets another. The role needs:
 
-- `bedrock:InvokeModel` and `bedrock:InvokeModelWithResponseStream` on the chosen model or inference profile. For an inference profile, also on the models in each Region it routes to.
+- `bedrock:InvokeModel` on the chosen model or inference profile. For an inference profile, also on the models in each Region it routes to. The app does not stream, so `bedrock:InvokeModelWithResponseStream` is not needed.
 - `bedrock:ListInferenceProfiles` and `bedrock:ListFoundationModels` to fill the model list in Space settings and on "New audit". Without them, type the model ID.
 
 The action names are in the [Amazon Bedrock authorization reference](https://docs.aws.amazon.com/service-authorization/latest/reference/list_bedrock.html). After the policy changes, rerun the review from the audit page. See [AWS setup](aws-setup.md).

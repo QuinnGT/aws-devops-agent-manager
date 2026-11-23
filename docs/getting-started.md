@@ -11,7 +11,7 @@ You need:
 1. A container engine. [Podman](https://podman.io/docs/installation) is the default. On macOS and Windows, Podman runs containers in a virtual machine, so also run `podman machine init` once and `podman machine start` after each restart of your computer.
 2. A compose provider for Podman. `podman compose` hands the work to [docker-compose or podman-compose](https://docs.podman.io/en/latest/markdown/podman-compose.1.html), so one of them must be installed.
 3. `git`, `curl` and `bash`.
-4. A few GB of free disk space for the image (about 1 GB) and the build.
+4. A few GB of free disk space for the image (under 1 GB) and the build.
 5. At least 3.5 GiB of memory for the container engine, if you build the image yourself. See [Memory for the build](#memory-for-the-build).
 6. To run against your own Agent Space: the [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html), version 2.9.6 or later. The demo does not need it.
 
@@ -48,9 +48,9 @@ The script:
 4. starts the web app and the worker,
 5. waits until the app answers and prints the address.
 
-Open `http://127.0.0.1:3001/spaces/anycompany-tickets`. You are signed in as Alex Rivera, the owner of the sample space, with no sign-in screen. The data is a fictional company, AnyCompany Tickets. [`sample-data/README.md`](../sample-data/README.md) says what it contains: two versions of an instruction package, eight audited investigations, releases, plans, audits with reports, and revisions.
+Open `http://127.0.0.1:3001/spaces/anycompany-tickets`. You are signed in as Alex Rivera, the owner of the sample space, with no sign-in screen. The data is a fictional company, AnyCompany Tickets. [`sample-data/README.md`](../sample-data/README.md) says what it contains: two versions of an instruction package, eight audited investigations, releases, plans, audits with reports, an audit reviewed with review files, and revisions, one of them holding fixes sent from an audit.
 
-What does not work in the demo is everything that calls AWS. A sync, **Test connection** and an audit reviewed by an Amazon Bedrock model all fail with a credentials error, because the sample space has no Agent Space behind it. An audit reviewed with review files calls no AWS API, so you can try it ([Audit without Bedrock](#audit-without-bedrock)). The worker runs, so imports, exports and analysis work. Scheduled syncs are switched off, so the pages keep showing the seeded data however long the demo runs. The reason and the setting are in [`scripts/demo-seed/policy/sync.yaml`](../scripts/demo-seed/policy/sync.yaml).
+What does not work in the demo is everything that calls AWS. A sync, **Test connection** and an audit reviewed by an Amazon Bedrock model all fail with a credentials error, because the sample space has no Agent Space behind it. An audit reviewed with review files calls no AWS API, so you can try it ([Audit without Bedrock](#audit-without-bedrock)). The audit "Early November, review files" shows one: one investigation has an imported review and two wait for a review file. The worker runs, so imports, exports and analysis work. Scheduled syncs are switched off, so the pages keep showing the seeded data however long the demo runs. The reason and the setting are in [`scripts/demo-seed/policy/sync.yaml`](../scripts/demo-seed/policy/sync.yaml).
 
 | To do this | Run |
 |---|---|
@@ -114,11 +114,11 @@ The sample data has reference reviews in `sample-data/audit/reviews/`. They cite
 
 The strip at the top of an audit shows the steps: Reviews, Decide, Fix in a revision, Report and Record, with what is left at each. Each cell links to its tab or card.
 
-1. Open the **Findings** tab. The list on the left is grouped by incident; the finding you select on the right is shown whole, with its evidence: each cited record, the quoted text and whether the citation check found it. **Accept**, **Edit** and **Reject** are the buttons at the top of the detail. The keys A, E, R, J and K do the same, and **Accept** on an incident's heading accepts the findings that passed the check.
-2. Under each finding, **What happens next** says where it goes. A fix for a memory or an instruction is a package fix: **Add to revision…** (or **Accept and add to revision…**) puts it on an open revision's to-address list, or starts a revision with it. The dialog starts on the revision that already holds findings from this audit, and says what each revision is. Accepting a fix does not apply it: a fix in a revision is only queued, and reaches the agent after someone edits the files in the revision, saves, and applies its plan. The finding then links to the revision, its plan and its release, and the banner at the top of the audit names the revisions still waiting and any accepted package fixes that are in none. Any other fix is listed in the report as an action for its owner, and a diagnosis is counted in the report. An Editor can decide findings and build revisions; a Viewer can read them. The "Who can do what" page lists the roles.
+1. Open the **Findings** tab. The list on the left is grouped by incident; the finding you select on the right is shown whole, with its evidence: each cited record, the quoted text and whether the citation check found it. **Accept**, **Edit** and **Reject** are the buttons at the top of the detail, and the keys A, E and R do the same. J moves to the next proposed finding and K to the previous one, and the "Single keys" switch turns the keys off. **Edit** saves your changes and accepts the finding, and **Change decision** reopens a decided one. On an incident's heading, **Accept 3** (or **Accept the 3 without problems** when a citation failed) accepts that incident's proposed findings that passed the check.
+2. Under each finding, **What happens next** says where it goes. A fix for a memory or an instruction is a package fix: **Add to revision…** (or **Accept and add to revision…**) puts it on an open revision's to-address list, or starts a revision with it. **Add the 2 accepted package fixes to a revision…** at the top of the list does the same for every accepted package fix that is in no revision yet. The dialog starts on the revision that already holds findings from this audit, and says what each revision is. Accepting a fix does not apply it: a fix in a revision is only queued, and reaches the agent after someone edits the files in the revision, saves, and applies its plan. The finding then links to the revision, its plan and its release, and the banner at the top of the audit names the revisions still waiting and any accepted package fixes that are in none. Any other fix is listed in the report as an action for its owner, and a diagnosis is counted in the report. An Editor can decide findings and build revisions; a Viewer can read them. The "Who can do what" page lists the roles.
 3. A citation such as **R12** is record 12 of the investigation's journal. Press it to read the record under its row (press **O** for the first cited one). If a citation failed the check and you read the record and the finding holds, press **I checked the record** and say what you found.
-4. On the **Report** tab, build the report, edit the summary and export it if you want to share it.
-5. When every finding has a decision, choose **Save the audit record**. The dialog says the repository, branch and folder, which of `audit.json`, `findings.json` and `report.md` are new, and whether the commit is pushed (only when the repository has a remote and pushing is on). Saving changes nothing in the Agent Space. Afterwards the card shows the commit, which you can copy, and whether it was pushed.
+4. On the **Report** tab, build the report, edit the summary and export it if you want to share it. Text the model drafted for a shareable section needs a person's **Approve this text** before the record can be saved.
+5. When every finding has a decision, choose **Save the audit record** on the **Report** tab. The dialog says the repository, branch and folder, which of `audit.json`, `findings.json` and `report.md` are new, and whether the commit is pushed (only when the repository has a remote and pushing is on). Saving changes nothing in the Agent Space. Afterwards the card shows the commit, which you can copy, and whether it was pushed.
 
 ### Where the data lives
 
@@ -224,7 +224,7 @@ If your shell already has `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` (for e
 - The refresher keeps no credential. It starts the AWS CLI each time. Its files, in the git-ignored `.dam/` folder of the repository, hold only a process number, a log and a status with times and error messages.
 - The refresher stops by itself about 15 minutes after the containers are gone, for example after `podman compose down`.
 
-To run the app without containers, see [Run the app without containers](development.md).
+To run the app without containers, see [Run the app natively](development.md#run-the-app-natively).
 
 ## Change the policy of the containers
 

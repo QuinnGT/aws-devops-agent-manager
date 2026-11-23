@@ -9,7 +9,7 @@ The short version: the app listens on `127.0.0.1` by default, writes to an Agent
 - **Loopback by default.** The web server binds `DAM_HOST`, which defaults to `127.0.0.1`. The container stack binds `0.0.0.0` inside the container and publishes the port as `127.0.0.1:<port>:<port>`. That publish rule is the boundary. Do not widen it. To reach the app from another machine, use an SSH port forward.
 - **Postgres is not published.** In the container stack only the web and worker containers can reach it. The development database in `compose.dev.yaml` is published to `127.0.0.1:55432` only.
 - **No TLS in the app.** It serves plain HTTP. Self-hosting behind a reverse proxy is not ready yet ([Roadmap](roadmap.md#self-hosting)). When it is, terminate TLS at the proxy, run it in hosted mode (below), and set `BETTER_AUTH_URL` and `DAM_ALLOWED_ORIGINS` to the public address. See [Configuration](configuration.md).
-- **The image runs as a non-root user.**
+- **The image runs as a non-root user** (`app`, UID 10001) on Amazon Linux 2023 minimal, pinned by digest. It holds Node.js, git and the ssh client, and no npm, corepack or yarn.
 
 ## Sign-in
 
@@ -46,6 +46,7 @@ Every page, Server Action and Route Handler goes through one access layer that c
 - **Only through plans.** Nothing in the app edits an asset directly. A draft, an import, a restore and a revision all become a plan. The plan page shows the diff, and the app writes only after a Publisher applies it. See [Concepts](concepts.md#drafts-plans-and-apply).
 - **Only in the worker.** The code that builds AWS credentials for write access throws unless the process is the worker (`DAM_PROCESS=worker`). Git commits, tags and pushes follow the same rule. The web process cannot write even if a page tried.
 - **Checked before and after.** Apply re-reads each asset and skips an item that changed since the plan was checked. It sends each write once and reads the result back to compare it with the plan.
+- **History commits run your git hooks.** The worker commits to a history repository with `git commit`, so `pre-commit` and `commit-msg` hooks, such as a secret scanner set with `core.hooksPath`, check those commits as they check any other commit on the computer. A hook that rejects a commit fails the job. See [Troubleshooting](troubleshooting.md#a-sync-release-or-saved-audit-record-fails-in-a-git-hook).
 - **Every action is logged.** The audit log records who changed or exported what, with the result. People with the `auditlog.read` permission (Admins) read it on the Audit log page and can export it as CSV or JSON. Findings, reports and revisions record who made each change.
 - **One exception: a chat review's files.** An audit that uses the DevOps Agent chat as its reviewer attaches two temporary files to the space and sends a chat message, without a plan, because the files are working copies of one review and not part of the space's configuration. The worker creates and deletes only files it created itself, names them with the prefix `dam-review-`, and the sync leaves them out of history. The chat stays in the space's chat history, because the service has no call to delete it. Without the optional `chat-review-policy.json` permissions this cannot run. See [AWS setup](aws-setup.md#devops-agent-chat-reviews).
 
@@ -71,13 +72,13 @@ Text from an Agent Space, from journals and from models can be wrong or hostile.
 - **Model tools.** A review has three tools, and each reads only that investigation's records. The model has no tool for other journals, files, other spaces or the network.
 - **Model output.** Nothing a model returns is run, fetched, or used as a path. A review is checked against a schema, and every record it cites is checked against the journal. A person accepts or rejects each finding before it can reach a revision.
 - **Chat reviews.** The DevOps Agent chat that writes a chat review has the space's own tools and instructions, not the three tools above, and journal text reaches it as an attached file. The prompt says to treat the journal as evidence and to change nothing, but that is an instruction to a model. The app's controls are the permissions of the write role, the audit's cancel and timeout, and a hard stop: if the chat asks for an approval or an interrupt, the review fails and the app approves nothing. A separate reviewer space with no connected accounts keeps the chat's reach small.
-- **Uploads.** Zips and package folders are read with limits on size and entry count. The reader rejects absolute paths and `..` segments, and package uploads also reject symlinks, encryption and duplicate names. Nothing from a zip is written to disk under its own name.
+- **Uploads.** Zips and package folders are read with limits on size and entry count. The reader rejects absolute paths, `..` segments, symlinks and encrypted entries, and package uploads also reject duplicate names. Nothing from a zip is written to disk under its own name.
 
 ## Where data is stored
 
 | Data | Where |
 |---|---|
-| Asset content and change history, releases, finalized audits, revision branches | The history repository on the machine that runs the app, `DAM_DATA_DIR/history/<name>`. It is pushed to your remote only when you set one up and turn pushes on |
+| Asset content and change history, releases, saved audit records, revision branches | The history repository on the machine that runs the app, `DAM_DATA_DIR/history/<name>`. It is pushed to your remote only when you set one up and turn pushes on |
 | The asset index, plans, drafts, journals (every cached record), analyzer results, audits, findings, ground-truth documents, role bindings, sessions, the audit log | Postgres |
 | Journal exports (kept 14 days), journal imports, package uploads (kept 30 days) | `DAM_DATA_DIR`, in folders with mode `0700` and files with mode `0600` |
 | A history repository's deploy key | Only its path is stored. The key file stays where you put it |
