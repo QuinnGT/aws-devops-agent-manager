@@ -13,7 +13,9 @@
  * something to show: the sample policy overlay committed into the history
  * repository, assets, history, plans, releases v1 and v1.1 with both
  * verification checks, journals and analyzer results, audits in every state
- * with a report, revisions, and a default review model in Space settings.
+ * with a report, an audit reviewed with review files, revisions (one with
+ * accepted fixes from an audit on its to-address list), and a default review
+ * model in Space settings.
  *
  * No AWS, Bedrock or network calls: the Agent Space is a mock
  * (aws-sdk-client-mock) serving sample package v1, reviews come from the
@@ -40,6 +42,7 @@ import { createDemoSpace } from "./lib/space";
 import { seedAnalysis } from "./parts/analysis";
 import { seedAuditScreens } from "./parts/audits";
 import { fakeSpaceFrom, packageAssets, samplePackages } from "./parts/content";
+import { sendFixesToRevision, seedReviewFilesAudit } from "./parts/flow";
 import { seedReportScreens } from "./parts/reports";
 import { acceptedFindingLink, seedRevisionScreens } from "./parts/revisions";
 import { verifyStory } from "./parts/story";
@@ -70,7 +73,7 @@ async function main() {
 
     // ---------- audits and reports (the benchmark journals) ----------
     await seedAuditScreens(space, ALEX);
-    await seedReportScreens(space, { owner: ALEX, reviewer: REVIEWER });
+    const reports = await seedReportScreens(space, { owner: ALEX, reviewer: REVIEWER });
 
     // ---------- revisions ----------
     const link = await acceptedFindingLink(space.id);
@@ -88,6 +91,13 @@ async function main() {
       people: { owner: ALEX, sam: SAM },
       sync: syncSpace,
     });
+    await drain(space.id);
+
+    // ---------- an audit's fixes queued in a revision, and an audit reviewed with review files ----------
+    // The audit in review keeps two fixes in no revision, so its page shows that warning; the saved audit has all of its fixes queued.
+    await sendFixesToRevision(space, { auditId: reports.main, revisionId: revisions.vendor, count: 2, actor: ALEX });
+    await sendFixesToRevision(space, { auditId: reports.finalized, revisionId: revisions.live, count: 10, actor: ALEX });
+    await seedReviewFilesAudit(space, ALEX);
     await drain(space.id);
 
     // ---------- analyzer results for every investigation ----------
