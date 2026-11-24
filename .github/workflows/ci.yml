@@ -45,9 +45,9 @@ jobs:
           POSTGRES_USER: dam
           POSTGRES_PASSWORD: ci-only-throwaway
           POSTGRES_DB: dam_ci
-        # No host port is named, so Docker picks a free one. The URL below reads it from the job context.
+        # Published on 127.0.0.1 only. No host port is named, so Docker picks a free one; the URL below reads it from the job context.
         ports:
-          - 5432/tcp
+          - 127.0.0.1::5432/tcp
         options: >-
           --health-cmd "pg_isready -U dam -d dam_ci"
           --health-interval 5s
@@ -86,7 +86,7 @@ jobs:
           # The seed empties only a database whose name starts with "dam_" (and is not "dam").
           POSTGRES_DB: dam_ci_demo
         ports:
-          - 5432/tcp
+          - 127.0.0.1::5432/tcp
         options: >-
           --health-cmd "pg_isready -U dam -d dam_ci_demo"
           --health-interval 5s

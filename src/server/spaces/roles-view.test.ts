@@ -10,7 +10,7 @@ describe("who can do what", () => {
   it("lists each role with its own description and the highest role each subject holds here", () => {
     const w = whoCanDoWhat(policy, [b("ann@example.com", "viewer", null), b("Ann@example.com", "publisher"), b("bob@example.com", "editor"), b("cy@example.com", "admin", "other"), b("sre", "publisher", null, "group")], SPACE, null);
     expect(w.roles.map((r) => r.name)).toEqual(["viewer", "editor", "publisher", "admin"]);
-    expect(w.roles.find((r) => r.name === "editor")?.description).toBe("Can view everything, sync the space, write change reasons, and draft changes and turn them into plans.");
+    expect(w.roles.find((r) => r.name === "editor")?.description).toBe("Can view everything, sync the space, write change reasons, draft changes and turn them into plans, import journals, run audits, review findings and build revisions.");
     for (const r of w.roles) expect(r.description).not.toMatch(/permissions, plus/);
     expect(w.roles.find((r) => r.name === "publisher")?.holders).toEqual([
       { kind: "user", subject: "Ann@example.com", scope: "space" },

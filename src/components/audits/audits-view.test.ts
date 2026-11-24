@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { NO_REVIEW_MODEL_REASON } from "@/server/ai/models";
+import { AUDIT_STATE_LABELS, type AuditState } from "@/server/audits/states";
 import { assignByTime, cohortCounts, cohortSelections } from "./cohorts";
 import { cardRows, changedValues, citationField, citationsByField, evidenceRows, firstCitation, quotesFor, type CardField } from "./finding-view";
 import { auditListQuery, defaultFindingState, filterQuery, findingListQuery, itemListQuery, parseAuditListParams, parseFindingListParams, parseItemListParams } from "./list-params";
@@ -48,6 +49,8 @@ describe("audit words", () => {
       finalized: ["success", "Record saved"],
       cancelled: ["neutral", "Cancelled"],
     });
+    // The server's labels (list rows, audit detail, reasons) use the same words as the badge.
+    for (const [state, badge] of Object.entries(AUDIT_STATE_BADGE)) expect(AUDIT_STATE_LABELS[state as AuditState]).toBe(badge.label);
     expect(itemReviewBadge("pending").label).toBe("Waiting");
     expect(itemReviewBadge("analyzing").label).toBe("Waiting");
     expect(itemReviewBadge("reviewing")).toMatchObject({ tone: "info", label: "Reviewing" });

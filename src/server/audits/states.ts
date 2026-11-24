@@ -20,7 +20,7 @@ export type FindingState = (typeof FINDING_STATES)[number];
 export const AUDIT_STATE_LABELS: Record<AuditState, string> = {
   draft: "Draft",
   running: "Running",
-  reviewing: "Reviewing findings",
+  reviewing: "In review",
   finalized: "Record saved",
   cancelled: "Cancelled",
 };
