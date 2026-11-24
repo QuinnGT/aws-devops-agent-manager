@@ -12,7 +12,7 @@ roles:
       - audits.read
   editor:
     rank: 20
-    description: Can view everything, sync the space, write change reasons, and draft changes and turn them into plans.
+    description: Can view everything, sync the space, write change reasons, draft changes and turn them into plans, import journals, run audits, review findings and build revisions.
     inherits: [viewer]
     permissions:
       - journals.import
@@ -25,7 +25,7 @@ roles:
       - revisions.build
   publisher:
     rank: 30
-    description: Can draft and plan changes, approve and apply plans, restore older versions and create releases.
+    description: Can draft and plan changes, run audits and build revisions, approve and apply plans and revisions, restore older versions and create releases.
     inherits: [editor]
     permissions:
       - plans.approve
