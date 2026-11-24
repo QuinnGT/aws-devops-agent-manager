@@ -4,10 +4,10 @@
 //   <start the app on that database, signed in as the space owner>
 //   pnpm screenshots http://127.0.0.1:3001 [docs/images] [--space <alias>]
 //
-// Each page is captured at 1440x900 in the light theme, and the first three
-// also in the dark theme (<name>-dark.png). Asset, plan, release, audit item
-// and revision IDs are read from the app's own pages, so the script works on
-// any database the seed filled. It does not click anything that writes.
+// Each page is captured once, at 1440x900 in the dark theme, so every image in
+// the docs looks the same. Asset, plan, release, audit, finding and revision
+// IDs are read from the app's own pages, so the script works on any database
+// the seed filled. It does not click anything that writes.
 //
 // It drives the Google Chrome you have installed (playwright-core downloads no
 // browser). Set CHROME_PATH to use a different Chrome or Chromium binary.
@@ -51,7 +51,7 @@ const browser = await chromium
     process.exit(1);
   });
 
-const context = await browser.newContext({ viewport: VIEWPORT, timezoneId: "UTC", locale: "en-US", reducedMotion: "reduce" });
+const context = await browser.newContext({ viewport: VIEWPORT, colorScheme: "dark", timezoneId: "UTC", locale: "en-US", reducedMotion: "reduce" });
 // The app formats times in the zone its "tz" cookie names; a fixed zone keeps the images the same on every machine.
 await context.addCookies([{ name: "tz", value: "UTC", url: base.origin }]);
 const page = await context.newPage();
@@ -90,54 +90,77 @@ async function discover() {
   const release = links(await html(`${space}/releases`), "/releases/[^\"/?#]+")[0];
   if (!release) throw new Error("No release found");
 
-  // Incident review: the first incident of the audit with the most investigations.
+  // Audit flow: the audit with the most investigations, on its page with the flow strip.
+  // Review files: an audit whose reviews come back as review files (it offers "Download all review files").
   let audit = null;
+  let reviewFiles = null;
   for (const link of links(await html(`${space}/audits`), "/audits/[0-9a-f-]{36}")) {
     const body = await html(link);
-    const items = [...body.matchAll(/<a [^>]*href="([^"]+\/items\/[0-9a-f-]{36})"[^>]*>([^<]*)</g)]
-      .filter((m) => /^INCIDENT-\d+$/.test(m[2].trim()))
-      .map((m) => m[1]);
-    if (items.length && (!audit || items.length > audit.count)) audit = { item: items[0], count: items.length };
+    const items = [...body.matchAll(/<a [^>]*href="([^"]+\/items\/[0-9a-f-]{36})"[^>]*>([^<]*)</g)].filter((m) => /^INCIDENT-\d+$/.test(m[2].trim()));
+    if (items.length && (!audit || items.length > audit.count)) audit = { link, count: items.length };
+    if (!reviewFiles && textOf(body).includes("Download all review files")) reviewFiles = link;
   }
   if (!audit) throw new Error("No audit with investigations found");
+  if (!reviewFiles) throw new Error("No audit reviewed with review files found");
 
-  // Revision editor: the revision whose build passed with the most saves, on a file it edited.
+  // Audit record: the report tab of an audit whose record is saved.
+  const saved = links(await html(`${space}/audits?state=finalized`), "/audits/[0-9a-f-]{36}")[0];
+  if (!saved) throw new Error("No audit with a saved record found");
+
+  // Revision editor: the revision with the most findings to address, then the most saves, whose build passed, on a file it edited.
   let revision = null;
   for (const link of links(await html(`${space}/revisions`), "/revisions/[^\"/?#]+")) {
     const body = await html(link);
     const text = textOf(body);
     const saves = Number(text.match(/(\d+) saves?/)?.[1] ?? 0);
-    if (!text.includes(" Ready ") || (revision && saves <= revision.saves)) continue;
+    const toAddress = Number(body.match(/rev-to-address-h[\s\S]*?tabular-nums">(\d+)</)?.[1] ?? 0);
+    const score = toAddress * 1000 + saves;
+    if (!text.includes(" Ready ") || (revision && score <= revision.score)) continue;
     const edited = body
       .split("<a ")
       .filter((s) => s.startsWith('href="?file='))
       .map((s) => ({ href: unescapeHtml(s.match(/^href="([^"]+)"/)[1]), edited: textOf(s.slice(0, s.indexOf("</a>"))).includes("Edited") }))
       .filter((f) => f.edited && !f.href.endsWith(".zip"));
     const file = edited.find((f) => !f.href.includes("README")) ?? edited[0];
-    revision = { link: file ? `${link}${file.href}` : link, saves };
+    // A finding the revision lists (to address, or linked by a save), for the Findings tab.
+    const finding = hrefs(body, new RegExp(`href="(${space.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/audits/[0-9a-f-]{36}/findings\\?finding=[0-9a-f-]{36})"`, "g"))[0];
+    revision = { link: file ? `${link}${file.href}` : link, score, finding };
   }
   if (!revision) throw new Error("No revision with a passing build found");
 
   return {
-    "space-home": { url: space, dark: true },
-    "plan-review": { url: plan, dark: true },
-    "release-verification": { url: `${release}/verification`, dark: true },
-    "asset-history": { url: asset.link },
-    "incident-review": { url: audit.item },
+    "space-home": { url: space },
+    "plan-review": { url: plan },
+    "audit-flow": { url: audit.link },
+    // Scrolled so the list and the selected finding fill the frame under the tabs and filters.
+    findings: { url: revision.finding ?? `${audit.link}/findings`, scrollTo: { selector: '[aria-label="Findings list"]', top: 185 } },
     "revision-editor": { url: revision.link },
+    "review-files": { url: reviewFiles },
+    "audit-record": { url: `${saved}/report` },
+    "release-verification": { url: `${release}/verification` },
+    "asset-history": { url: asset.link },
   };
 }
 
-async function capture(name, url, scheme) {
-  await page.emulateMedia({ colorScheme: scheme });
+async function capture(name, { url, scrollTo }) {
   const res = await page.goto(new URL(url, base).href, { waitUntil: "networkidle" });
   if (!res || !res.ok()) throw new Error(`${url} answered ${res?.status()}`);
   // Route loading states are skeletons; wait until the page has its data.
   await page.waitForFunction(() => !document.querySelector('[data-slot="skeleton"]'), null, { timeout: 15000 });
   if (!(await page.locator("h1").count())) throw new Error(`${url} has no heading`);
+  if (scrollTo) {
+    // Scroll the page so the element's top is `top` pixels from the top of the viewport.
+    const found = await page.evaluate(({ selector, top }) => {
+      const el = document.querySelector(selector);
+      if (!el) return false;
+      window.scrollTo(0, window.scrollY + el.getBoundingClientRect().top - top);
+      return true;
+    }, scrollTo);
+    if (!found) throw new Error(`${url} has no ${scrollTo.selector}`);
+  }
   const body = await page.locator("body").innerText();
   if (/Application error|This page couldn.t load|Internal Server Error/i.test(body)) throw new Error(`${url} shows an error page`);
-  const file = path.join(outDir, scheme === "dark" ? `${name}-dark.png` : `${name}.png`);
+  const file = path.join(outDir, `${name}.png`);
   await page.screenshot({ path: file });
   const { size } = await stat(file);
   console.log(`${path.relative(process.cwd(), file)}  ${Math.round(size / 1024)} KB${size > MAX_BYTES ? "  (over 400 KB)" : ""}`);
@@ -148,9 +171,7 @@ let ok = true;
 try {
   await mkdir(outDir, { recursive: true });
   const shots = await discover();
-  for (const [name, { url, dark }] of Object.entries(shots)) {
-    for (const scheme of dark ? ["light", "dark"] : ["light"]) ok = (await capture(name, url, scheme)) && ok;
-  }
+  for (const [name, shot] of Object.entries(shots)) ok = (await capture(name, shot)) && ok;
 } catch (err) {
   console.error(err.message);
   ok = false;

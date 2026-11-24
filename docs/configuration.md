@@ -39,7 +39,7 @@ With no OIDC provider and no bypass, the app rejects every request.
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `AUTH_DEV_BYPASS` | `false` | Signs in one local user on every request. The server refuses to start with it on unless it binds a loopback address, or `DAM_LOOPBACK_PUBLISH_ONLY` is `true`. Never use it on a shared host |
+| `AUTH_DEV_BYPASS` | `false` | Signs in one local user on every request. The server refuses to start with it on unless it binds a loopback address, or `DAM_LOOPBACK_PUBLISH_ONLY` is `true`. The container stack turns it on and passes `AUTH_DEV_USER_EMAIL` and `AUTH_DEV_ROLE` from `.env`. Never use it on a shared host |
 | `AUTH_DEV_USER_EMAIL` | `local@localhost` | Email of the bypass user. The demo uses `alex@example.com` |
 | `AUTH_DEV_USER_NAME` | `Local user` | Display name of the bypass user |
 | `AUTH_DEV_ROLE` | `admin` | Role of the bypass user: `viewer`, `editor`, `publisher` or `admin` |
@@ -81,7 +81,7 @@ The container stack never passes `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` or
 |---|---|---|
 | `DAM_PORT` | `3000` | Host port of the real stack |
 | `DAM_DEMO_PORT` | `3001` | Host port of the demo stack |
-| `DAM_IMAGE` | `localhost/devops-agent-manager:dev` | Image to run. Set a published image to pull it and skip the local build |
+| `DAM_IMAGE` | `localhost/devops-agent-manager:dev` | Image to run. Set a published image to pull it and skip the local build. When you set it to a `localhost/` name, the script neither pulls nor builds it, so that image must already exist |
 | `DAM_CONTAINER_CLI` | Podman if present, else Docker | `podman` or `docker` |
 | `DAM_AWS_LOGIN_COMMAND` | none | A command that signs you in to AWS, for example `okta-aws-cli web --profile <name>`. `up` runs it when the AWS CLI has no credentials, and `login` always runs it, instead of `aws sso login`. It runs in a shell on your computer, with `AWS_PROFILE` set to the profile. Set it in the shell or in `.env` |
 | `DAM_SKIP_MEMORY_CHECK` | none | Set to `1` to skip the check that the container engine has 3.5 GiB of memory before it builds the image |

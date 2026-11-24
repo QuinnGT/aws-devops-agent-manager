@@ -131,6 +131,7 @@ Rules for tests:
 - No live AWS or Bedrock calls. Use `aws-sdk-client-mock`, the AI SDK's mock models (`ai/test`), and the captured read-only responses in `test/fixtures/api/test-space/`, where the Agent Space ID, account IDs and principals are masked.
 - No pushes and no GitHub calls. History repositories in tests are local folders under `DAM_DATA_DIR`.
 - Put the data a test needs in `sample-data/` when it is invented, or in `test/private/` when it is not yours to publish.
+- Tests commit to real git repositories under `DAM_DATA_DIR` with your `HOME`, so a global `core.hooksPath` hook, such as a secret scanner, runs on those commits too. `pnpm demo:seed` uses a `HOME` of its own and runs no global hooks.
 
 ### The sample dataset
 
@@ -168,7 +169,7 @@ Each server module in `src/server/<module>/` has a `README.md` where the module 
 `pnpm screenshots` captures the images in `docs/images/` from a running app that holds the sample data. Capture from a production build, because the development server shows an overlay.
 
 1. Seed a database as in "Try the sample data natively".
-2. Build, then serve the build on the seeded database. Use a loopback address and the bypass as Alex Rivera:
+2. In the same shell as the seed, so `DATABASE_URL` and `DAM_DATA_DIR` are still set, build, then serve the build on the seeded database. Use a loopback address and the bypass as Alex Rivera:
 
    ```sh
    pnpm build
@@ -184,7 +185,19 @@ Each server module in `src/server/<module>/` has a `README.md` where the module 
 
 4. Stop the server.
 
-The script drives your installed Google Chrome through `playwright-core`, which downloads no browser. Set `CHROME_PATH` to use another Chrome or Chromium. It finds the pages from the app itself, so it works on any database the seed filled. Run it soon after seeding: the sync status line reads "Synced 3 min ago" and turns to a warning once the last sync is old. Look at every image before you commit it.
+The script drives your installed Google Chrome through `playwright-core`, which downloads no browser. Set `CHROME_PATH` to use another Chrome or Chromium. It finds the pages from the app itself, so it works on any database the seed filled, and `--space <alias>` picks a space other than the first one listed. It writes nine images, all in the dark theme so the docs look the same throughout, and exits with an error when one is over 400 KB. Run it soon after seeding: the sync status line reads "Synced 3 min ago" and turns to a warning once the last sync is old. Look at every image before you commit it.
+
+| Image | Page | Used in |
+|---|---|---|
+| `space-home` | The space home page | README |
+| `audit-flow` | The audit with the most investigations, with its flow strip | README, Concepts |
+| `plan-review` | The first open plan | README, Concepts |
+| `findings` | The Findings tab, on a finding the revision below lists | README |
+| `revision-editor` | The revision with the most findings to address, whose build passed, on a file it edited | README, Concepts |
+| `review-files` | An audit reviewed with review files | README |
+| `audit-record` | The Report tab of an audit whose record is saved | README |
+| `release-verification` | The newest release's Verification tab | README, Concepts |
+| `asset-history` | The asset with the most versions, comparing its two newest | README |
 
 ## Where things are
 

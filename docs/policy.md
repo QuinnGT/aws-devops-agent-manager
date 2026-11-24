@@ -22,9 +22,9 @@ All files are in [`policy/`](../policy/). Each YAML file is one section, checked
 | `journals.yaml`, `journal-import.yaml` | Journal export, import formats, retention, markdown templates (`journal-templates/`) |
 | `analyzers.yaml` | Patterns the memory reads analyzer uses to find listings and paths |
 | `output-rules.yaml` | Rules that check agent output and reports, for example masking account IDs |
-| `package-io.yaml`, `package-layouts.yaml` | Package import and export, and the layouts that map a package to assets |
+| `package-io.yaml`, `package-layouts.yaml` | Package import and export, whether an export is refused when the checks fail (off by default), the export notes file, and the layouts that map a package to assets |
 | `audits.yaml` | Audit profiles, with `audit-profiles/` and `prompts/` |
-| `revisions.yaml` | Revision names, saves, the change record, plan and release templates |
+| `revisions.yaml` | Revision names, saves, the to-address list, the change record, plan and release templates, and what a revision's export leaves out |
 
 ## Layers
 
@@ -97,7 +97,7 @@ The check `code` values appear in the app as "Details: package.safety-message" u
 - **Review.** The runner settings (step limit, maximum output tokens, concurrency, time limit), and the paths of the prompt files, all relative to a policy folder: `systemPrompt`, `promptTemplate`, `finalStepPrompt` and `outputSchema`.
 - **Failure modes and fix owners.** The lists the model chooses from, with the labels the app shows.
 - **Findings.** For each kind of finding: which part of the review output it comes from (`from`), its title template, its fields, which fields a person may edit, and whether a revision may link to it (`linkable`).
-- **Report.** The sections, whether each is shareable or internal, and the prompts for the sections a model drafts.
+- **Report.** The sections, whether each is shareable or internal, the prompts for the sections a model drafts, which output-rule severities refuse an export (`exportBlockOn`, default `error`), and the commit message and committer of the saved audit record (`commitMessage`, default `Save audit record {auditName} of {spaceAlias}`, and `committer`).
 
 The prompt files are markdown with `{{placeholders}}` that the app fills in, for example `{{incident_id}}`, `{{condensed_trace}}`, `{{failure_modes}}` and `{{step_limit}}`. The output schema is a JSON Schema (draft 2020-12). The review must match it, and the app rejects an answer that does not.
 
@@ -121,7 +121,7 @@ The `reviewers` block of `audits.yaml` lists who can write an audit's reviews. "
 | `handoff` | Review files that a person runs with an agent and imports back |
 | `devops-agent-chat` | A chat in the Agent Space, with the review files attached |
 
-Each entry has a `label`, a `description` and optional `options`. An option has a `label`, a `default` and a list of `values`, each with an `id`, a `label` and a `description`. The form shows one control per option with the default preselected, and the server refuses a runner that is not listed and an option value that is not one of the option's values. Leave a runner out to stop offering it. If the block is empty, no choice is shown and every audit uses its profile's `review.runner`. The audit keeps its choice in its profile snapshot (`review.runner` and `review.runnerOptions`), so a later policy change does not alter it.
+Each entry has a `label`, a `description` and optional `options`. An option has a `label`, a `default` and a list of `values`, each with an `id`, a `label` and a `description`. The form shows one control per option with the default preselected, and the server refuses a runner that is not listed and an option value that is not one of the option's values. To stop offering a runner, delete its entry from `audits.yaml` in `DAM_POLICY_DIR`. An overlay cannot remove it, because objects merge key by key ([Layers](#layers)). If the block is empty, no choice is shown and every audit uses its profile's `review.runner`. The audit keeps its choice in its profile snapshot (`review.runner` and `review.runnerOptions`), so a later policy change does not alter it.
 
 The `handoff` block sets the review files and the import:
 

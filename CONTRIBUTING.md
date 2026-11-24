@@ -49,6 +49,6 @@ Never commit real customer data, account IDs, Agent Space IDs, people's names or
 - Keep each pull request small and about one thing. Open an issue first for a large change.
 - Fill in the pull request template.
 - Say why in the description when you add a dependency, and pin it to an exact version.
-- A new permission goes in `src/server/policy/sections/roles.ts` and `policy/roles.yaml`. Say so in the description.
-- UI changes follow `design-system/devops-agent-manager/MASTER.md` and the page file for the screen.
+- A new permission goes in `src/server/policy/sections/roles.ts`, `policy/roles.yaml` and the roles table in `docs/security.md`. Say so in the description.
+- UI changes follow `design-system/devops-agent-manager/MASTER.md` and the page file for the screen. When a change alters a screen that `docs/images/` shows, capture the images again with `pnpm screenshots` ([Development](docs/development.md#screenshots)) and update the text that describes the screen.
 - Use plain, specific wording in UI text and documentation. No em dashes. Use inclusive language (allowlist and denylist, primary and replica).

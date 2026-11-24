@@ -14,7 +14,7 @@ DevOps Agent Manager manages an AWS DevOps Agent Space from outside the Operator
 
 ## Stack (pinned, see package.json)
 
-Next.js 16.4 App Router + React 19.3, TypeScript strict (`noUncheckedIndexedAccess` on), Postgres + Drizzle 0.45, pg-boss 12, Better Auth 1.7, AWS SDK v3 `@aws-sdk/client-devops-agent` 3.1166, simple-git 4, Zod 4, shadcn/ui (radix-nova) + Tailwind 4, Vitest 5. pnpm. Local containers run on Podman (`pnpm db:dev:up` uses `podman compose`).
+Next.js 16.4 App Router + React 19.3, TypeScript strict (`noUncheckedIndexedAccess` on), Postgres + Drizzle 0.45, pg-boss 12, Better Auth 1.7, AWS SDK v3 `@aws-sdk/client-devops-agent` 3.1169, simple-git 4, Zod 4, shadcn/ui (radix-nova) + Tailwind 4, Vitest 5. pnpm. Local containers run on Podman (`pnpm db:dev:up` uses `podman compose`).
 
 Say why in the pull request when you add a dependency. Edit `package.json`, run `pnpm install`, and pin exact versions.
 
