@@ -4,12 +4,9 @@ A web app that manages an [AWS DevOps Agent Space](https://docs.aws.amazon.com/d
 
 > **A community project, not an official AWS product.** AWS does not support or endorse it. It is a stop-gap until the AWS DevOps Agent service offers these features itself.
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/space-home-dark.png">
-  <img src="docs/images/space-home.png" alt="The space home page: what needs attention, the recent changes with who made each one, and the share of changes by source (DevOps Agent, Web app, CLI or SDK, This app).">
-</picture>
+<img src="docs/images/space-home.png" alt="The space home page: what needs attention, the recent changes with who made each one, and the share of changes by source (DevOps Agent, Web app, CLI or SDK, This app).">
 
-The screenshots show the sample space, AnyCompany Tickets, which is invented. Every screen in them is in the [demo](#try-it).
+The screenshots show the sample space, AnyCompany Tickets, which is invented, in the dark theme. Every screen in them is in the [demo](#try-it).
 
 ## What it does
 
@@ -34,17 +31,11 @@ The parts connect, so a problem found in one investigation can be followed to th
 
 The strip at the top of each audit shows the steps and what is left at each. Here, 2 of the accepted fixes are in no revision yet, so the audit page says so:
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/audit-flow-dark.png">
-  <img src="docs/images/audit-flow.png" alt="An audit in review: the flow strip from Reviews to Record, a warning that 2 accepted package fixes are in no revision, and the reviewed investigations with their scores and citation checks.">
-</picture>
+<img src="docs/images/audit-flow.png" alt="An audit in review: the flow strip from Reviews to Record, a warning that 2 accepted package fixes are in no revision, and the reviewed investigations with their scores and citation checks.">
 
 Every change to the space goes through a plan like this one: the changes on the left, the diff of the selected change on the right, and Apply in the header.
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/plan-review-dark.png">
-  <img src="docs/images/plan-review.png" alt="A plan under review: the changed memory in the list, its word diff, and the Apply 1 change button.">
-</picture>
+<img src="docs/images/plan-review.png" alt="A plan under review: the changed memory in the list, its word diff, and the Apply 1 change button.">
 
 ## Try it
 

@@ -185,7 +185,7 @@ Each server module in `src/server/<module>/` has a `README.md` where the module 
 
 4. Stop the server.
 
-The script drives your installed Google Chrome through `playwright-core`, which downloads no browser. Set `CHROME_PATH` to use another Chrome or Chromium. It finds the pages from the app itself, so it works on any database the seed filled, and `--space <alias>` picks a space other than the first one listed. It writes nine images, three of them also in the dark theme, and exits with an error when one is over 400 KB. Run it soon after seeding: the sync status line reads "Synced 3 min ago" and turns to a warning once the last sync is old. Look at every image before you commit it.
+The script drives your installed Google Chrome through `playwright-core`, which downloads no browser. Set `CHROME_PATH` to use another Chrome or Chromium. It finds the pages from the app itself, so it works on any database the seed filled, and `--space <alias>` picks a space other than the first one listed. It writes nine images, all in the dark theme so the docs look the same throughout, and exits with an error when one is over 400 KB. Run it soon after seeding: the sync status line reads "Synced 3 min ago" and turns to a warning once the last sync is old. Look at every image before you commit it.
 
 | Image | Page | Used in |
 |---|---|---|
